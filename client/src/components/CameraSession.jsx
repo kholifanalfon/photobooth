@@ -4,7 +4,12 @@ import { Camera } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
-export default function CameraSession({ layoutConfig, onComplete, onCancel }) {
+export default function CameraSession({
+  layoutConfig,
+  countdownDuration = 3,
+  onComplete,
+  onCancel
+}) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const intervalRef = useRef(null);
@@ -21,6 +26,9 @@ export default function CameraSession({ layoutConfig, onComplete, onCancel }) {
     layoutConfig?.photoCount ||
     (layoutConfig?.layoutType && FRAME_CONFIGS[layoutConfig.layoutType]?.photoCount) ||
     3;
+
+  const totalCountdownSeconds =
+    layoutConfig?.countdownDuration ?? countdownDuration ?? 3;
 
   useEffect(() => {
     let mounted = true;
@@ -48,6 +56,11 @@ export default function CameraSession({ layoutConfig, onComplete, onCancel }) {
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          if (typeof videoRef.current.play === 'function') {
+            videoRef.current.play().catch(() => {
+              // Ignore browser autoplay/user gesture rejections safely
+            });
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -87,12 +100,20 @@ export default function CameraSession({ layoutConfig, onComplete, onCancel }) {
   };
 
   const handleCancel = () => {
-    if (capturedPhotos.length > 0 && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    if (
+      capturedPhotosRef.current.length > 0 &&
+      typeof window !== 'undefined' &&
+      typeof window.confirm === 'function'
+    ) {
       const confirmed = window.confirm('Apakah Anda yakin ingin membatalkan sesi foto?');
       if (!confirmed) return;
     }
 
     clearTimers();
+
+    // Explicit ephemeral security purge of volatile captured image memory
+    capturedPhotosRef.current = [];
+    setCapturedPhotos([]);
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -156,7 +177,14 @@ export default function CameraSession({ layoutConfig, onComplete, onCancel }) {
   const triggerCaptureSequence = () => {
     if (countdown !== null) return;
 
-    let timer = 3;
+    let timer = totalCountdownSeconds;
+    if (timer <= 0) {
+      setCountdown(0);
+      audioFx.playCountdownBeep(true);
+      executeShutter();
+      return;
+    }
+
     setCountdown(timer);
     audioFx.playCountdownBeep(false);
 

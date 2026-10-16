@@ -227,7 +227,7 @@ test('CameraSession Error Handling', async (t) => {
 });
 
 test('CameraSession WebRTC Camera Feed & Track Lifecycle', async (t) => {
-  await t.test('initializes getUserMedia with ideal 1080p and stops tracks on unmount', async () => {
+  await t.test('initializes getUserMedia with ideal 1080p, triggers video play, and stops tracks on unmount', async () => {
     let tracksStopped = 0;
     const mockTrack = {
       stop: () => { tracksStopped += 1; }
@@ -237,6 +237,8 @@ test('CameraSession WebRTC Camera Feed & Track Lifecycle', async (t) => {
     };
 
     let requestedConstraints = null;
+    let videoPlayCalled = false;
+
     const restoreNavigator = mockMediaDevices({
       getUserMedia: async (constraints) => {
         requestedConstraints = constraints;
@@ -250,6 +252,14 @@ test('CameraSession WebRTC Camera Feed & Track Lifecycle', async (t) => {
         onCancel: () => {}
       });
 
+      // Mock videoRef with play() method to verify video playback defense
+      const videoRef = harness.refs.get(0);
+      videoRef.current = {
+        play: async () => {
+          videoPlayCalled = true;
+        }
+      };
+
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       // Check stream was acquired with correct constraints
@@ -259,9 +269,10 @@ test('CameraSession WebRTC Camera Feed & Track Lifecycle', async (t) => {
       assert.strictEqual(requestedConstraints.video.width.ideal, 1920);
       assert.strictEqual(requestedConstraints.video.height.ideal, 1080);
 
-      // Verify streamRef holds the active stream
+      // Verify streamRef holds the active stream and video play was attempted
       const streamRef = harness.refs.get(1); // streamRef is second ref
       assert.strictEqual(streamRef.current, mockStream);
+      assert.strictEqual(videoPlayCalled, true, 'video.play() should be called defensively');
 
       // Unmount should stop all tracks
       harness.unmount();
@@ -346,10 +357,6 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
       assert.strictEqual(beeps[0], false, 'Initial countdown beep should not be final');
 
       // Advance interval ticks (countdown 2, 1, 0)
-      // T = 1000ms -> timer becomes 2
-      // T = 2000ms -> timer becomes 1
-      // T = 3000ms -> timer becomes 0 & executeShutter()
-      // T = 3300ms -> flash clears & onComplete()
       await new Promise((resolve) => setTimeout(resolve, 3600));
 
       assert.strictEqual(shutterSoundPlayed, true, 'Shutter sound must play upon countdown 0');
@@ -367,6 +374,35 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
       audioFx.playCountdownBeep = origCountdownBeep;
       audioFx.playShutterSound = origShutterSound;
       global.document = originalDocument;
+      restoreNavigator();
+    }
+  });
+
+  await t.test('supports configurable countdown timer duration via prop and layoutConfig', async () => {
+    const mockStream = { getTracks: () => [{ stop: () => {} }] };
+    const restoreNavigator = mockMediaDevices({ getUserMedia: async () => mockStream });
+
+    try {
+      // 1. Configured via countdownDuration prop = 5
+      const harnessProp = createHarness(CameraSession, {
+        countdownDuration: 5,
+        layoutConfig: { photoCount: 1 }
+      });
+      const buttonProp = harnessProp.vdom.props.children[3].props.children;
+      buttonProp.props.onClick();
+      assert.strictEqual(harnessProp.states.get(2), 5, 'Countdown must initialize to 5s from prop');
+      harnessProp.unmount();
+
+      // 2. Configured via layoutConfig.countdownDuration = 2
+      const harnessConfig = createHarness(CameraSession, {
+        countdownDuration: 5,
+        layoutConfig: { countdownDuration: 2, photoCount: 1 }
+      });
+      const buttonConfig = harnessConfig.vdom.props.children[3].props.children;
+      buttonConfig.props.onClick();
+      assert.strictEqual(harnessConfig.states.get(2), 2, 'Countdown must prioritize layoutConfig.countdownDuration');
+      harnessConfig.unmount();
+    } finally {
       restoreNavigator();
     }
   });
@@ -401,7 +437,9 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
     };
 
     try {
+      // Using countdownDuration = 1 for fast test iteration
       const harness = createHarness(CameraSession, {
+        countdownDuration: 1,
         layoutConfig: { photoCount: 2 }, // 2 poses
         onComplete: (photos) => { completedPhotos = photos; },
         onCancel: () => {}
@@ -415,8 +453,8 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
       let captureButton = currentVdom.props.children[3].props.children;
       captureButton.props.onClick();
 
-      // Wait for pose 1 to finish (3.45s)
-      await new Promise((resolve) => setTimeout(resolve, 3450));
+      // Wait for pose 1 to finish (1s timer + 300ms shutter)
+      await new Promise((resolve) => setTimeout(resolve, 1450));
 
       // First pose done, completedPhotos should still be null
       assert.strictEqual(completedPhotos, null, 'Should not complete after pose 1 of 2');
@@ -430,7 +468,7 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
       captureButton.props.onClick();
 
       // Wait for pose 2 to finish
-      await new Promise((resolve) => setTimeout(resolve, 3450));
+      await new Promise((resolve) => setTimeout(resolve, 1450));
 
       assert.ok(completedPhotos, 'Should call onComplete after 2nd pose is captured');
       assert.strictEqual(completedPhotos.length, 2);
@@ -443,9 +481,10 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
     }
   });
 
-  await t.test('cancellation clears timers, purges active session, and stops camera stream', async () => {
+  await t.test('cancellation clears timers, purges volatile memory, and stops camera stream', async () => {
     let cancelCalled = false;
     let trackStopped = false;
+    let confirmPromptShown = false;
 
     const mockStream = {
       getTracks: () => [
@@ -459,7 +498,10 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
 
     const originalWindow = global.window;
     global.window = {
-      confirm: () => true
+      confirm: (msg) => {
+        confirmPromptShown = true;
+        return true;
+      }
     };
 
     const harness = createHarness(CameraSession, {
@@ -470,6 +512,11 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
     const streamRef = harness.refs.get(1);
     streamRef.current = mockStream;
 
+    // Simulate 1 captured photo in volatile memory
+    const capturedPhotosRef = harness.refs.get(4);
+    capturedPhotosRef.current = ['data:image/jpeg;base64,volatile-frame'];
+    harness.states.set(1, ['data:image/jpeg;base64,volatile-frame']);
+
     // Trigger Batalkan Sesi
     const header = harness.vdom.props.children[1];
     const cancelButton = header.props.children[0];
@@ -477,9 +524,12 @@ test('CameraSession Countdown, Shutter, and Multi-Pose Capture Loop', async (t) 
 
     cancelButton.props.onClick();
 
+    assert.strictEqual(confirmPromptShown, true, 'Confirmation prompt must display when volatile frames exist');
     assert.strictEqual(cancelCalled, true, 'onCancel must be invoked');
     assert.strictEqual(trackStopped, true, 'Active camera stream tracks must be stopped');
     assert.strictEqual(streamRef.current, null, 'streamRef must be cleared');
+    assert.deepStrictEqual(capturedPhotosRef.current, [], 'Volatile photos ref must be purged on cancel');
+    assert.deepStrictEqual(harness.states.get(1), [], 'Captured photos state must be purged on cancel');
 
     global.window = originalWindow;
     restoreNavigator();
