@@ -1,7 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
+const path = require('path');
+const fs = require('fs');
 const { app } = require('../src/app');
+
+const uploadsDir = path.resolve(__dirname, '../uploads');
+
+// Cleanup all test files created during test suite execution
+test.after(async () => {
+  if (fs.existsSync(uploadsDir)) {
+    const files = await fs.promises.readdir(uploadsDir);
+    for (const file of files) {
+      if (file.startsWith('photo_test-session') || file.startsWith('photo_purge-test-session') || file.startsWith('photo_traversal')) {
+        await fs.promises.unlink(path.join(uploadsDir, file)).catch(() => {});
+      }
+    }
+  }
+});
 
 test('GET /health returns status ok', async () => {
   const res = await request(app).get('/health');
@@ -26,7 +42,7 @@ test('POST /api/photos/qr-generate returns 400 when URL is missing', async () =>
   assert.ok(res.body.error);
 });
 
-test('POST /api/photos/upload stores image and returns downloadUrl and QR', async () => {
+test('POST /api/photos/upload stores image and returns downloadUrl and QR with dynamic extension', async () => {
   const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
   const res = await request(app)
     .post('/api/photos/upload')
@@ -39,7 +55,25 @@ test('POST /api/photos/upload stores image and returns downloadUrl and QR', asyn
   assert.strictEqual(res.body.success, true);
   assert.ok(res.body.downloadUrl);
   assert.match(res.body.qrCodeDataUri, /^data:image\/png;base64,/);
-  assert.match(res.body.filename, /^photo_test-session-123_/);
+  // Verifies dynamic extension .png
+  assert.match(res.body.filename, /^photo_test-session-123_.*\.png$/);
+});
+
+test('POST /api/photos/upload sanitizes sessionId to prevent directory traversal', async () => {
+  const sampleBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+  const res = await request(app)
+    .post('/api/photos/upload')
+    .send({
+      imageBase64: sampleBase64,
+      sessionId: '../../traversal_test'
+    });
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  // Verifies directory traversal stripped and .jpg extension detected
+  assert.match(res.body.filename, /^photo_traversal_test_.*\.jpg$/);
+  // Confirm file was created safely inside uploadsDir
+  assert.ok(fs.existsSync(path.join(uploadsDir, res.body.filename)));
 });
 
 test('POST /api/photos/upload returns 400 if imageBase64 is missing', async () => {
@@ -82,20 +116,26 @@ test('POST /api/sessions creates a new session', async () => {
   assert.strictEqual(res.body.frameColor, '#000000');
 });
 
-test('DELETE /api/sessions/:id purges session and cleans local files', async () => {
+test('DELETE /api/sessions/:id purges session and cleans local files with anchored prefix', async () => {
   const sessionId = 'purge-test-session';
 
   // Upload a temporary file for this session
   const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-  await request(app)
+  const uploadRes = await request(app)
     .post('/api/photos/upload')
     .send({
       imageBase64: sampleBase64,
       sessionId
     });
 
+  const createdFile = path.join(uploadsDir, uploadRes.body.filename);
+  assert.ok(fs.existsSync(createdFile), 'Uploaded file should exist prior to purge');
+
   const res = await request(app).delete(`/api/sessions/${sessionId}`);
   assert.strictEqual(res.status, 200);
   assert.strictEqual(res.body.success, true);
   assert.strictEqual(res.body.session.status, 'PURGED');
+
+  // Verify file was cleaned up by anchored prefix deletion
+  assert.strictEqual(fs.existsSync(createdFile), false, 'Uploaded file should be removed after purge');
 });

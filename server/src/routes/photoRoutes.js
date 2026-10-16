@@ -33,8 +33,25 @@ router.post('/upload', async (req, res) => {
       return res.status(400).json({ error: 'imageBase64 required' });
     }
 
+    // 1. Sanitize sessionId to prevent directory traversal
+    const safeSessionId = (sessionId ? String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '') : '') || `anon_${Date.now()}`;
+
+    // 3. Dynamic extension detection based on MIME header
+    let ext = '.jpg';
+    const mimeMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
+    if (mimeMatch) {
+      const mimeSubtype = mimeMatch[1].toLowerCase();
+      if (mimeSubtype === 'png') {
+        ext = '.png';
+      } else if (mimeSubtype === 'webp') {
+        ext = '.webp';
+      } else if (mimeSubtype === 'jpeg' || mimeSubtype === 'jpg') {
+        ext = '.jpg';
+      }
+    }
+
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    const filename = `photo_${sessionId || Date.now()}_${Date.now()}.jpg`;
+    const filename = `photo_${safeSessionId}_${Date.now()}${ext}`;
     const filepath = path.join(uploadsDir, filename);
 
     await fs.promises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
@@ -43,15 +60,19 @@ router.post('/upload', async (req, res) => {
     const downloadUrl = `${host}/uploads/${filename}`;
     const qrCodeDataUri = await generateQrDataUri(downloadUrl);
 
-    // Save to DB if sessionId and DATABASE_URL are present
+    // 4. Save to DB if safeSessionId and DATABASE_URL are present without bloating DB with multi-MB base64
     if (sessionId && process.env.DATABASE_URL) {
       try {
+        const truncatedDataUri = imageBase64.length > 256
+          ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
+          : imageBase64;
+
         await prisma.capturedPhoto.create({
           data: {
             sessionId,
             poseIndex: Number(poseIndex) || 0,
             filePath: filepath,
-            imageDataUri: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${base64Data}`
+            imageDataUri: truncatedDataUri
           }
         });
       } catch (dbErr) {

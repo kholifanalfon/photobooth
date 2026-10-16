@@ -105,12 +105,15 @@ router.delete('/:id', async (req, res) => {
       };
     }
 
-    // Delete local file buffers matching session id
-    if (fs.existsSync(uploadsDir)) {
+    // 2. Delete local file buffers using anchored prefix matching with sanitized ID
+    const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');
+    const prefix = `photo_${safeId}_`;
+
+    if (fs.existsSync(uploadsDir) && safeId) {
       try {
         const files = await fs.promises.readdir(uploadsDir);
         for (const file of files) {
-          if (file.includes(id)) {
+          if (file.startsWith(prefix)) {
             await fs.promises.unlink(path.join(uploadsDir, file)).catch(() => {});
           }
         }
