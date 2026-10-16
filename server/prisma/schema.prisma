@@ -1,0 +1,68 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  PURGED
+}
+
+enum PrintStatus {
+  QUEUED
+  PRINTING
+  SUCCESS
+  FAILED
+}
+
+model BoothSession {
+  id             String          @id @default(uuid()) @db.Uuid
+  frameTemplate  String          @map("frame_template") @db.VarChar(32)
+  photoCount     Int             @default(3) @map("photo_count") @db.SmallInt
+  frameColor     String          @default("#FFFFFF") @map("frame_color") @db.VarChar(16)
+  templateConfig Json?           @map("template_config")
+  status         SessionStatus   @default(ACTIVE)
+  storageUrl     String?         @map("storage_url") @db.VarChar(512)
+  clientIp       String?         @map("client_ip") @db.VarChar(45)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  completedAt    DateTime?       @map("completed_at") @db.Timestamptz
+  purgedAt       DateTime?       @map("purged_at") @db.Timestamptz
+  photos         CapturedPhoto[]
+  printJobs      PrintJob[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("booth_sessions")
+}
+
+model CapturedPhoto {
+  id           String       @id @default(uuid()) @db.Uuid
+  sessionId    String       @map("session_id") @db.Uuid
+  poseIndex    Int          @map("pose_index") @db.SmallInt
+  filePath     String?      @map("file_path") @db.VarChar(512)
+  imageDataUri String       @map("image_data_uri") @db.Text
+  capturedAt   DateTime     @default(now()) @map("captured_at") @db.Timestamptz
+  session      BoothSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, poseIndex])
+  @@map("captured_photos")
+}
+
+model PrintJob {
+  id           String       @id @default(uuid()) @db.Uuid
+  sessionId    String       @map("session_id") @db.Uuid
+  copies       Int          @default(1) @db.SmallInt
+  printerName  String       @map("printer_name") @db.VarChar(128)
+  status       PrintStatus  @default(QUEUED)
+  errorMessage String?      @map("error_message") @db.Text
+  dispatchedAt DateTime     @default(now()) @map("dispatched_at") @db.Timestamptz
+  completedAt  DateTime?    @map("completed_at") @db.Timestamptz
+  session      BoothSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([status, dispatchedAt])
+  @@map("print_jobs")
+}
