@@ -7,6 +7,9 @@ const { prisma } = require('../db');
 const router = express.Router();
 const uploadsDir = path.resolve(__dirname, '../../uploads');
 
+// In-memory fallback session store for local/testing without a live DB connection
+const memorySessions = new Map();
+
 // POST /api/sessions
 router.post('/', async (req, res) => {
   try {
@@ -42,6 +45,7 @@ router.post('/', async (req, res) => {
         clientIp: req.ip || null,
         createdAt: new Date().toISOString()
       };
+      memorySessions.set(session.id, session);
     }
 
     return res.status(201).json(session);
@@ -67,6 +71,11 @@ router.get('/:id', async (req, res) => {
         console.warn('Prisma DB error in get session:', dbErr.message);
       }
     }
+
+    if (!session && memorySessions.has(id)) {
+      session = memorySessions.get(id);
+    }
+
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -98,12 +107,15 @@ router.delete('/:id', async (req, res) => {
     }
 
     if (!session) {
-      session = {
+      session = memorySessions.get(id) || {
         id,
         status: 'PURGED',
         purgedAt: new Date().toISOString()
       };
     }
+    session.status = 'PURGED';
+    session.purgedAt = new Date().toISOString();
+    memorySessions.delete(id);
 
     // 2. Delete local file buffers using anchored prefix matching with sanitized ID
     const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');

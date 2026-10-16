@@ -24,6 +24,9 @@ function createMockCanvas(hasRoundRect = true) {
     strokeRect(x, y, w, h) {
       operations.push({ type: 'strokeRect', x, y, w, h, strokeStyle: this.strokeStyle, lineWidth: this.lineWidth });
     },
+    stroke() {
+      operations.push({ type: 'stroke', strokeStyle: this.strokeStyle, lineWidth: this.lineWidth });
+    },
     fillText(text, x, y) {
       operations.push({ type: 'fillText', text, x, y, fillStyle: this.fillStyle, font: this.font, textAlign: this.textAlign });
     },
@@ -389,8 +392,8 @@ test('composePhotosToFrame - Compositing Pipeline & Mock Canvas', async (t) => {
     }
 
     // Check borders drawn
-    const strokeCalls = operations.filter((op) => op.type === 'strokeRect');
-    assert.strictEqual(strokeCalls.length, 3, 'Should stroke border around 3 photos');
+    const strokeCalls = operations.filter((op) => op.type === 'stroke');
+    assert.strictEqual(strokeCalls.length, 3, 'Should stroke rounded border around 3 photos');
 
     // Check branding text
     const textCalls = operations.filter((op) => op.type === 'fillText');

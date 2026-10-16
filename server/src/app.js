@@ -30,4 +30,25 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/print', printRoutes);
 
-module.exports = { app, uploadsDir };
+// 404 handler for unknown API routes
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Client bundle integration (SPA static serving)
+const clientDistDir = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistDir)) {
+  app.use(express.static(clientDistDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/health')) {
+      return next();
+    }
+    const indexHtml = path.join(clientDistDir, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      return res.sendFile(indexHtml);
+    }
+    next();
+  });
+}
+
+module.exports = { app, uploadsDir, clientDistDir };

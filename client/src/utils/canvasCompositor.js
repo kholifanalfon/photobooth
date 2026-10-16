@@ -210,10 +210,12 @@ export async function composePhotosToFrame(photos = [], options = {}) {
       ctx.drawImage(img, cropX, cropY, cropW, cropH, slot.x, slot.y, slot.width, slot.height);
       ctx.restore();
 
-      // Border around photo
+      // Rounded border around photo matching corner radius
+      ctx.beginPath();
+      drawRoundRect(ctx, slot.x, slot.y, slot.width, slot.height, radius);
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
       ctx.lineWidth = 2;
-      ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
+      ctx.stroke();
     }
   }
 
