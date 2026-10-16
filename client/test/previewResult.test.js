@@ -115,6 +115,7 @@ function createTestHarness(Component, props) {
   return {
     vdom,
     render,
+    refs: refMap,
     states: stateMap,
     unmount: () => {
       for (const cleanup of effectCleanups.values()) {
@@ -160,7 +161,7 @@ test('resolveApiUrl - Configuration and Fallback Resolution', async (t) => {
 // 2. QrModal Component Tests
 // ---------------------------------------------------------
 test('QrModal - Markup, Accessibility, and State Rendering', async (t) => {
-  await t.test('returns null when isOpen is false', () => {
+  await t.test('returns empty markup when isOpen is false under AnimatePresence', () => {
     const html = renderToStaticMarkup(
       React.createElement(QrModal, { isOpen: false, onClose: () => {} })
     );
@@ -217,7 +218,7 @@ test('QrModal - Markup, Accessibility, and State Rendering', async (t) => {
       }
     });
 
-    const backdrop = harness.vdom;
+    const backdrop = harness.vdom.props.children || harness.vdom;
     assert.strictEqual(typeof backdrop.props.onClick, 'function');
     backdrop.props.onClick();
     assert.strictEqual(closeCount, 1, 'Backdrop click must invoke onClose');
@@ -283,7 +284,7 @@ test('QrModal - Markup, Accessibility, and State Rendering', async (t) => {
 // 3. ResetConfirmModal Component Tests
 // ---------------------------------------------------------
 test('ResetConfirmModal - Markup, Accessibility, and Actions', async (t) => {
-  await t.test('returns null when isOpen is false', () => {
+  await t.test('returns empty markup when isOpen is false under AnimatePresence', () => {
     const html = renderToStaticMarkup(
       React.createElement(ResetConfirmModal, {
         isOpen: false,
@@ -313,8 +314,14 @@ test('ResetConfirmModal - Markup, Accessibility, and Actions', async (t) => {
       'Must warn visitor about permanent photo deletion'
     );
     assert.ok(html.includes('Batal'), 'Must render cancel button');
-    assert.ok(html.includes('Ya, Hapus &amp; Mulai') || html.includes('Ya, Hapus & Mulai'), 'Must render confirm button');
-    assert.ok(html.includes('lucide-triangle-alert') || html.includes('lucide-alert-triangle'), 'Must render alert icon');
+    assert.ok(
+      html.includes('Ya, Hapus &amp; Mulai') || html.includes('Ya, Hapus & Mulai'),
+      'Must render confirm button'
+    );
+    assert.ok(
+      html.includes('lucide-triangle-alert') || html.includes('lucide-alert-triangle'),
+      'Must render alert icon'
+    );
   });
 
   await t.test('invokes onCancel and onConfirm callbacks on button clicks', () => {
@@ -331,7 +338,7 @@ test('ResetConfirmModal - Markup, Accessibility, and Actions', async (t) => {
       }
     });
 
-    const backdrop = harness.vdom;
+    const backdrop = harness.vdom.props.children || harness.vdom;
     const modalContent = backdrop.props.children;
     const buttonGroup = modalContent.props.children[3];
     const cancelButton = buttonGroup.props.children[0];
@@ -410,7 +417,7 @@ test('PreviewResult - Markup and Structure', async (t) => {
     assert.ok(html.includes('data:image/jpeg;base64,mockPreviewBytes'), 'Must display composite image');
   });
 
-  await t.test('renders placeholder message when composite is not yet ready', () => {
+  await t.test('renders placeholder message and disables Print & Download buttons when composite is not ready', () => {
     const html = renderToStaticMarkup(
       React.createElement(PreviewResult, {
         photos: [],
@@ -421,6 +428,39 @@ test('PreviewResult - Markup and Structure', async (t) => {
     );
 
     assert.ok(html.includes('Merender komposit...'), 'Must render composite loading text');
+
+    // Both Print and Download buttons must have disabled attribute
+    const harness = createTestHarness(PreviewResult, {
+      photos: [],
+      layoutConfig: { layoutType: 'STRIP_3' },
+      onResetSession: () => {},
+      initialCompositeUrl: null
+    });
+
+    const actionGroup = harness.vdom.props.children[3];
+    const printBtn = actionGroup.props.children[0];
+    const downloadQrBtn = actionGroup.props.children[1];
+    const resetBtn = actionGroup.props.children[2];
+
+    assert.strictEqual(printBtn.props.disabled, true, 'Print button must be disabled when composite is not ready');
+    assert.strictEqual(downloadQrBtn.props.disabled, true, 'Download (QR) button must be disabled when composite is not ready');
+    assert.strictEqual(resetBtn.props.disabled, undefined, 'Reset button should remain enabled');
+  });
+
+  await t.test('enables Print and Download buttons when composite is ready', () => {
+    const harness = createTestHarness(PreviewResult, {
+      photos: [],
+      layoutConfig: { layoutType: 'STRIP_3' },
+      onResetSession: () => {},
+      initialCompositeUrl: 'data:image/jpeg;base64,readyPhoto'
+    });
+
+    const actionGroup = harness.vdom.props.children[3];
+    const printBtn = actionGroup.props.children[0];
+    const downloadQrBtn = actionGroup.props.children[1];
+
+    assert.strictEqual(printBtn.props.disabled, false, 'Print button must be enabled when composite is ready');
+    assert.strictEqual(downloadQrBtn.props.disabled, false, 'Download (QR) button must be enabled when composite is ready');
   });
 });
 
@@ -564,7 +604,7 @@ test('PreviewResult - Interactive Actions & Modals Lifecycle', async (t) => {
     }
   });
 
-  await t.test('clicking Print Foto calls /api/print and displays status confirmation', async () => {
+  await t.test('clicking Print Foto calls /api/print and manages reset timer cleanly on unmount', async () => {
     let printEndpoint = null;
     let printPayload = null;
 
@@ -596,6 +636,14 @@ test('PreviewResult - Interactive Actions & Modals Lifecycle', async (t) => {
       assert.strictEqual(printPayload.copies, 1);
       assert.strictEqual(printPayload.sessionId, 'print_session');
       assert.strictEqual(harness.states.get(5), 'Terkirim ke antrean cetak!');
+
+      // Verify timer ref was assigned
+      const timerRef = harness.refs.get(0);
+      assert.ok(timerRef && timerRef.current, 'Timer ref must be active');
+
+      // Verify unmount cleans up timer without errors
+      assert.doesNotThrow(() => harness.unmount());
+      assert.strictEqual(timerRef.current, null, 'Timer ref must be cleared on unmount');
     } finally {
       global.fetch = originalFetch;
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Printer, QrCode, RefreshCcw, CheckCircle2 } from 'lucide-react';
 import { composePhotosToFrame } from '../utils/canvasCompositor.js';
@@ -49,6 +49,18 @@ export default function PreviewResult({
   const [isUploading, setIsUploading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  const printTimerRef = useRef(null);
+
+  // Clear print timer on unmount
+  useEffect(() => {
+    return () => {
+      if (printTimerRef.current) {
+        clearTimeout(printTimerRef.current);
+        printTimerRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     let isSubscribed = true;
 
@@ -80,8 +92,10 @@ export default function PreviewResult({
   }, [photos, layoutConfig]);
 
   const handleDownloadQr = async () => {
+    if (!compositeUrl) return;
+
     setIsQrOpen(true);
-    if (!qrCodeDataUri && compositeUrl) {
+    if (!qrCodeDataUri) {
       setIsUploading(true);
       try {
         const uploadEndpoint = resolveApiUrl('/api/photos/upload', apiBaseUrl);
@@ -111,6 +125,8 @@ export default function PreviewResult({
   };
 
   const handlePrint = async () => {
+    if (!compositeUrl) return;
+
     setIsPrinting(true);
     setPrintStatus('Mengirim ke printer...');
     try {
@@ -129,7 +145,13 @@ export default function PreviewResult({
       }
 
       setPrintStatus('Terkirim ke antrean cetak!');
-      setTimeout(() => setPrintStatus(null), 3000);
+      if (printTimerRef.current) {
+        clearTimeout(printTimerRef.current);
+      }
+      printTimerRef.current = setTimeout(() => {
+        setPrintStatus(null);
+        printTimerRef.current = null;
+      }, 3000);
     } catch (err) {
       // Fallback: native browser printing for kiosks without print agent
       if (typeof window !== 'undefined' && typeof window.print === 'function') {
@@ -195,7 +217,7 @@ export default function PreviewResult({
       <div className="flex flex-wrap items-center justify-center gap-4 mt-6 w-full max-w-xl">
         <button
           onClick={handlePrint}
-          disabled={isPrinting}
+          disabled={isPrinting || !compositeUrl}
           type="button"
           className="flex-1 py-4 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2 text-lg transition-colors cursor-pointer"
         >
@@ -204,7 +226,7 @@ export default function PreviewResult({
 
         <button
           onClick={handleDownloadQr}
-          disabled={isUploading}
+          disabled={isUploading || !compositeUrl}
           type="button"
           className="flex-1 py-4 px-6 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2 text-lg transition-colors cursor-pointer"
         >
