@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Sparkles, Camera, Gift } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 

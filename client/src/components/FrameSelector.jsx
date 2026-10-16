@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
@@ -64,7 +63,7 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     }
                   }}
                   className={`cursor-pointer p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center ${
-                    active ? 'border-pink-500 bg-pink-50/50 shadow-md scale-102' : 'border-slate-200 hover:border-slate-300'
+                    active ? 'border-pink-500 bg-pink-50/50 shadow-md scale-[1.02]' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="w-16 h-24 bg-slate-200 rounded-lg mb-3 flex flex-col gap-1 p-1 justify-center items-center">
