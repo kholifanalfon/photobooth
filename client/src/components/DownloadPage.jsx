@@ -53,87 +53,83 @@ export default function DownloadPage({ filename }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-between p-4 sm:p-6 select-none relative overflow-x-hidden">
-      {/* Background ambient glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-pink-600/15 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-0 right-10 w-[400px] h-[400px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none" />
-
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col items-center justify-between p-4 sm:p-6 select-none relative">
       {/* Header */}
-      <header className="w-full max-w-md flex items-center justify-between pt-2 pb-4 z-10 border-b border-slate-800/80">
+      <header className="w-full max-w-md flex items-center justify-between pt-2 pb-4 z-10 border-b border-slate-200">
         <a
           href="/"
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors font-medium"
         >
           <ArrowLeft size={16} />
           <span>Photobooth</span>
         </a>
-        <div className="flex items-center gap-1 text-pink-400 font-bold text-sm tracking-wide">
-          <Sparkles size={16} />
-          <span>MOMENT CAPTURED</span>
+        <div className="flex items-center gap-1 text-rose-600 font-bold text-xs tracking-wider uppercase">
+          <Sparkles size={14} />
+          <span>Moment Captured</span>
         </div>
       </header>
 
-      {/* Center Card & Preview */}
-      <main className="w-full max-w-md flex flex-col items-center my-auto py-6 z-10">
+      {/* Center Flat Card & Preview */}
+      <main className="w-full max-w-md flex flex-col items-center my-auto py-4 z-10">
         <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.4 }}
-          className="w-full bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col items-center gap-4"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="w-full bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col items-center gap-4"
         >
-          {/* Photo Frame Container */}
-          <div className="relative w-full max-w-[320px] rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-700/60 bg-black flex items-center justify-center">
+          {/* Photo Frame Container (Clean Flat Border) */}
+          <div className="relative w-full max-w-[320px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
             {safeFilename ? (
               <img
                 src={photoUrl}
                 alt="Photobooth Result"
-                className="w-full h-auto object-contain max-h-[50vh] transition-transform duration-300 hover:scale-[1.02]"
+                className="w-full h-auto object-contain max-h-[50vh]"
                 loading="eager"
               />
             ) : (
-              <div className="h-64 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <ImageIcon size={48} />
+              <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
+                <ImageIcon size={44} />
                 <span className="text-sm">Foto tidak ditemukan</span>
               </div>
             )}
           </div>
 
-          <div className="text-center">
-            <h1 className="text-xl font-black bg-gradient-to-r from-pink-400 via-rose-300 to-amber-200 bg-clip-text text-transparent">
+          <div className="text-center mt-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
               Foto Anda Siap Diunduh!
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
               Simpan kenangan spesial ini langsung ke galeri smartphone Anda dalam resolusi penuh.
             </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="w-full flex flex-col gap-3 pt-2">
+          {/* Action Buttons (Flat Solid Design) */}
+          <div className="w-full flex flex-col gap-2.5 pt-1">
             <button
               onClick={handleDownload}
               disabled={downloading || !safeFilename}
-              className={`w-full py-4 px-6 rounded-2xl font-bold text-base flex items-center justify-center gap-2.5 shadow-lg transition-all cursor-pointer ${
+              className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-colors cursor-pointer ${
                 downloading
-                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white hover:brightness-110 active:scale-98 shadow-pink-500/25'
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-sm'
               }`}
             >
-              <Download size={20} className={downloading ? 'animate-bounce' : ''} />
+              <Download size={18} className={downloading ? 'animate-bounce' : ''} />
               <span>{downloading ? 'Mengunduh Foto...' : 'Unduh Foto Sekarang'}</span>
             </button>
 
             <button
               onClick={handleShare}
-              className="w-full py-3 px-6 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 bg-slate-800/90 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-all cursor-pointer"
+              className="w-full py-3 px-6 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
             >
               {copied ? (
                 <>
-                  <Check size={18} className="text-emerald-400" />
-                  <span className="text-emerald-400">Link Berhasil Disalin!</span>
+                  <Check size={16} className="text-emerald-600" />
+                  <span className="text-emerald-600 font-medium">Link Berhasil Disalin!</span>
                 </>
               ) : (
                 <>
-                  <Share2 size={18} />
+                  <Share2 size={16} />
                   <span>Bagikan Link Foto</span>
                 </>
               )}
@@ -144,7 +140,7 @@ export default function DownloadPage({ filename }) {
 
       {/* Footer */}
       <footer className="w-full max-w-md text-center py-3 z-10">
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           Photobooth Experience &bull; Simpan foto sebelum sesi berakhir
         </p>
       </footer>
