@@ -197,7 +197,7 @@ export default function LandingPage({ onStartSession }) {
 
   return (
     <div
-      className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-3 sm:p-6 transition-colors duration-300"
+      className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-2 sm:p-5 transition-colors duration-300"
     >
       {/* Settings Gear Button (Opens Left Drawer) */}
       <button
@@ -248,10 +248,10 @@ export default function LandingPage({ onStartSession }) {
 
       {/* Main Container */}
       <div
-        className={`z-10 flex flex-col items-center w-full text-center px-3 sm:px-6 my-auto transition-all duration-300 ${
+        className={`z-10 flex flex-col items-center w-full text-center px-2 sm:px-4 my-auto transition-all duration-300 ${
           hasActiveVideo
             ? isPortrait
-              ? 'max-w-md'
+              ? 'max-w-sm sm:max-w-md'
               : 'max-w-4xl sm:max-w-5xl'
             : 'max-w-lg sm:max-w-xl'
         }`}
@@ -282,15 +282,15 @@ export default function LandingPage({ onStartSession }) {
         {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
-            className={`relative mb-4 sm:mb-5 mx-auto select-none transition-all duration-300 ${
+            className={`relative mb-3 sm:mb-4 mx-auto select-none transition-all duration-300 ${
               isPortrait
-                ? 'w-auto max-w-[310px] sm:max-w-[370px]'
+                ? 'w-auto max-w-[320px] sm:max-w-[380px]'
                 : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[860px]'
             }`}
           >
             {/* Thematic Outer Frame Wrapping Title and Video */}
             <div
-              className={`relative p-2.5 sm:p-3.5 rounded-3xl transition-all duration-300 ${
+              className={`relative p-2 sm:p-3 rounded-3xl transition-all duration-300 ${
                 isWedding
                   ? 'bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 border-2 border-rose-200/90 shadow-2xl ring-1 ring-amber-300/40 shadow-rose-200/50'
                   : 'bg-white/95 border border-slate-200/90 shadow-2xl ring-1 ring-slate-100 shadow-slate-300/40'
@@ -315,12 +315,12 @@ export default function LandingPage({ onStartSession }) {
               )}
 
               {/* Header Title directly attached on the frame */}
-              <div className="pt-1 pb-2 sm:pb-3 px-3 text-center select-none">
+              <div className="pt-0.5 pb-1 sm:pb-2 px-2 text-center select-none">
                 <h1
                   className={`tracking-wide leading-tight transition-all duration-300 ${
                     isWedding
-                      ? 'font-romantic text-3xl sm:text-4xl md:text-5xl text-rose-950 font-normal drop-shadow-2xs'
-                      : 'text-base sm:text-lg md:text-xl font-extrabold text-slate-800 tracking-tight'
+                      ? 'font-romantic text-2xl sm:text-3xl md:text-4xl text-rose-950 font-normal drop-shadow-2xs'
+                      : 'text-sm sm:text-base md:text-lg font-extrabold text-slate-800 tracking-tight'
                   }`}
                 >
                   {config.title || activeTheme.defaultTitle}
@@ -329,8 +329,8 @@ export default function LandingPage({ onStartSession }) {
                   <p
                     className={`transition-all duration-300 mt-0.5 line-clamp-1 ${
                       isWedding
-                        ? 'font-romantic-serif italic text-xs sm:text-sm text-rose-800/80'
-                        : 'text-[11px] sm:text-xs text-slate-500 font-medium'
+                        ? 'font-romantic-serif italic text-[11px] sm:text-xs text-rose-800/80'
+                        : 'text-[10px] sm:text-[11px] text-slate-500 font-medium'
                     }`}
                   >
                     {config.subtitle || activeTheme.defaultSubtitle}
@@ -338,12 +338,12 @@ export default function LandingPage({ onStartSession }) {
                 )}
               </div>
 
-              {/* Inner Video Viewport with Borderless Cropping & Interaction Lock */}
+              {/* Inner Video Viewport with Full Aspect Ratio Preserved (Zero Cropping) & Interaction Lock */}
               <div
-                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 ${
+                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 flex items-center justify-center ${
                   isPortrait
-                    ? 'w-full aspect-[9/16] max-h-[50vh] sm:max-h-[55vh]'
-                    : 'w-full aspect-video max-h-[50vh] sm:max-h-[56vh]'
+                    ? 'w-full aspect-[9/16] max-h-[52vh] sm:max-h-[58vh]'
+                    : 'w-full aspect-video max-h-[52vh] sm:max-h-[58vh]'
                 }`}
               >
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
@@ -360,7 +360,7 @@ export default function LandingPage({ onStartSession }) {
                         postToYouTube('mute');
                         postToYouTube('playVideo');
                       }}
-                      className="w-full h-full border-0 pointer-events-none select-none scale-[1.02]"
+                      className="w-full h-full border-0 pointer-events-none select-none"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       referrerPolicy="strict-origin-when-cross-origin"
                       allowFullScreen
@@ -382,14 +382,18 @@ export default function LandingPage({ onStartSession }) {
                     )}
                   </>
                 ) : gdriveEmbedUrl ? (
-                  <iframe
-                    key={config.videoUrl}
-                    src={gdriveEmbedUrl}
-                    title="Google Drive Video Player"
-                    className="absolute -top-[52px] -bottom-[52px] -left-[2px] -right-[2px] w-[calc(100%+4px)] h-[calc(100%+104px)] border-0 pointer-events-none select-none"
-                    allow="autoplay; encrypted-media; fullscreen"
-                    allowFullScreen
-                  />
+                  <>
+                    <iframe
+                      key={config.videoUrl}
+                      src={gdriveEmbedUrl}
+                      title="Google Drive Video Player"
+                      className="w-full h-full border-0 pointer-events-none select-none"
+                      allow="autoplay; encrypted-media; fullscreen"
+                      allowFullScreen
+                    />
+                    {/* Clean top-right corner mask to hide Google Drive pop-out icon without cropping video */}
+                    <div className="absolute top-0 right-0 w-11 h-11 bg-black/90 pointer-events-none z-10 rounded-bl-xl" />
+                  </>
                 ) : (
                   <video
                     ref={videoElemRef}
@@ -403,7 +407,7 @@ export default function LandingPage({ onStartSession }) {
                         setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
                       }
                     }}
-                    className="w-full h-full object-cover pointer-events-none select-none"
+                    className="w-full h-full object-contain pointer-events-none select-none"
                   />
                 )}
               </div>
