@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, SlidersHorizontal, Video, Type, Palette, Upload, RefreshCw, Check } from 'lucide-react';
+import { X, SlidersHorizontal, Video, Type, Palette, Upload, RefreshCw, Check, Info } from 'lucide-react';
 
 export const THEME_PRESETS = {
   general: {
@@ -223,6 +223,17 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                       placeholder="https://www.youtube.com/watch?v=... atau link MP4"
                       className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                     />
+                    <div className="mt-1.5 p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] text-amber-800 space-y-1">
+                      <p className="font-bold flex items-center gap-1 text-amber-900">
+                        <Info size={13} className="shrink-0" /> Catatan Pemutaran Video YouTube:
+                      </p>
+                      <p className="leading-relaxed">
+                        • Autoplay di HP & Tablet mewajibkan video dimulai dalam keadaan <strong>senyap (mute)</strong> sesuai kebijakan keamanan browser mobile.
+                      </p>
+                      <p className="leading-relaxed">
+                        • Pastikan video YouTube memiliki izin <em>Allow embedding</em>. Video klip musik berhak cipta (VEVO) diblokir oleh pemiliknya dari pemutaran luar (Error 150).
+                      </p>
+                    </div>
                   </div>
 
                   <div className="relative">
