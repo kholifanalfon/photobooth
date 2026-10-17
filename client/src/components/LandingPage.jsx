@@ -58,10 +58,8 @@ const DEFAULT_CONFIG = {
 export default function LandingPage({ onStartSession }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [ytError, setYtError] = useState(null);
   const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
   const [exactNumericRatio, setExactNumericRatio] = useState(null);
-  const iframeRef = useRef(null);
   const videoElemRef = useRef(null);
 
   // Initialize config safely from localStorage
@@ -109,14 +107,11 @@ export default function LandingPage({ onStartSession }) {
   };
 
   const hasActiveVideo = config.enableVideo && Boolean((config.videoUrl || '').trim());
-  const ytEmbedUrl = getYoutubeEmbedUrl(config.videoUrl);
-  const gdriveEmbedUrl = getGoogleDriveEmbedUrl(config.videoUrl);
 
   const effectiveRatio = detectVideoAspectRatio(config.videoUrl, config.videoRatio, elementDetectedRatio);
   const isPortraitMode = effectiveRatio === 'portrait' || effectiveRatio === 'portrait-photo';
 
   useEffect(() => {
-    setYtError(null);
     setElementDetectedRatio(null);
     setExactNumericRatio(null);
 
@@ -131,17 +126,6 @@ export default function LandingPage({ onStartSession }) {
       setCachedVideoSrc(config.videoUrl);
     }
   }, [config.videoUrl]);
-
-  const postToYouTube = (func, args = []) => {
-    try {
-      if (iframeRef.current && iframeRef.current.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func, args }),
-          '*'
-        );
-      }
-    } catch (e) {}
-  };
 
   // Autoplay attempt: Trigger play immediately upon load + gesture fallback
   useEffect(() => {
@@ -367,70 +351,23 @@ export default function LandingPage({ onStartSession }) {
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
                 <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
 
-                {ytEmbedUrl ? (
-                  <>
-                    <iframe
-                      key={config.videoUrl}
-                      ref={iframeRef}
-                      src={ytEmbedUrl}
-                      title="YouTube Video Preview"
-                      onLoad={() => {
-                        postToYouTube('mute');
-                        postToYouTube('playVideo');
-                      }}
-                      className="w-full h-full border-0 pointer-events-none select-none"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      allowFullScreen
-                    />
-                    {ytError && (
-                      <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-20">
-                        <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
-                        <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
-                          {ytError}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsDrawerOpen(true)}
-                          className="mt-2.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-                        >
-                          Buka Pengaturan Video
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : gdriveEmbedUrl ? (
-                  <>
-                    <iframe
-                      key={config.videoUrl}
-                      src={gdriveEmbedUrl}
-                      title="Google Drive Video Player"
-                      className="w-full h-full border-0 pointer-events-none select-none"
-                      allow="autoplay; encrypted-media; fullscreen"
-                      allowFullScreen
-                    />
-                    {/* Clean top-right corner mask to hide Google Drive pop-out icon without cropping video */}
-                    <div className="absolute top-0 right-0 w-11 h-11 bg-black/90 pointer-events-none z-10 rounded-bl-xl" />
-                  </>
-                ) : (
-                  <video
-                    ref={videoElemRef}
-                    src={cachedVideoSrc || config.videoUrl}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="auto"
-                    onLoadedMetadata={(e) => {
-                      if (e.target && e.target.videoWidth && e.target.videoHeight) {
-                        const ratio = e.target.videoWidth / e.target.videoHeight;
-                        setExactNumericRatio(ratio);
-                        setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
-                      }
-                    }}
-                    className="w-full h-full object-contain pointer-events-none select-none"
-                  />
-                )}
+                <video
+                  ref={videoElemRef}
+                  src={cachedVideoSrc || config.videoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  onLoadedMetadata={(e) => {
+                    if (e.target && e.target.videoWidth && e.target.videoHeight) {
+                      const ratio = e.target.videoWidth / e.target.videoHeight;
+                      setExactNumericRatio(ratio);
+                      setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
+                    }
+                  }}
+                  className="w-full h-full object-contain pointer-events-none select-none"
+                />
               </div>
 
               {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line */}

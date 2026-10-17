@@ -8,10 +8,8 @@ import {
   Palette,
   Check,
   Upload,
-  Clipboard,
-  ExternalLink,
+  Trash2,
   Sparkles,
-  Heart,
   Loader2,
   HardDrive,
   Database
@@ -69,32 +67,10 @@ export default function LandingConfigDrawer({
     onUpdateConfig({ enableVideo: !config.enableVideo });
   };
 
-  const handleVideoUrlChange = (e) => {
-    onUpdateConfig({ videoUrl: e.target.value });
-  };
-
-  const handlePasteVideoUrl = async () => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          onUpdateConfig({ videoUrl: text.trim(), enableVideo: true });
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Clipboard readText failed or not permitted', err);
-    }
-    if (typeof window !== 'undefined') {
-      const promptVal = window.prompt('Tempel link video YouTube / Google Drive / MP4 di sini:', '');
-      if (promptVal && promptVal.trim()) {
-        onUpdateConfig({ videoUrl: promptVal.trim(), enableVideo: true });
-      }
-    }
-  };
-
-  const handleClearVideoUrl = () => {
-    onUpdateConfig({ videoUrl: '' });
+  const handleRemoveVideo = () => {
+    onUpdateConfig({ videoUrl: '', enableVideo: false });
+    setUploadStatus('');
+    setUploadError(null);
   };
 
   const handleVideoFileUpload = async (e) => {
@@ -151,7 +127,7 @@ export default function LandingConfigDrawer({
       onUpdateConfig({ videoUrl: serverVideoUrl, enableVideo: true });
       setUploadPercent(100);
       setChunkDetail('Selesai 100%');
-      setUploadStatus('✓ Video tersimpan di server & siap di-cache!');
+      setUploadStatus('✓ Video berhasil diunggah ke server & browser cache!');
     } catch (err) {
       console.error('Failed chunked video upload:', err);
       setUploadError(err.message || 'Gagal mengunggah video ke server');
@@ -342,7 +318,7 @@ export default function LandingConfigDrawer({
                   </div>
                 )}
 
-                {/* TAB 2: VIDEO SETTINGS */}
+                {/* TAB 2: VIDEO SETTINGS - PURE UPLOAD & INDEXEDDB CHUNKING */}
                 {activeTab === 'video' && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
@@ -359,43 +335,6 @@ export default function LandingConfigDrawer({
                         />
                         <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
                       </label>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-slate-700">
-                          URL Video (YouTube / Google Drive / Server):
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handlePasteVideoUrl}
-                            className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Clipboard size={12} />
-                            <span>Tempel</span>
-                          </button>
-                          {config.videoUrl && (
-                            <button
-                              type="button"
-                              onClick={handleClearVideoUrl}
-                              className="text-[11px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer"
-                            >
-                              Hapus
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <input
-                        type="url"
-                        value={config.videoUrl}
-                        onChange={handleVideoUrlChange}
-                        placeholder="https://drive.google.com/file/d/... atau YouTube URL"
-                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                      />
-                      <div className="text-[11px] text-slate-400 mt-1 space-y-1">
-                        <p>Format yang didukung: Google Drive View, YouTube Video/Shorts, atau video tersimpan di server.</p>
-                      </div>
                     </div>
 
                     {/* Orientasi Video / Aspect Ratio Selector */}
@@ -431,25 +370,53 @@ export default function LandingConfigDrawer({
                     </div>
 
                     {/* Server Upload & Browser Caching Section with IndexedDB Chunking */}
-                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                           <HardDrive size={14} className="text-rose-500" />
-                          <span>Unggah Video (Chunking IndexedDB)</span>
+                          <span>Unggah File Video</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <Database size={10} /> Anti-Timeout
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Database size={10} /> Chunking IndexedDB
                         </span>
                       </div>
 
-                      <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-rose-400 hover:bg-rose-50/40 transition-colors">
+                      {/* Video Status Card if video already exists */}
+                      {config.videoUrl && !isUploading && (
+                        <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                              <Check size={14} />
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-emerald-950">Video Aktif Tersimpan</div>
+                              <div className="text-[10px] text-emerald-700">Tersimpan di server & cache browser</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveVideo}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Hapus Video"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Dropzone Upload Button */}
+                      <label className="flex items-center justify-center gap-2 p-3.5 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-rose-400 hover:bg-rose-50/40 transition-colors">
                         {isUploading ? (
                           <Loader2 size={16} className="text-rose-500 animate-spin" />
                         ) : (
                           <Upload size={16} className="text-slate-500" />
                         )}
                         <span className="text-xs font-semibold text-slate-700">
-                          {isUploading ? 'Sedang Memproses...' : 'Pilih File Video (MP4/WebM)'}
+                          {isUploading
+                            ? 'Sedang Memproses Upload...'
+                            : config.videoUrl
+                            ? 'Pilih File untuk Mengganti Video'
+                            : 'Pilih & Unggah File Video (MP4/WebM)'}
                         </span>
                         <input
                           type="file"
@@ -498,11 +465,9 @@ export default function LandingConfigDrawer({
                         </p>
                       )}
 
-                      {config.videoUrl && !isUploading && (
-                        <p className="text-[11px] text-slate-500">
-                          File video dipecah ke IndexedDB secara aman sebelum diunggah ke server untuk mencegah timeout jaringan.
-                        </p>
-                      )}
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Format yang didukung: <strong>MP4, WebM, MOV</strong>. File otomatis dipecah per 1.5MB via IndexedDB agar bebas hambatan timeout jaringan.
+                      </p>
                     </div>
                   </div>
                 )}
