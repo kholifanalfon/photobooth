@@ -127,12 +127,9 @@ export default function LandingPage({ onStartSession }) {
     }
   }, [config.videoUrl]);
 
-  // Autoplay attempt: Trigger play immediately upon load + gesture fallback
+  // Autoplay video file immediately upon load + gesture fallback
   useEffect(() => {
     if (!hasActiveVideo) return;
-
-    postToYouTube('mute');
-    postToYouTube('playVideo');
 
     if (videoElemRef.current) {
       videoElemRef.current.muted = true;
@@ -143,8 +140,6 @@ export default function LandingPage({ onStartSession }) {
     }
 
     const handleInteraction = () => {
-      postToYouTube('mute');
-      postToYouTube('playVideo');
       if (videoElemRef.current && videoElemRef.current.paused) {
         videoElemRef.current.play().catch(() => {});
       }
@@ -164,35 +159,6 @@ export default function LandingPage({ onStartSession }) {
       }
     };
   }, [config.videoUrl, config.enableVideo, hasActiveVideo]);
-
-  // YouTube postMessage event listener for error 150/101 detection
-  useEffect(() => {
-    const handleMessage = (e) => {
-      if (!e.origin || (!e.origin.includes('youtube.com') && !e.origin.includes('youtube-nocookie.com'))) {
-        return;
-      }
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (!data) return;
-        if (data.event === 'onError') {
-          if (data.info === 150 || data.info === 101) {
-            setYtError('Pemilik video YouTube ini membatasi pemutaran di situs eksternal (Error 150 / Hak Cipta). Silakan gunakan video YouTube lain yang mengizinkan embed atau unggah MP4 langsung.');
-          } else if (data.info === 100 || data.info === 2) {
-            setYtError('Video YouTube tidak ditemukan atau URL tidak valid.');
-          }
-        }
-      } catch (err) {}
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('message', handleMessage);
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('message', handleMessage);
-      }
-    };
-  }, []);
 
   const activeTheme = THEME_PRESETS[config.theme] || THEME_PRESETS.general;
   const isWedding = config.theme === 'wedding';
