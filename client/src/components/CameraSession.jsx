@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Loader2 } from 'lucide-react';
+import { Camera, Loader2, RotateCcw, Check } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
@@ -22,6 +22,7 @@ export default function CameraSession({
   const [isFlashing, setIsFlashing] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [poseReviewPhoto, setPoseReviewPhoto] = useState(null);
 
   const totalPhotos =
     layoutConfig?.photoCount ||
@@ -51,20 +52,18 @@ export default function CameraSession({
             },
             audio: false
           });
-        } catch {
-          // Fallback to basic webcam constraints for broader camera driver compatibility
+        } catch (initialErr) {
+          // Fallback to basic video constraints
           stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: 'user',
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 }
-            },
+            video: true,
             audio: false
           });
         }
 
         if (!mounted) {
-          stream.getTracks().forEach((track) => track.stop());
+          if (stream) {
+            stream.getTracks().forEach((track) => track.stop());
+          }
           return;
         }
 
@@ -142,7 +141,7 @@ export default function CameraSession({
 
   const handleCancel = () => {
     if (
-      capturedPhotosRef.current.length > 0 &&
+      (capturedPhotosRef.current.length > 0 || poseReviewPhoto) &&
       typeof window !== 'undefined' &&
       typeof window.confirm === 'function'
     ) {
@@ -155,6 +154,7 @@ export default function CameraSession({
     // Explicit ephemeral security purge of volatile captured image memory
     capturedPhotosRef.current = [];
     setCapturedPhotos([]);
+    setPoseReviewPhoto(null);
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -193,30 +193,41 @@ export default function CameraSession({
       photoData = 'data:image/jpeg;base64,mock';
     }
 
-    const nextPhotos = [...capturedPhotosRef.current, photoData];
-    capturedPhotosRef.current = nextPhotos;
-    setCapturedPhotos(nextPhotos);
-
     timeoutRef.current = setTimeout(() => {
       setIsFlashing(false);
       setCountdown(null);
-
-      if (nextPhotos.length >= totalPhotos) {
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
-        if (typeof onComplete === 'function') {
-          onComplete(nextPhotos);
-        }
-      } else {
-        setCurrentPose(nextPhotos.length);
-      }
+      // Put captured photo into review state instead of jumping directly to next pose
+      setPoseReviewPhoto(photoData);
     }, 300);
   };
 
+  const handleRetake = () => {
+    setPoseReviewPhoto(null);
+  };
+
+  const handleAcceptPhoto = () => {
+    if (!poseReviewPhoto) return;
+
+    const nextPhotos = [...capturedPhotosRef.current, poseReviewPhoto];
+    capturedPhotosRef.current = nextPhotos;
+    setCapturedPhotos(nextPhotos);
+    setPoseReviewPhoto(null);
+
+    if (nextPhotos.length >= totalPhotos) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (typeof onComplete === 'function') {
+        onComplete(nextPhotos);
+      }
+    } else {
+      setCurrentPose(nextPhotos.length);
+    }
+  };
+
   const triggerCaptureSequence = () => {
-    if (countdown !== null) return;
+    if (countdown !== null || poseReviewPhoto) return;
 
     let timer = totalCountdownSeconds;
     if (timer <= 0) {
@@ -280,10 +291,10 @@ export default function CameraSession({
         <div className="w-20" />
       </div>
 
-      {/* Main Viewfinder */}
+      {/* Main Viewfinder / Pose Review */}
       <div className="relative z-10 w-full max-w-3xl aspect-[4/3] bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex items-center justify-center">
         {/* Loading Spinner until video stream is actively playing */}
-        {!isVideoReady && (
+        {!isVideoReady && !poseReviewPhoto && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-900/90 z-20">
             <Loader2 className="w-10 h-10 animate-spin text-pink-500" />
             <span className="text-sm font-medium">Menghubungkan kamera...</span>
@@ -295,8 +306,24 @@ export default function CameraSession({
           autoPlay
           playsInline
           muted
-          className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${isVideoReady ? 'opacity-100' : 'opacity-0'}`}
+          className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+            isVideoReady && !poseReviewPhoto ? 'opacity-100' : 'opacity-0'
+          }`}
         />
+
+        {/* Pose Review Overlay */}
+        {poseReviewPhoto && (
+          <div className="absolute inset-0 z-30 bg-black flex flex-col items-center justify-center">
+            <img
+              src={poseReviewPhoto}
+              alt={`Review Pose ${currentPose + 1}`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute top-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 text-white font-bold text-sm">
+              ✨ Review Pose {currentPose + 1}
+            </div>
+          </div>
+        )}
 
         {/* Large Countdown Overlay */}
         <AnimatePresence>
@@ -318,18 +345,37 @@ export default function CameraSession({
 
       {/* Bottom Controls */}
       <div className="z-10 flex flex-col items-center gap-4">
-        <button
-          disabled={countdown !== null}
-          onClick={triggerCaptureSequence}
-          className={`px-10 py-5 rounded-full font-black text-2xl flex items-center gap-3 shadow-2xl transition-all ${
-            countdown !== null
-              ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:scale-105 active:scale-95 text-white shadow-pink-500/30'
-          }`}
-        >
-          <Camera size={28} />
-          {countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
-        </button>
+        {poseReviewPhoto ? (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleRetake}
+              className="px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-all cursor-pointer"
+            >
+              <RotateCcw size={22} />
+              Foto Ulang (Retake)
+            </button>
+            <button
+              onClick={handleAcceptPhoto}
+              className="px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
+            >
+              <Check size={22} />
+              Gunakan Foto Ini
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled={countdown !== null}
+            onClick={triggerCaptureSequence}
+            className={`px-10 py-5 rounded-full font-black text-2xl flex items-center gap-3 shadow-2xl transition-all ${
+              countdown !== null
+                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:scale-105 active:scale-95 text-white shadow-pink-500/30'
+            }`}
+          >
+            <Camera size={28} />
+            {countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
+          </button>
+        )}
       </div>
     </div>
   );

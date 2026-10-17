@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import FrameSelector from './components/FrameSelector';
 import CameraSession from './components/CameraSession';
 import PreviewResult from './components/PreviewResult';
+import DownloadPage from './components/DownloadPage';
 
 export default function App() {
-  const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING, FRAME_PICKER, CAMERA, PREVIEW
+  const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING, FRAME_PICKER, CAMERA, PREVIEW, DOWNLOAD
   const [layoutConfig, setLayoutConfig] = useState(null);
   const [capturedPhotos, setCapturedPhotos] = useState([]);
+  const [downloadFilename, setDownloadFilename] = useState('');
+
+  // Detect URL path to display dedicated mobile download page if accessed via /download/:filename
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/download/')) {
+        const file = path.replace(/^\/download\//, '').split('?')[0];
+        setDownloadFilename(file);
+        setCurrentStep('DOWNLOAD');
+      }
+    }
+  }, []);
 
   const handleStartLanding = () => {
     setCurrentStep('FRAME_PICKER');
@@ -31,6 +45,10 @@ export default function App() {
 
   return (
     <div className="w-full min-h-screen">
+      {currentStep === 'DOWNLOAD' && (
+        <DownloadPage filename={downloadFilename} />
+      )}
+
       {currentStep === 'LANDING' && <LandingPage onStartSession={handleStartLanding} />}
 
       {currentStep === 'FRAME_PICKER' && (

@@ -38,15 +38,13 @@ router.post('/upload', async (req, res) => {
 
     // 3. Dynamic extension detection based on MIME header
     let ext = '.jpg';
-    const mimeMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
-    if (mimeMatch) {
-      const mimeSubtype = mimeMatch[1].toLowerCase();
-      if (mimeSubtype === 'png') {
-        ext = '.png';
-      } else if (mimeSubtype === 'webp') {
-        ext = '.webp';
-      } else if (mimeSubtype === 'jpeg' || mimeSubtype === 'jpg') {
-        ext = '.jpg';
+    if (imageBase64.startsWith('data:image/')) {
+      const match = imageBase64.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
+      if (match && match[1]) {
+        const subtype = match[1].toLowerCase();
+        if (subtype === 'png') ext = '.png';
+        else if (subtype === 'webp') ext = '.webp';
+        else if (subtype === 'jpeg' || subtype === 'jpg') ext = '.jpg';
       }
     }
 
@@ -57,8 +55,9 @@ router.post('/upload', async (req, res) => {
     await fs.promises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
 
     const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `http://${req.headers.host}` : 'http://localhost:3001');
-    const downloadUrl = `${host}/uploads/${filename}`;
-    const qrCodeDataUri = await generateQrDataUri(downloadUrl);
+    const downloadPageUrl = `${host}/download/${filename}`;
+    const rawFileUrl = `${host}/uploads/${filename}`;
+    const qrCodeDataUri = await generateQrDataUri(downloadPageUrl);
 
     // 4. Save to DB if safeSessionId and DATABASE_URL are present without bloating DB with multi-MB base64
     if (sessionId && process.env.DATABASE_URL) {
@@ -76,17 +75,16 @@ router.post('/upload', async (req, res) => {
           }
         });
       } catch (dbErr) {
-        if (process.env.NODE_ENV !== 'test') {
-          console.warn('Prisma DB error saving photo record:', dbErr.message);
-        }
+        console.error('Prisma DB error saving photo record:', dbErr.message);
       }
     }
 
     return res.json({
       success: true,
-      downloadUrl,
-      qrCodeDataUri,
-      filename
+      downloadUrl: downloadPageUrl,
+      rawUrl: rawFileUrl,
+      filename,
+      qrCodeDataUri
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
