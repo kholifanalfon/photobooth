@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera } from 'lucide-react';
+import { Camera, Loader2 } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
@@ -21,6 +21,7 @@ export default function CameraSession({
   const [countdown, setCountdown] = useState(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [cameraError, setCameraError] = useState(null);
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   const totalPhotos =
     layoutConfig?.photoCount ||
@@ -39,14 +40,28 @@ export default function CameraSession({
           throw new Error('WebRTC getUserMedia is not supported');
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            facingMode: 'user'
-          },
-          audio: false
-        });
+        // Tiered constraints: try HD first, fallback to standard if rejected
+        let stream = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false
+          });
+        } catch {
+          // Fallback to basic webcam constraints for broader camera driver compatibility
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 }
+            },
+            audio: false
+          });
+        }
 
         if (!mounted) {
           stream.getTracks().forEach((track) => track.stop());
@@ -54,17 +69,43 @@ export default function CameraSession({
         }
 
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          if (typeof videoRef.current.play === 'function') {
-            videoRef.current.play().catch(() => {
-              // Ignore browser autoplay/user gesture rejections safely
-            });
+        const video = videoRef.current;
+
+        if (video) {
+          video.srcObject = stream;
+
+          const markReady = () => {
+            if (mounted) {
+              setIsVideoReady(true);
+            }
+          };
+
+          // Robust playback initialization: wait for metadata / canplay event
+          video.onloadedmetadata = () => {
+            markReady();
+            if (typeof video.play === 'function') {
+              video.play().catch(() => {
+                // Ignore autoplay gesture restrictions safely
+              });
+            }
+          };
+
+          if (typeof video.play === 'function') {
+            video.play()
+              .then(markReady)
+              .catch(() => {
+                // In mock test environments or restricted autoplay, mark ready so UI doesn't hang
+                markReady();
+              });
+          } else {
+            markReady();
           }
+        } else {
+          setIsVideoReady(true);
         }
       } catch (err) {
         if (mounted) {
-          setCameraError('Gagal mengakses kamera. Pastikan izin kamera telah diberikan.');
+          setCameraError('Gagal mengakses kamera. Pastikan izin kamera telah diberikan dan tidak sedang digunakan aplikasi lain.');
         }
       }
     }
@@ -241,12 +282,20 @@ export default function CameraSession({
 
       {/* Main Viewfinder */}
       <div className="relative z-10 w-full max-w-3xl aspect-[4/3] bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex items-center justify-center">
+        {/* Loading Spinner until video stream is actively playing */}
+        {!isVideoReady && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-900/90 z-20">
+            <Loader2 className="w-10 h-10 animate-spin text-pink-500" />
+            <span className="text-sm font-medium">Menghubungkan kamera...</span>
+          </div>
+        )}
+
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-cover scale-x-[-1]"
+          className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${isVideoReady ? 'opacity-100' : 'opacity-0'}`}
         />
 
         {/* Large Countdown Overlay */}
@@ -257,7 +306,7 @@ export default function CameraSession({
               initial={{ scale: 0.3, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 1.5, opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs pointer-events-none"
+              className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs pointer-events-none z-30"
             >
               <span className="text-9xl font-black text-white drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]">
                 {countdown}
@@ -272,11 +321,10 @@ export default function CameraSession({
         <button
           disabled={countdown !== null}
           onClick={triggerCaptureSequence}
-          aria-label={countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
           className={`px-10 py-5 rounded-full font-black text-2xl flex items-center gap-3 shadow-2xl transition-all ${
             countdown !== null
               ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:scale-105 text-white shadow-pink-500/30'
+              : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:scale-105 active:scale-95 text-white shadow-pink-500/30'
           }`}
         >
           <Camera size={28} />
