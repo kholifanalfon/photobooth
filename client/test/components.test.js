@@ -264,4 +264,21 @@ test('FrameSelector Interactive Event Contracts', async (t) => {
     assert.strictEqual(confirmedData.frameColor, '#FFFFFF');
     assert.deepStrictEqual(confirmedData.palette, PALETTES[0]);
   });
+
+  await t.test("renders grid-cols-2 for GRID_2X2 and reflects selected frame color across thumbnails", () => {
+    const htmlWhite = renderToStaticMarkup(
+      React.createElement(FrameSelector, { onConfirm: () => {}, onBack: () => {} })
+    );
+
+    assert.ok(htmlWhite.includes("data-testid=\"thumbnail-grid-2x2\""), "Must have grid 2x2 thumbnail");
+    assert.ok(htmlWhite.includes("grid-cols-2 grid-rows-2"), "GRID_2X2 thumbnail must use 2x2 CSS grid");
+    assert.ok(htmlWhite.includes("style=\"background-color:#FFFFFF\""), "Thumbnails should reflect selected frame background");
+
+    const treeBlack = renderComponentTree(FrameSelector, { onConfirm: () => {}, onBack: () => {} }, [
+      "STRIP_3",
+      PALETTES[1]
+    ]);
+    const htmlBlack = renderToStaticMarkup(treeBlack);
+    assert.ok(htmlBlack.includes("style=\"background-color:#1E1E24\""), "Thumbnails must dynamically reflect #1E1E24 frame color");
+  });
 });

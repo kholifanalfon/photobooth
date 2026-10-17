@@ -27,13 +27,62 @@ export default function FrameSelector({ onConfirm, onBack }) {
     }
   };
 
+  /**
+   * Helper to render accurate layout thumbnail according to layout type and selected frame color
+   */
+  const renderLayoutThumbnail = (key, config) => {
+    const frameBg = selectedPalette.hex;
+    const borderStyle = frameBg === '#FFFFFF' ? 'border border-slate-300' : 'border border-black/10';
+
+    if (key === 'GRID_2X2') {
+      return (
+        <div
+          data-testid="thumbnail-grid-2x2"
+          className={`w-16 h-24 rounded-lg mb-3 grid grid-cols-2 grid-rows-2 gap-1 p-1.5 shadow-sm transition-colors duration-200 ${borderStyle}`}
+          style={{ backgroundColor: frameBg }}
+        >
+          <div className="w-full h-full bg-slate-400/80 rounded-sm" />
+          <div className="w-full h-full bg-slate-400/80 rounded-sm" />
+          <div className="w-full h-full bg-slate-400/80 rounded-sm" />
+          <div className="w-full h-full bg-slate-400/80 rounded-sm" />
+        </div>
+      );
+    }
+
+    if (key === 'POLAROID_1') {
+      return (
+        <div
+          data-testid="thumbnail-polaroid-1"
+          className={`w-16 h-24 rounded-lg mb-3 flex flex-col justify-between p-1.5 shadow-sm transition-colors duration-200 ${borderStyle}`}
+          style={{ backgroundColor: frameBg }}
+        >
+          <div className="w-full h-14 bg-slate-400/80 rounded-sm" />
+          <div className="w-8 h-1.5 bg-slate-300/80 rounded-full self-center mb-1" />
+        </div>
+      );
+    }
+
+    // STRIP_3 or STRIP_4 or fallback
+    return (
+      <div
+        data-testid={`thumbnail-${key.toLowerCase()}`}
+        className={`w-16 h-24 rounded-lg mb-3 flex flex-col gap-1 p-1.5 justify-center items-center shadow-sm transition-colors duration-200 ${borderStyle}`}
+        style={{ backgroundColor: frameBg }}
+      >
+        {Array.from({ length: config.photoCount }).map((_, i) => (
+          <div key={i} className="w-full h-full bg-slate-400/80 rounded-sm" />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col min-h-screen w-full bg-slate-50 text-slate-800 p-6 md:p-10 select-none">
       <div className="flex items-center justify-between max-w-5xl mx-auto w-full mb-8">
         <button
           onClick={onBack}
           aria-label="Kembali"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white shadow-sm border border-slate-200 hover:bg-slate-100 font-semibold"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white shadow-sm border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer"
         >
           <ArrowLeft size={18} /> Kembali
         </button>
@@ -66,11 +115,7 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     active ? 'border-pink-500 bg-pink-50/50 shadow-md scale-[1.02]' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <div className="w-16 h-24 bg-slate-200 rounded-lg mb-3 flex flex-col gap-1 p-1 justify-center items-center">
-                    {Array.from({ length: config.photoCount }).slice(0, 4).map((_, i) => (
-                      <div key={i} className="w-full h-full bg-slate-400 rounded-sm" />
-                    ))}
-                  </div>
+                  {renderLayoutThumbnail(key, config)}
                   <span className="font-bold text-sm text-slate-800">{config.name}</span>
                   <span className="text-xs text-slate-500">{config.photoCount} Jepretan</span>
                 </div>
@@ -93,7 +138,7 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     aria-label={p.name}
                     aria-pressed={active}
                     onClick={() => setSelectedPalette(p)}
-                    className="flex flex-col items-center p-3 rounded-xl border border-slate-200 hover:shadow-sm transition-all focus:outline-none"
+                    className="flex flex-col items-center p-3 rounded-xl border border-slate-200 hover:shadow-sm transition-all focus:outline-none cursor-pointer"
                   >
                     <div
                       className="w-10 h-10 rounded-full border-2 border-slate-300 mb-2 flex items-center justify-center shadow-inner"
@@ -110,7 +155,7 @@ export default function FrameSelector({ onConfirm, onBack }) {
 
           <button
             onClick={handleConfirm}
-            className="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-500 text-white font-extrabold text-lg rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 hover:opacity-95"
+            className="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-500 text-white font-extrabold text-lg rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 hover:opacity-95 cursor-pointer"
           >
             Lanjut ke Kamera <ArrowRight size={20} />
           </button>
