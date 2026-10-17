@@ -302,31 +302,37 @@ export default function CameraSession({
       {/* Screen Flash Overlay */}
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
-      {/* Header Info */}
-      <div className="z-10 flex items-center justify-between w-full max-w-2xl shrink-0 mb-1">
-        <button
-          onClick={handleCancel}
-          aria-label="Batalkan Sesi"
-          className="text-slate-600 hover:text-slate-900 font-medium text-xs px-2 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
-        >
-          Batalkan Sesi
-        </button>
+      {/* Header Info (Grid 3-columns with true center pose badge) */}
+      <div className="z-10 grid grid-cols-3 items-center w-full max-w-2xl shrink-0 mb-1">
+        <div className="flex justify-start">
+          <button
+            onClick={handleCancel}
+            aria-label="Batalkan Sesi"
+            className="text-slate-600 hover:text-slate-900 font-medium text-xs px-2 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+          >
+            Batalkan Sesi
+          </button>
+        </div>
 
-        <div className="bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-xs font-bold text-xs text-slate-700">
-          Pose ke <span className="text-rose-600 font-extrabold text-sm">{currentPose + 1}</span> dari {totalPhotos}
+        <div className="flex justify-center">
+          <div className="bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-xs font-bold text-xs text-slate-700 whitespace-nowrap">
+            Pose ke <span className="text-rose-600 font-extrabold text-sm">{currentPose + 1}</span> dari {totalPhotos}
+          </div>
         </div>
 
         {/* Switch Camera Button for mobile / tablet devices */}
-        <button
-          onClick={toggleCamera}
-          aria-label="Ganti Kamera"
-          title="Ganti Kamera (Depan / Belakang)"
-          disabled={countdown !== null || Boolean(poseReviewPhoto)}
-          className="p-1 sm:px-2.5 sm:py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
-        >
-          <RefreshCw size={13} />
-          <span className="hidden sm:inline">{facingMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}</span>
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={toggleCamera}
+            aria-label="Ganti Kamera"
+            title="Ganti Kamera (Depan / Belakang)"
+            disabled={countdown !== null || Boolean(poseReviewPhoto)}
+            className="p-1 sm:px-2.5 sm:py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
+          >
+            <RefreshCw size={13} />
+            <span className="hidden sm:inline">{facingMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Viewfinder / Pose Review Card */}
