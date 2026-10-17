@@ -270,10 +270,10 @@ export default function LandingPage({ onStartSession }) {
         {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
-            className={`relative mb-3 sm:mb-4 mx-auto select-none transition-all duration-300 ${
+            className={`relative mb-2 sm:mb-3 mx-auto select-none transition-all duration-300 ${
               isPortraitMode
-                ? 'w-auto max-w-[310px] sm:max-w-[370px]'
-                : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[840px]'
+                ? 'w-fit max-w-[280px] sm:max-w-[340px]'
+                : 'w-full max-w-[480px] sm:max-w-[640px]'
             }`}
           >
             {/* Thematic Outer Frame Snugly Wrapping Video (Hidden while video is loading) */}
@@ -354,7 +354,7 @@ export default function LandingPage({ onStartSession }) {
                   onCanPlay={() => setIsVideoLoading(false)}
                   onPlaying={() => setIsVideoLoading(false)}
                   onWaiting={() => setIsVideoLoading(true)}
-                  className={`w-full h-full object-contain pointer-events-none select-none transition-opacity duration-300 ${
+                  className={`w-full h-full object-cover pointer-events-none select-none transition-opacity duration-300 ${
                     isVideoLoading ? 'opacity-0' : 'opacity-100'
                   }`}
                 />
@@ -441,31 +441,31 @@ export default function LandingPage({ onStartSession }) {
                 </AnimatePresence>
               </div>
 
-              {/* Frame Footer Bottom: Nama Pengantin Romantis Selaras dengan Title + Letter Spacing */}
+              {/* Frame Footer Bottom: Nama Pengantin Romantis Compact & Fit to Frame */}
               {!isVideoLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
-                  className="pt-2 pb-1.5 px-2 text-center border-t border-rose-200/80 mt-1.5 select-none flex items-center justify-center"
+                  className="pt-1 pb-0.5 px-2 text-center border-t border-rose-200/80 mt-1 select-none flex items-center justify-center"
                 >
-                  <div className="inline-flex items-center justify-center gap-2.5 px-5 py-1 rounded-full bg-white/95 border border-rose-200/90 shadow-2xs max-w-full">
+                  <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-0.5 rounded-full bg-white/95 border border-rose-200/80 shadow-2xs max-w-full">
                     {isWedding ? (
-                      <Heart size={14} className="text-rose-500 fill-rose-400 shrink-0 animate-pulse" />
+                      <Heart size={11} className="text-rose-500 fill-rose-400 shrink-0 animate-pulse" />
                     ) : (
-                      <Sparkles size={13} className="text-amber-500 shrink-0" />
+                      <Sparkles size={11} className="text-amber-500 shrink-0" />
                     )}
-                    <span className={`truncate max-w-[280px] sm:max-w-[400px] text-rose-950 ${
+                    <span className={`truncate max-w-[240px] sm:max-w-[320px] text-rose-950 ${
                       isWedding
-                        ? 'font-romantic text-2xl sm:text-3xl font-normal tracking-wider sm:tracking-widest leading-none drop-shadow-2xs py-0.5'
-                        : 'text-xs sm:text-sm font-semibold tracking-wider'
+                        ? 'font-romantic text-lg sm:text-xl font-normal tracking-wide leading-none drop-shadow-2xs py-0.5'
+                        : 'text-[11px] sm:text-xs font-semibold tracking-wide'
                     }`}>
                       {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
                     </span>
                     {isWedding ? (
-                      <Heart size={14} className="text-rose-500 fill-rose-400 shrink-0 animate-pulse" />
+                      <Heart size={11} className="text-rose-500 fill-rose-400 shrink-0 animate-pulse" />
                     ) : (
-                      <Sparkles size={13} className="text-amber-500 shrink-0" />
+                      <Sparkles size={11} className="text-amber-500 shrink-0" />
                     )}
                   </div>
                 </motion.div>
