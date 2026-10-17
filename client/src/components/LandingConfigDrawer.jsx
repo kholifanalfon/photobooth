@@ -1,37 +1,50 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, SlidersHorizontal, Video, Type, Palette, Upload, RefreshCw, Check, Info, ClipboardPaste } from 'lucide-react';
+import {
+  X,
+  RotateCcw,
+  Video,
+  Type,
+  Palette,
+  Check,
+  Upload,
+  Clipboard,
+  ExternalLink,
+  Sparkles,
+  Heart
+} from 'lucide-react';
 
 export const THEME_PRESETS = {
   general: {
     id: 'general',
-    name: 'Umum (Fun & Casual)',
+    name: 'Umum & Ceria',
+    description: 'Tema ceria, universal dan menyenangkan dengan nuansa rose & amber.',
     defaultTitle: 'Capture The Magic! ✨',
     defaultSubtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
     bgClass: 'bg-slate-50',
-    accentColor: '#F43F5E', // rose-500
-    btnClass: 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white',
-    headingClass: 'text-slate-900',
-    subheadingClass: 'text-slate-500',
-    ornamentColor: 'text-rose-300',
-    ornamentType: 'general'
+    headingClass: 'text-slate-800',
+    subheadingClass: 'text-slate-600',
+    btnClass: 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-200'
   },
   wedding: {
     id: 'wedding',
-    name: 'Pernikahan (Wedding & Romance)',
+    name: 'Pernikahan Romantis',
+    description: 'Nuansa romantis, elegan dan mewah untuk pesta pernikahan dan tunangan.',
     defaultTitle: 'The Wedding Celebration 💍',
     defaultSubtitle: 'Abadikan momen bahagia dan penuh cinta di hari istimewa ini.',
     bgClass: 'bg-slate-50',
-    accentColor: '#FB7185', // rose-400
-    btnClass: 'bg-gradient-to-r from-rose-400 to-rose-500 hover:from-rose-500 hover:to-rose-600 text-white shadow-rose-200',
     headingClass: 'text-rose-950 font-serif',
-    subheadingClass: 'text-rose-700/80',
-    ornamentColor: 'text-rose-300/80',
-    ornamentType: 'wedding'
+    subheadingClass: 'text-rose-800/80 font-serif',
+    btnClass: 'bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white shadow-rose-300'
   }
 };
 
-export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateConfig }) {
+export default function LandingConfigDrawer({
+  isOpen,
+  onClose,
+  config,
+  onUpdateConfig
+}) {
   const [activeTab, setActiveTab] = useState('content'); // 'content' | 'video' | 'theme'
 
   const handleTitleChange = (e) => {
@@ -42,8 +55,8 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
     onUpdateConfig({ subtitle: e.target.value });
   };
 
-  const handleToggleVideo = (e) => {
-    onUpdateConfig({ enableVideo: e.target.checked });
+  const handleToggleVideo = () => {
+    onUpdateConfig({ enableVideo: !config.enableVideo });
   };
 
   const handleVideoUrlChange = (e) => {
@@ -98,6 +111,8 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
     onUpdateConfig({
       title: currentTheme.defaultTitle,
       subtitle: currentTheme.defaultSubtitle,
+      eventDate: 'Saturday, 17 October 2026',
+      coupleNames: 'The Wedding Celebration',
       videoUrl: '',
       enableVideo: false,
       videoRatio: 'auto',
@@ -119,71 +134,69 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
             className="absolute inset-0 bg-black/40 backdrop-blur-2xs transition-opacity"
           />
 
-          {/* Drawer Content */}
           <div className="fixed inset-y-0 left-0 max-w-full flex">
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-screen max-w-sm sm:max-w-md bg-white shadow-2xl flex flex-col h-full"
+              className="w-screen max-w-sm sm:max-w-md bg-white shadow-2xl flex flex-col"
             >
-              {/* Header */}
-              <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-rose-100 text-rose-600 rounded-xl">
-                    <SlidersHorizontal size={18} />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-800">Pengaturan Tampilan</h2>
-                    <p className="text-xs text-slate-500">Kustomisasi Halaman Awal Photobooth</p>
-                  </div>
+              {/* Drawer Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800">
+                    Pengaturan Halaman Depan
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Kustomisasi judul, video pengantar, dan tema
+                  </p>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex border-b border-slate-200 px-4 pt-2 bg-slate-50/30 gap-1">
+              <div className="flex border-b border-slate-200 bg-slate-50/50 px-3 pt-2 gap-1">
                 <button
                   type="button"
                   onClick={() => setActiveTab('content')}
-                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all cursor-pointer ${
                     activeTab === 'content'
-                      ? 'border-rose-500 text-rose-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'border-rose-500 text-rose-600 bg-white shadow-2xs'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <Type size={16} />
-                  <span>Teks & Konten</span>
+                  <Type size={14} />
+                  <span>Konten & Teks</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('video')}
-                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all cursor-pointer ${
                     activeTab === 'video'
-                      ? 'border-rose-500 text-rose-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'border-rose-500 text-rose-600 bg-white shadow-2xs'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <Video size={16} />
+                  <Video size={14} />
                   <span>Media Video</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('theme')}
-                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all cursor-pointer ${
                     activeTab === 'theme'
-                      ? 'border-rose-500 text-rose-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'border-rose-500 text-rose-600 bg-white shadow-2xs'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <Palette size={16} />
-                  <span>Tema Acara</span>
+                  <Palette size={14} />
+                  <span>Tema Visual</span>
                 </button>
               </div>
 
@@ -207,7 +220,7 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                         className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                       />
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Teks utama yang tampil di atas kotak hadiah / video.
+                        Teks utama yang tampil di atas video / kotak hadiah.
                       </p>
                     </div>
 
@@ -216,7 +229,7 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                         Sub-Judul (Instruksi)
                       </label>
                       <textarea
-                        rows={3}
+                        rows={2}
                         value={config.subtitle}
                         onChange={(e) => {
                           onUpdateConfig({ isSubtitleCustom: true });
@@ -228,6 +241,38 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                       <p className="text-[11px] text-slate-400 mt-1">
                         Petunjuk singkat untuk tamu undangan / pengguna booth.
                       </p>
+                    </div>
+
+                    {/* Frame Detail Fields */}
+                    <div className="p-3 bg-rose-50/50 border border-rose-200/70 rounded-xl space-y-3">
+                      <div className="text-xs font-bold text-rose-950 flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-rose-500" />
+                        <span>Teks Bingkai Video (Frame Accent)</span>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                          Tanggal Acara (Tampil di Frame Atas):
+                        </label>
+                        <input
+                          type="text"
+                          value={config.eventDate ?? 'Saturday, 17 October 2026'}
+                          onChange={(e) => onUpdateConfig({ eventDate: e.target.value })}
+                          placeholder="Contoh: 17 . 10 . 2026"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                          Nama Pengantin / Acara (Tampil di Frame Bawah, 1 Line):
+                        </label>
+                        <input
+                          type="text"
+                          value={config.coupleNames ?? 'The Wedding Celebration'}
+                          onChange={(e) => onUpdateConfig({ coupleNames: e.target.value })}
+                          placeholder="Contoh: Vanessa & Moynihan"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -254,68 +299,57 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-slate-700">
-                          URL Video (YouTube / Google Drive / MP4)
+                          URL Video (YouTube / Google Drive):
                         </label>
-                        <button
-                          type="button"
-                          onClick={handlePasteVideoUrl}
-                          title="Tempel link dari clipboard (otomatis mengganti link saat ini)"
-                          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 rounded-lg transition-colors cursor-pointer shadow-2xs"
-                        >
-                          <ClipboardPaste size={12} />
-                          <span>Paste Link</span>
-                        </button>
-                      </div>
-                      <div className="relative flex items-center">
-                        <input
-                          type="url"
-                          value={config.videoUrl || ''}
-                          onChange={handleVideoUrlChange}
-                          placeholder="https://www.youtube.com/... atau https://drive.google.com/..."
-                          className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                        />
-                        {config.videoUrl && (                          <button
+                        <div className="flex items-center gap-2">
+                          <button
                             type="button"
-                            onClick={handleClearVideoUrl}
-                            title="Hapus Link Saat Ini"
-                            className="absolute right-2.5 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                            onClick={handlePasteVideoUrl}
+                            className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
                           >
-                            <X size={14} />
+                            <Clipboard size={12} />
+                            <span>Tempel</span>
                           </button>
-                        )}
+                          {config.videoUrl && (
+                            <button
+                              type="button"
+                              onClick={handleClearVideoUrl}
+                              className="text-[11px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-1.5 p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] text-amber-800 space-y-1">
-                        <p className="font-bold flex items-center gap-1 text-amber-900">
-                          <Info size={13} className="shrink-0" /> Karakteristik Sumber Video:
-                        </p>
-                        <p className="leading-relaxed">
-                          • <strong>YouTube:</strong> Otomatis berputar (autoplay) dalam kondisi senyap (mute) sesuai kebijakan browser modern.
-                        </p>
-                        <p className="leading-relaxed">
-                          • <strong>Google Drive:</strong> Pemutar Google Drive menampilkan tombol <em>Play</em> di tengah (sistem Google Drive tidak mengizinkan autoplay otomatis dari luar).
-                        </p>
-                        <p className="leading-relaxed">
-                          • <strong>Unggah File Lokal (MP4/WebM):</strong> Paling direkomendasikan jika ingin autoplay langsung 100% instan tanpa perlu ketuk layar sama sekali.
-                        </p>
+                      <input
+                        type="url"
+                        value={config.videoUrl}
+                        onChange={handleVideoUrlChange}
+                        placeholder="https://drive.google.com/file/d/... atau YouTube URL"
+                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                      />
+                      <div className="text-[11px] text-slate-400 mt-1 space-y-1">
+                        <p>Format yang didukung: Google Drive View, YouTube Video/Shorts, atau tautan file MP4/WebM langsung.</p>
                       </div>
                     </div>
 
                     {/* Orientasi Video / Aspect Ratio Selector */}
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                        Orientasi / Aspek Rasio Video:
+                        Ukuran & Aspek Rasio Video:
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {[
                           { id: 'auto', label: 'Otomatis', desc: 'Deteksi Otomatis' },
-                          { id: 'landscape', label: 'Landscape', desc: '16:9 Lebar' },
-                          { id: 'portrait', label: 'Portrait', desc: '9:16 Tegak' }
+                          { id: 'portrait-photo', label: 'Portrait 3:4', desc: 'Kamera HP Standar' },
+                          { id: 'portrait', label: 'Portrait 9:16', desc: 'Reels / Shorts' },
+                          { id: 'landscape', label: 'Landscape 16:9', desc: 'Layar Lebar' }
                         ].map((item) => (
                           <button
                             key={item.id}
                             type="button"
                             onClick={() => onUpdateConfig({ videoRatio: item.id })}
-                            className={`p-2.5 rounded-xl text-center border text-xs transition-all cursor-pointer ${
+                            className={`p-2 rounded-xl text-center border text-xs transition-all cursor-pointer ${
                               (config.videoRatio || 'auto') === item.id
                                 ? 'border-rose-500 bg-rose-50/80 text-rose-700 shadow-2xs font-bold'
                                 : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-600 font-medium'
@@ -327,7 +361,7 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                         ))}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Pilih <em>Otomatis</em> untuk deteksi langsung (misal: YouTube Shorts / video vertikal), atau kunci ke Landscape/Portrait sesuai format video.
+                        Pilih <em>Portrait 3:4</em> jika video kamera HP Anda memiliki sedikit blank space di mode 9:16.
                       </p>
                     </div>
 
@@ -368,23 +402,19 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                               : 'border-slate-200 hover:border-slate-300 bg-white'
                           }`}
                         >
-                          <div className="space-y-0.5">
-                            <div className="font-bold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5">
-                              <span>{preset.name}</span>
+                          <div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-800">
+                              {preset.name}
                             </div>
-                            <div className="text-[11px] text-slate-400">
-                              Default: "{preset.defaultTitle}"
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              {preset.description}
                             </div>
                           </div>
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 border"
-                            style={{
-                              borderColor: isSelected ? preset.accentColor : '#CBD5E1',
-                              backgroundColor: isSelected ? preset.accentColor : 'transparent'
-                            }}
-                          >
-                            {isSelected && <Check size={12} className="text-white" />}
-                          </div>
+                          {isSelected && (
+                            <div className="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0">
+                              <Check size={14} />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -392,22 +422,22 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between">
+              {/* Drawer Footer Actions */}
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={handleResetToDefault}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
                 >
-                  <RefreshCw size={14} />
+                  <RotateCcw size={14} />
                   <span>Reset Default</span>
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  Selesai
+                  Tutup & Terapkan
                 </button>
               </div>
             </motion.div>

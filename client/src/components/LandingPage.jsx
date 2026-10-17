@@ -19,7 +19,7 @@ export function getGoogleDriveEmbedUrl(url) {
 }
 
 export function detectVideoAspectRatio(url, explicitRatio = 'auto', detectedFromElement = null) {
-  if (explicitRatio === 'portrait' || explicitRatio === 'landscape') {
+  if (['portrait', 'portrait-photo', 'landscape', 'square'].includes(explicitRatio)) {
     return explicitRatio;
   }
   if (detectedFromElement === 'portrait' || detectedFromElement === 'landscape') {
@@ -35,7 +35,7 @@ export function detectVideoAspectRatio(url, explicitRatio = 'auto', detectedFrom
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle } from 'lucide-react';
+import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle, Calendar } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
 
@@ -44,9 +44,11 @@ const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
 const DEFAULT_CONFIG = {
   title: 'Capture The Magic! ✨',
   subtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
+  eventDate: 'Saturday, 17 October 2026',
+  coupleNames: 'The Wedding Celebration',
   videoUrl: '',
   enableVideo: false,
-  videoRatio: 'auto', // 'auto' | 'landscape' | 'portrait'
+  videoRatio: 'auto', // 'auto' | 'portrait' | 'portrait-photo' | 'landscape' | 'square'
   theme: 'general',
   isTitleCustom: false,
   isSubtitleCustom: false
@@ -57,6 +59,7 @@ export default function LandingPage({ onStartSession }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [ytError, setYtError] = useState(null);
   const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
+  const [exactNumericRatio, setExactNumericRatio] = useState(null);
   const iframeRef = useRef(null);
   const videoElemRef = useRef(null);
 
@@ -107,11 +110,12 @@ export default function LandingPage({ onStartSession }) {
   const gdriveEmbedUrl = getGoogleDriveEmbedUrl(config.videoUrl);
 
   const effectiveRatio = detectVideoAspectRatio(config.videoUrl, config.videoRatio, elementDetectedRatio);
-  const isPortrait = effectiveRatio === 'portrait';
+  const isPortraitMode = effectiveRatio === 'portrait' || effectiveRatio === 'portrait-photo';
 
   useEffect(() => {
     setYtError(null);
     setElementDetectedRatio(null);
+    setExactNumericRatio(null);
   }, [config.videoUrl]);
 
   const postToYouTube = (func, args = []) => {
@@ -195,9 +199,27 @@ export default function LandingPage({ onStartSession }) {
   const activeTheme = THEME_PRESETS[config.theme] || THEME_PRESETS.general;
   const isWedding = config.theme === 'wedding';
 
+  // Compute aspect ratio classes dynamically to avoid blank space
+  const getAspectRatioClasses = () => {
+    if (exactNumericRatio) {
+      return 'w-full max-h-[50vh] sm:max-h-[56vh]';
+    }
+    switch (effectiveRatio) {
+      case 'portrait-photo':
+        return 'aspect-[3/4] w-full max-h-[50vh] sm:max-h-[56vh]';
+      case 'portrait':
+        return 'aspect-[9/16] w-full max-h-[50vh] sm:max-h-[56vh]';
+      case 'square':
+        return 'aspect-square w-full max-h-[48vh] sm:max-h-[54vh]';
+      case 'landscape':
+      default:
+        return 'aspect-video w-full max-h-[48vh] sm:max-h-[54vh]';
+    }
+  };
+
   return (
     <div
-      className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-2 sm:p-5 transition-colors duration-300"
+      className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-3 sm:p-6 transition-colors duration-300"
     >
       {/* Settings Gear Button (Opens Left Drawer) */}
       <button
@@ -250,47 +272,47 @@ export default function LandingPage({ onStartSession }) {
       <div
         className={`z-10 flex flex-col items-center w-full text-center px-2 sm:px-4 my-auto transition-all duration-300 ${
           hasActiveVideo
-            ? isPortrait
+            ? isPortraitMode
               ? 'max-w-sm sm:max-w-md'
               : 'max-w-4xl sm:max-w-5xl'
             : 'max-w-lg sm:max-w-xl'
         }`}
       >
-        {/* If video is not active, render title & subtitle above gift box */}
-        {!hasActiveVideo ? (
-          <motion.h1
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`font-extrabold ${activeTheme.headingClass} tracking-tight mb-1.5 ${
-              isWedding ? 'font-romantic text-4xl sm:text-5xl font-normal text-rose-950' : 'text-2xl sm:text-3xl md:text-4xl'
-            }`}
-          >
-            {config.title || activeTheme.defaultTitle}
-          </motion.h1>
-        ) : null}
+        {/* Title and Subtitle OUTSIDE the frame */}
+        <motion.h1
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`font-extrabold ${activeTheme.headingClass} tracking-tight transition-all duration-300 ${
+            isWedding
+              ? 'font-romantic text-3xl sm:text-4xl md:text-5xl font-normal text-rose-950 mb-0.5 drop-shadow-2xs'
+              : 'text-2xl sm:text-3xl md:text-4xl mb-1'
+          }`}
+        >
+          {config.title || activeTheme.defaultTitle}
+        </motion.h1>
 
-        {!hasActiveVideo ? (
-          <p
-            className={`${activeTheme.subheadingClass} font-normal text-xs sm:text-sm md:text-base mb-4 sm:mb-5 max-w-sm ${
-              isWedding ? 'font-romantic-serif italic' : ''
-            }`}
-          >
-            {config.subtitle || activeTheme.defaultSubtitle}
-          </p>
-        ) : null}
+        <p
+          className={`${activeTheme.subheadingClass} font-normal transition-all duration-300 ${
+            isWedding
+              ? 'font-romantic-serif italic text-xs sm:text-sm text-rose-800/80 mb-3 sm:mb-4 max-w-sm line-clamp-2'
+              : 'text-xs sm:text-sm md:text-base text-slate-600 mb-3 sm:mb-4 max-w-sm'
+          }`}
+        >
+          {config.subtitle || activeTheme.defaultSubtitle}
+        </p>
 
         {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
             className={`relative mb-3 sm:mb-4 mx-auto select-none transition-all duration-300 ${
-              isPortrait
-                ? 'w-auto max-w-[320px] sm:max-w-[380px]'
-                : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[860px]'
+              isPortraitMode
+                ? 'w-auto max-w-[310px] sm:max-w-[370px]'
+                : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[840px]'
             }`}
           >
-            {/* Thematic Outer Frame Wrapping Title and Video */}
+            {/* Thematic Outer Frame Snugly Wrapping Video without blank space */}
             <div
-              className={`relative p-2 sm:p-3 rounded-3xl transition-all duration-300 ${
+              className={`relative p-2 sm:p-2.5 rounded-3xl transition-all duration-300 ${
                 isWedding
                   ? 'bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 border-2 border-rose-200/90 shadow-2xl ring-1 ring-amber-300/40 shadow-rose-200/50'
                   : 'bg-white/95 border border-slate-200/90 shadow-2xl ring-1 ring-slate-100 shadow-slate-300/40'
@@ -314,37 +336,19 @@ export default function LandingPage({ onStartSession }) {
                 </>
               )}
 
-              {/* Header Title directly attached on the frame */}
-              <div className="pt-0.5 pb-1 sm:pb-2 px-2 text-center select-none">
-                <h1
-                  className={`tracking-wide leading-tight transition-all duration-300 ${
-                    isWedding
-                      ? 'font-romantic text-2xl sm:text-3xl md:text-4xl text-rose-950 font-normal drop-shadow-2xs'
-                      : 'text-sm sm:text-base md:text-lg font-extrabold text-slate-800 tracking-tight'
-                  }`}
-                >
-                  {config.title || activeTheme.defaultTitle}
-                </h1>
-                {(config.subtitle || activeTheme.defaultSubtitle) && (
-                  <p
-                    className={`transition-all duration-300 mt-0.5 line-clamp-1 ${
-                      isWedding
-                        ? 'font-romantic-serif italic text-[11px] sm:text-xs text-rose-800/80'
-                        : 'text-[10px] sm:text-[11px] text-slate-500 font-medium'
-                    }`}
-                  >
-                    {config.subtitle || activeTheme.defaultSubtitle}
-                  </p>
-                )}
+              {/* Frame Header Top: Tanggal Acara Berlangsung */}
+              <div className="py-1 px-2 text-center flex items-center justify-center gap-1.5 select-none border-b border-rose-100/70 mb-1.5">
+                <Sparkles size={11} className="text-amber-400" />
+                <span className="text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase text-rose-800/85">
+                  {config.eventDate || 'Saturday, 17 October 2026'}
+                </span>
+                <Sparkles size={11} className="text-amber-400" />
               </div>
 
-              {/* Inner Video Viewport with Full Aspect Ratio Preserved (Zero Cropping) & Interaction Lock */}
+              {/* Inner Video Viewport Fitted Snugly to Video Size */}
               <div
-                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 flex items-center justify-center ${
-                  isPortrait
-                    ? 'w-full aspect-[9/16] max-h-[52vh] sm:max-h-[58vh]'
-                    : 'w-full aspect-video max-h-[52vh] sm:max-h-[58vh]'
-                }`}
+                style={exactNumericRatio ? { aspectRatio: exactNumericRatio } : {}}
+                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 flex items-center justify-center ${getAspectRatioClasses()}`}
               >
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
                 <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
@@ -404,12 +408,21 @@ export default function LandingPage({ onStartSession }) {
                     playsInline
                     onLoadedMetadata={(e) => {
                       if (e.target && e.target.videoWidth && e.target.videoHeight) {
+                        const ratio = e.target.videoWidth / e.target.videoHeight;
+                        setExactNumericRatio(ratio);
                         setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
                       }
                     }}
                     className="w-full h-full object-contain pointer-events-none select-none"
                   />
                 )}
+              </div>
+
+              {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line */}
+              <div className="pt-1.5 pb-0.5 px-2 text-center border-t border-rose-100/70 mt-1.5 select-none">
+                <p className="font-romantic text-base sm:text-lg text-rose-950 truncate max-w-[270px] sm:max-w-[330px] mx-auto leading-tight">
+                  {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
+                </p>
               </div>
             </div>
           </div>
