@@ -1,3 +1,13 @@
+
+export function getYoutubeEmbedUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+  if (match && match[1]) {
+    const videoId = match[1];
+    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0&playsinline=1`;
+  }
+  return null;
+}
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, Play } from 'lucide-react';
@@ -131,14 +141,24 @@ export default function LandingPage({ onStartSession }) {
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {config.enableVideo && config.videoUrl ? (
           <div className="relative mb-5 sm:mb-6 w-full max-w-[280px] sm:max-w-[340px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
-            <video
-              src={config.videoUrl}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+            {getYoutubeEmbedUrl(config.videoUrl) ? (
+              <iframe
+                src={getYoutubeEmbedUrl(config.videoUrl)}
+                title="YouTube Video Preview"
+                className="w-full h-full border-0 pointer-events-none"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : (
+              <video
+                src={config.videoUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
         ) : (
           /* Gift Box Graphic (Flat Solid) */

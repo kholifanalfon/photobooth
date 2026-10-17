@@ -214,13 +214,13 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      URL Video (MP4 / WebM / Link Langsung)
+                      URL Video (YouTube / MP4 / WebM / Link Langsung)
                     </label>
                     <input
                       type="url"
                       value={config.videoUrl || ''}
                       onChange={handleVideoUrlChange}
-                      placeholder="https://example.com/teaser.mp4"
+                      placeholder="https://www.youtube.com/watch?v=... atau link MP4"
                       className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                     />
                   </div>
