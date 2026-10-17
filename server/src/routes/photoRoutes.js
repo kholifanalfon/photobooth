@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 const { generateQrDataUri } = require('../services/qrService');
 const { prisma } = require('../db');
 
@@ -10,6 +11,58 @@ const uploadsDir = path.resolve(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+// Multer storage configuration for persistent landing video uploads
+const videoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.mp4';
+    const safeName = `video_landing_${Date.now()}${ext}`;
+    cb(null, safeName);
+  }
+});
+
+const uploadVideoMiddleware = multer({
+  storage: videoStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max
+  fileFilter: (req, file, cb) => {
+    const isVideo =
+      (file.mimetype && file.mimetype.startsWith('video/')) ||
+      /\.(mp4|webm|mov|ogg|m4v)$/i.test(file.originalname);
+    if (isVideo) {
+      cb(null, true);
+    } else {
+      cb(new Error('File harus berupa format video (MP4, WebM, MOV, OGG)'));
+    }
+  }
+}).single('video');
+
+// POST /api/photos/upload-video
+router.post('/upload-video', (req, res) => {
+  uploadVideoMiddleware(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Gagal mengunggah file video' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Tidak ada file video yang dikirim' });
+    }
+
+    const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `${req.protocol}://${req.headers.host}` : 'http://localhost:5000');
+    const filename = req.file.filename;
+    const videoUrl = `${host}/uploads/${filename}`;
+    const relativeUrl = `/uploads/${filename}`;
+
+    return res.json({
+      success: true,
+      filename,
+      videoUrl,
+      relativeUrl,
+      size: req.file.size
+    });
+  });
+});
 
 // POST /api/photos/qr-generate
 router.post('/qr-generate', async (req, res) => {

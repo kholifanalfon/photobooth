@@ -11,8 +11,11 @@ import {
   Clipboard,
   ExternalLink,
   Sparkles,
-  Heart
+  Heart,
+  Loader2,
+  HardDrive
 } from 'lucide-react';
+import { preloadAndCacheVideo } from '../utils/videoCache.js';
 
 export const THEME_PRESETS = {
   general: {
@@ -46,6 +49,9 @@ export default function LandingConfigDrawer({
   onUpdateConfig
 }) {
   const [activeTab, setActiveTab] = useState('content'); // 'content' | 'video' | 'theme'
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [uploadError, setUploadError] = useState(null);
 
   const handleTitleChange = (e) => {
     onUpdateConfig({ title: e.target.value });
@@ -87,11 +93,57 @@ export default function LandingConfigDrawer({
     onUpdateConfig({ videoUrl: '' });
   };
 
-  const handleVideoFileUpload = (e) => {
+  const handleVideoFileUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const videoBlobUrl = URL.createObjectURL(file);
-      onUpdateConfig({ videoUrl: videoBlobUrl, enableVideo: true });
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+    setUploadStatus('Mengunggah video ke server...');
+
+    // Fast local preview preview while uploading
+    const tempBlobUrl = URL.createObjectURL(file);
+    onUpdateConfig({ videoUrl: tempBlobUrl, enableVideo: true });
+
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+
+      // Determine correct API endpoint for local dev vs production
+      let apiEndpoint = '/api/photos/upload-video';
+      if (typeof window !== 'undefined') {
+        const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalHost && window.location.port !== '5000') {
+          apiEndpoint = 'http://localhost:5000/api/photos/upload-video';
+        }
+      }
+
+      const res = await fetch(apiEndpoint, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Upload gagal: HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const serverVideoUrl = data.videoUrl || data.relativeUrl;
+
+      setUploadStatus('Menyimpan ke cache browser untuk pemutaran instan...');
+
+      // Pre-warm browser cache so next page opens instantly with 0ms lag
+      await preloadAndCacheVideo(serverVideoUrl);
+
+      // Persist server video URL in landing config
+      onUpdateConfig({ videoUrl: serverVideoUrl, enableVideo: true });
+      setUploadStatus('✓ Video tersimpan di server & siap di-cache!');
+    } catch (err) {
+      console.error('Failed to upload video to server:', err);
+      setUploadError(err.message || 'Gagal mengunggah video ke server');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -154,7 +206,7 @@ export default function LandingConfigDrawer({
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X size={20} />
                 </button>
@@ -299,7 +351,7 @@ export default function LandingConfigDrawer({
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-slate-700">
-                          URL Video (YouTube / Google Drive):
+                          URL Video (YouTube / Google Drive / Server):
                         </label>
                         <div className="flex items-center gap-2">
                           <button
@@ -329,7 +381,7 @@ export default function LandingConfigDrawer({
                         className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                       />
                       <div className="text-[11px] text-slate-400 mt-1 space-y-1">
-                        <p>Format yang didukung: Google Drive View, YouTube Video/Shorts, atau tautan file MP4/WebM langsung.</p>
+                        <p>Format yang didukung: Google Drive View, YouTube Video/Shorts, atau video tersimpan di server.</p>
                       </div>
                     </div>
 
@@ -365,21 +417,51 @@ export default function LandingConfigDrawer({
                       </p>
                     </div>
 
-                    <div className="relative">
-                      <div className="text-xs font-bold text-slate-700 mb-1">Atau Pilih File Video dari Perangkat:</div>
-                      <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors">
-                        <Upload size={16} className="text-slate-500" />
-                        <span className="text-xs font-semibold text-slate-600">Unggah Video Lokal (MP4/WebM)</span>
+                    {/* Server Upload & Browser Caching Section */}
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <HardDrive size={14} className="text-rose-500" />
+                          <span>Simpan Video ke Server & Browser Cache</span>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-rose-400 hover:bg-rose-50/40 transition-colors">
+                        {isUploading ? (
+                          <Loader2 size={16} className="text-rose-500 animate-spin" />
+                        ) : (
+                          <Upload size={16} className="text-slate-500" />
+                        )}
+                        <span className="text-xs font-semibold text-slate-700">
+                          {isUploading ? 'Sedang Mengunggah...' : 'Pilih & Unggah File Video (MP4/WebM)'}
+                        </span>
                         <input
                           type="file"
-                          accept="video/mp4,video/webm,video/ogg"
+                          accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                          disabled={isUploading}
                           onChange={handleVideoFileUpload}
                           className="hidden"
                         />
                       </label>
-                      {config.videoUrl && (
-                        <p className="text-[11px] text-emerald-600 mt-1 font-medium flex items-center gap-1">
-                          <Check size={12} /> Video aktif siap diputar di landing page
+
+                      {uploadStatus && (
+                        <p className={`text-[11px] font-medium flex items-center gap-1 ${
+                          uploadError ? 'text-rose-600' : 'text-emerald-600'
+                        }`}>
+                          {uploadError ? <X size={12} /> : <Check size={12} />}
+                          <span>{uploadStatus}</span>
+                        </p>
+                      )}
+
+                      {uploadError && (
+                        <p className="text-[11px] text-rose-500 font-medium">
+                          {uploadError}
+                        </p>
+                      )}
+
+                      {config.videoUrl && !isUploading && (
+                        <p className="text-[11px] text-slate-500">
+                          Video disimpan secara permanen di server dan di-cache lokal sehingga siap diputar instan tanpa jeda buffering.
                         </p>
                       )}
                     </div>

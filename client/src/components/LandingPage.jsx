@@ -38,6 +38,7 @@ import { motion } from 'framer-motion';
 import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle, Calendar } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
+import { getFastVideoUrl, preloadAndCacheVideo, isDirectVideoUrl } from '../utils/videoCache.js';
 
 const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
 
@@ -78,6 +79,8 @@ export default function LandingPage({ onStartSession }) {
     return DEFAULT_CONFIG;
   });
 
+  const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
+
   const handleUpdateConfig = (updates) => {
     setConfig((prev) => {
       const next = { ...prev, ...updates };
@@ -116,6 +119,17 @@ export default function LandingPage({ onStartSession }) {
     setYtError(null);
     setElementDetectedRatio(null);
     setExactNumericRatio(null);
+
+    if (isDirectVideoUrl(config.videoUrl)) {
+      setCachedVideoSrc(getFastVideoUrl(config.videoUrl));
+      preloadAndCacheVideo(config.videoUrl)
+        .then((cached) => {
+          if (cached) setCachedVideoSrc(cached);
+        })
+        .catch(() => {});
+    } else {
+      setCachedVideoSrc(config.videoUrl);
+    }
   }, [config.videoUrl]);
 
   const postToYouTube = (func, args = []) => {
@@ -401,11 +415,12 @@ export default function LandingPage({ onStartSession }) {
                 ) : (
                   <video
                     ref={videoElemRef}
-                    src={config.videoUrl}
+                    src={cachedVideoSrc || config.videoUrl}
                     autoPlay
                     loop
                     muted
                     playsInline
+                    preload="auto"
                     onLoadedMetadata={(e) => {
                       if (e.target && e.target.videoWidth && e.target.videoHeight) {
                         const ratio = e.target.videoWidth / e.target.videoHeight;
