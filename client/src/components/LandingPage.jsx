@@ -37,16 +37,16 @@ export default function LandingPage({ onStartSession }) {
         <Camera size={40} className="sm:w-12 sm:h-12" />
       </motion.div>
 
-      {/* Main Flat Card Container */}
-      <div className="z-10 flex flex-col items-center max-w-md w-full text-center px-6 py-8 sm:py-10 bg-white rounded-3xl border border-slate-200 shadow-sm">
+      {/* Main Container without card wrapper */}
+      <div className="z-10 flex flex-col items-center max-w-lg w-full text-center px-4 py-6">
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-2"
+          className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-2"
         >
           Capture The Magic! ✨
         </motion.h1>
-        <p className="text-slate-500 text-sm sm:text-base mb-6 sm:mb-8 font-normal max-w-sm">
+        <p className="text-slate-500 text-sm sm:text-base md:text-lg mb-8 sm:mb-10 font-normal max-w-md">
           Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.
         </p>
 
@@ -67,15 +67,15 @@ export default function LandingPage({ onStartSession }) {
           <motion.div
             animate={isOpen ? { scale: [1, 1.15, 0.95], y: -20 } : { y: [0, -6, 0] }}
             transition={isOpen ? { duration: 0.5 } : { repeat: Infinity, duration: 2.5 }}
-            className="w-32 h-32 sm:w-40 sm:h-40 bg-rose-500 rounded-2xl flex items-center justify-center relative shadow-sm"
+            className="w-36 h-36 sm:w-44 sm:h-44 bg-rose-500 rounded-3xl flex items-center justify-center relative shadow-sm"
           >
-            <Gift className="w-16 h-16 sm:w-20 sm:h-20 text-white" size={64} />
+            <Gift className="w-18 h-18 sm:w-22 sm:h-22 text-white" size={72} />
             {isOpen && (
               <motion.div
                 initial={{ scale: 0, opacity: 0.8 }}
                 animate={{ scale: 1.8, opacity: 0 }}
                 transition={{ duration: 0.6 }}
-                className="absolute inset-0 bg-rose-300 rounded-2xl"
+                className="absolute inset-0 bg-rose-300 rounded-3xl"
               />
             )}
           </motion.div>
@@ -86,7 +86,7 @@ export default function LandingPage({ onStartSession }) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-lg sm:text-xl rounded-xl transition-colors flex items-center justify-center gap-2.5 cursor-pointer shadow-sm"
+          className="w-full sm:w-auto px-8 sm:px-12 py-3.5 sm:py-4 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-lg sm:text-xl rounded-xl transition-colors flex items-center justify-center gap-2.5 cursor-pointer shadow-sm"
         >
           <Camera size={22} className="sm:w-6 sm:h-6" />
           Mulai Sekarang
