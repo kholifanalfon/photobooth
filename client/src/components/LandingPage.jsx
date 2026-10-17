@@ -4,19 +4,15 @@ export function getYoutubeEmbedUrl(url) {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
   if (match && match[1]) {
     const videoId = match[1];
-    const originParam = typeof window !== 'undefined' && window.location && window.location.origin
-      ? `&origin=${encodeURIComponent(window.location.origin)}`
-      : '';
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1&enablejsapi=1${originParam}`;
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1&enablejsapi=1`;
   }
   return null;
 }
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, Play } from 'lucide-react';
+import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
-import YouTubePlayer, { extractYoutubeVideoId } from './YouTubePlayer.jsx';
 
 const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
 
@@ -32,8 +28,10 @@ const DEFAULT_CONFIG = {
 
 export default function LandingPage({ onStartSession }) {
   const videoElemRef = useRef(null);
+  const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [ytError, setYtError] = useState(null);
   const [config, setConfig] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -77,16 +75,85 @@ export default function LandingPage({ onStartSession }) {
     }, 800);
   };
 
-  // Immediate autoplay for HTML5 MP4/WebM videos
+  const postToYouTube = (func, args = []) => {
+    try {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func, args }),
+          '*'
+        );
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
-    if (config.enableVideo && config.videoUrl && !extractYoutubeVideoId(config.videoUrl)) {
+    setYtError(null);
+    if (!config.enableVideo || !config.videoUrl) return;
+
+    // Direct autoplay triggers as iframe loads
+    const t1 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 300);
+    const t2 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 800);
+    const t3 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 1600);
+
+    // Immediate autoplay for HTML5 video
+    if (videoElemRef.current) {
+      videoElemRef.current.defaultMuted = true;
+      videoElemRef.current.muted = true;
+      videoElemRef.current.play().catch(() => {});
+    }
+
+    // Touch and click gesture fallback to guarantee play on any interaction
+    const handleInteraction = () => {
+      postToYouTube('mute');
+      postToYouTube('playVideo');
       if (videoElemRef.current) {
-        videoElemRef.current.defaultMuted = true;
-        videoElemRef.current.muted = true;
         videoElemRef.current.play().catch(() => {});
       }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('touchstart', handleInteraction, { passive: true });
+      window.addEventListener('pointerdown', handleInteraction, { passive: true });
+      window.addEventListener('click', handleInteraction);
     }
-  }, [config.enableVideo, config.videoUrl]);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('touchstart', handleInteraction);
+        window.removeEventListener('pointerdown', handleInteraction);
+        window.removeEventListener('click', handleInteraction);
+      }
+    };
+  }, [config.videoUrl, config.enableVideo]);
+
+  // YouTube postMessage event listener for error 150/101 detection
+  useEffect(() => {
+    const handleMessage = (e) => {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (!data) return;
+        if (data.event === 'onError') {
+          if (data.info === 150 || data.info === 101) {
+            setYtError('Pemilik video YouTube ini membatasi pemutaran di situs eksternal (Error 150 / Hak Cipta). Silakan gunakan video YouTube lain yang mengizinkan embed atau unggah MP4 langsung.');
+          } else if (data.info === 100 || data.info === 2) {
+            setYtError('Video YouTube tidak ditemukan atau URL tidak valid.');
+          }
+        }
+      } catch (err) {}
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', handleMessage);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('message', handleMessage);
+      }
+    };
+  }, []);
 
   const isWedding = config.theme === 'wedding';
 
@@ -157,11 +224,38 @@ export default function LandingPage({ onStartSession }) {
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {config.enableVideo && config.videoUrl ? (
           <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
-            {extractYoutubeVideoId(config.videoUrl) ? (
-              <YouTubePlayer
-                videoUrl={config.videoUrl}
-                onOpenDrawer={() => setIsDrawerOpen(true)}
-              />
+            {getYoutubeEmbedUrl(config.videoUrl) ? (
+              <>
+                <iframe
+                  key={config.videoUrl}
+                  ref={iframeRef}
+                  src={getYoutubeEmbedUrl(config.videoUrl)}
+                  title="YouTube Video Preview"
+                  onLoad={() => {
+                    postToYouTube('mute');
+                    postToYouTube('playVideo');
+                  }}
+                  className="w-full h-full border-0 pointer-events-auto"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+                {ytError && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-10">
+                    <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
+                    <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
+                      {ytError}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsDrawerOpen(true)}
+                      className="mt-2.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                    >
+                      Buka Pengaturan Video
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <video
                 ref={videoElemRef}
