@@ -35,9 +35,21 @@ export function detectVideoAspectRatio(url, explicitRatio = 'auto', detectedFrom
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle, Calendar } from 'lucide-react';
+import {
+  Sparkles,
+  Camera,
+  Gift,
+  SlidersHorizontal,
+  Heart,
+  AlertCircle,
+  Calendar,
+  Play,
+  Maximize2,
+  Minimize2
+} from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
+import SessionCodeModal from './SessionCodeModal.jsx';
 import { getFastVideoUrl, preloadAndCacheVideo, isDirectVideoUrl } from '../utils/videoCache.js';
 
 const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
@@ -53,6 +65,9 @@ const DEFAULT_CONFIG = {
   theme: 'general',
   isTitleCustom: false,
   isSubtitleCustom: false,
+  // Session Access PIN
+  requireSessionCode: false,
+  sessionCode: '1234',
   // Printer defaults
   printerName: 'Default System Printer',
   paperSize: '4R',
@@ -61,9 +76,11 @@ const DEFAULT_CONFIG = {
   autoPrint: false
 };
 
-export default function LandingPage({ onStartSession }) {
+export default function LandingPage({ onStartSession, isLiveMode = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isSessionCodeModalOpen, setIsSessionCodeModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
   const [exactNumericRatio, setExactNumericRatio] = useState(null);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
@@ -86,6 +103,15 @@ export default function LandingPage({ onStartSession }) {
 
   const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
 
+  // Sync fullscreen state
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const handleUpdateConfig = (updates) => {
     setConfig((prev) => {
       const next = { ...prev, ...updates };
@@ -100,8 +126,50 @@ export default function LandingPage({ onStartSession }) {
     });
   };
 
+  const handleGoLive = () => {
+    if (typeof window !== 'undefined') {
+      const liveUrl = `${window.location.origin}/live`;
+      const liveWin = window.open(liveUrl, '_blank');
+      if (liveWin) {
+        liveWin.focus();
+      }
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  };
+
   const handleStart = () => {
     if (isOpen) return;
+
+    // In live mode, request fullscreen on user interaction
+    if (isLiveMode && typeof document !== 'undefined' && !document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }
+
+    // Check if session code dialog is required
+    if (config.requireSessionCode && (config.sessionCode || '').trim() !== '') {
+      setIsSessionCodeModalOpen(true);
+      return;
+    }
+
+    proceedSessionLaunch();
+  };
+
+  const proceedSessionLaunch = () => {
+    setIsSessionCodeModalOpen(false);
     if (audioFx && typeof audioFx.playGiftPopSound === 'function') {
       audioFx.playGiftPopSound();
     }
@@ -148,7 +216,7 @@ export default function LandingPage({ onStartSession }) {
     }
 
     const handleInteraction = () => {
-      if (videoElemRef.current && videoElemRef.current.paused) {
+      if (videoElemRef.current) {
         videoElemRef.current.play().catch(() => {});
       }
     };
@@ -193,15 +261,44 @@ export default function LandingPage({ onStartSession }) {
     <div
       className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-3 sm:p-6 transition-colors duration-300"
     >
-      {/* Settings Gear Button (Opens Left Drawer) */}
-      <button
-        onClick={() => setIsDrawerOpen(true)}
-        aria-label="Buka Pengaturan Landing"
-        title="Konfigurasi Judul, Video & Tema"
-        className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 p-2 sm:p-2.5 rounded-xl bg-white/80 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs"
-      >
-        <SlidersHorizontal size={17} className="sm:w-5 sm:h-5" />
-      </button>
+      {/* Top Left Navigation: HANYA TAMPIL DI HALAMAN KONFIGURASI (!isLiveMode) */}
+      {!isLiveMode && (
+        <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 flex items-center gap-2">
+          {/* Settings Drawer Button */}
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            aria-label="Buka Pengaturan Landing"
+            title="Konfigurasi Tampilan, Video, Sesi & Printer"
+            className="p-2 sm:p-2.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5"
+          >
+            <SlidersHorizontal size={17} className="text-rose-500 sm:w-5 sm:h-5" />
+            <span className="text-xs font-bold text-slate-700 hidden sm:inline">Konfigurasi</span>
+          </button>
+
+          {/* Go Live Button */}
+          <button
+            onClick={handleGoLive}
+            aria-label="Luncurkan Halaman Live"
+            title="Buka Halaman Live Photobooth di Tab Baru (Tanpa Tombol Setting & Fullscreen)"
+            className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-md shadow-rose-200 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Play size={13} className="fill-white" />
+            <span>Go Live</span>
+          </button>
+        </div>
+      )}
+
+      {/* Top Right Fullscreen Button (Tampil di Mode Live untuk kenyamanan operator) */}
+      {isLiveMode && (
+        <button
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
+          title={isFullscreen ? 'Keluar Layar Penuh' : 'Masuk Mode Layar Penuh (Kiosk)'}
+          className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 p-2 sm:p-2.5 rounded-xl bg-white/40 hover:bg-white/80 border border-slate-200/50 text-slate-500 hover:text-slate-800 shadow-2xs transition-colors cursor-pointer backdrop-blur-xs"
+        >
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
+      )}
 
       {/* Decorative accent icons (Dynamic based on theme) */}
       {isWedding ? (
@@ -254,9 +351,10 @@ export default function LandingPage({ onStartSession }) {
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`font-extrabold ${activeTheme.headingClass} tracking-tight transition-all duration-300 ${
+          transition={{ duration: 0.5 }}
+          className={`font-black tracking-tight transition-all duration-300 ${activeTheme.headingClass} ${
             isWedding
-              ? 'font-romantic text-3xl sm:text-4xl md:text-5xl font-normal text-rose-950 mb-0.5 drop-shadow-2xs'
+              ? 'font-romantic text-4xl sm:text-5xl md:text-6xl text-rose-950 mb-0 leading-tight drop-shadow-xs'
               : 'text-2xl sm:text-3xl md:text-4xl mb-1'
           }`}
         >
@@ -312,35 +410,32 @@ export default function LandingPage({ onStartSession }) {
                 )
               )}
 
-              {/* Frame Header Top: Tanggal Acara Berlangsung (Hidden while loading) */}
+              {/* Frame Header Top: Event Date Badge (Hidden while loading) */}
               {!isVideoLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
-                  className="py-1 px-2 text-center flex items-center justify-center gap-1.5 select-none border-b border-rose-100/70 mb-1.5"
+                  className="pb-1 pt-0.5 px-2 text-center border-b border-rose-200/80 mb-1 select-none flex items-center justify-center gap-1.5"
                 >
-                  <Sparkles size={11} className="text-amber-400" />
-                  <span className="text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase text-rose-800/85">
+                  <Calendar size={11} className="text-rose-400" />
+                  <span className="text-[10px] sm:text-[11px] font-serif tracking-widest uppercase text-rose-900/80 font-medium">
                     {config.eventDate || 'Saturday, 17 October 2026'}
                   </span>
-                  <Sparkles size={11} className="text-amber-400" />
                 </motion.div>
               )}
 
-              {/* Inner Video Viewport Fitted Snugly to Video Size */}
+              {/* Video Player Display Container */}
               <div
-                style={!isVideoLoading && exactNumericRatio ? { aspectRatio: exactNumericRatio } : {}}
-                className={`relative rounded-2xl overflow-hidden select-none flex items-center justify-center transition-all duration-500 ${
-                  isVideoLoading
-                    ? 'w-[260px] sm:w-[320px] h-[220px] sm:h-[260px] mx-auto bg-transparent border-0'
-                    : `bg-black border border-slate-900/10 ${getAspectRatioClasses()}`
+                className={`relative rounded-2xl overflow-hidden shadow-inner bg-black ${getAspectRatioClasses()} ${
+                  exactNumericRatio ? 'flex items-center justify-center' : ''
                 }`}
+                style={
+                  exactNumericRatio
+                    ? { aspectRatio: String(exactNumericRatio) }
+                    : undefined
+                }
               >
-                {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
-                <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
-
-                {/* Video Element */}
                 <video
                   ref={videoElemRef}
                   src={cachedVideoSrc || config.videoUrl}
@@ -348,55 +443,60 @@ export default function LandingPage({ onStartSession }) {
                   loop
                   muted
                   playsInline
-                  preload="auto"
+                  controls={false}
                   onLoadedMetadata={(e) => {
-                    if (e.target && e.target.videoWidth && e.target.videoHeight) {
-                      const ratio = e.target.videoWidth / e.target.videoHeight;
-                      setExactNumericRatio(ratio);
-                      setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
+                    const videoWidth = e.target.videoWidth;
+                    const videoHeight = e.target.videoHeight;
+                    if (videoWidth && videoHeight) {
+                      setElementDetectedRatio(videoHeight >= videoWidth ? 'portrait' : 'landscape');
+                      setExactNumericRatio(videoWidth / videoHeight);
                     }
                   }}
-                  onLoadedData={() => setIsVideoLoading(false)}
-                  onCanPlay={() => setIsVideoLoading(false)}
-                  onPlaying={() => setIsVideoLoading(false)}
-                  onWaiting={() => setIsVideoLoading(true)}
-                  className={`w-full h-full object-cover pointer-events-none select-none transition-opacity duration-300 ${
-                    isVideoLoading ? 'opacity-0' : 'opacity-100'
-                  }`}
+                  onLoadedData={() => {
+                    setIsVideoLoading(false);
+                    if (videoElemRef.current) {
+                      videoElemRef.current.play().catch(() => {});
+                    }
+                  }}
+                  onCanPlay={() => {
+                    setIsVideoLoading(false);
+                  }}
+                  onWaiting={() => {
+                    setIsVideoLoading(true);
+                  }}
+                  onPlaying={() => {
+                    setIsVideoLoading(false);
+                  }}
+                  className="w-full h-full object-cover block mx-auto select-none pointer-events-none"
                 />
 
-                {/* Themed Video Loading Animation */}
+                {/* THEMATIC VIDEO LOADING ANIMATION */}
                 <AnimatePresence>
                   {isVideoLoading && (
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.35 }}
-                      className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-5 rounded-2xl select-none ${
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className={`absolute inset-0 flex flex-col items-center justify-center z-30 p-4 select-none backdrop-blur-md ${
                         isWedding
-                          ? 'bg-rose-950/85 backdrop-blur-md border border-rose-300/30 shadow-2xl shadow-rose-900/30'
-                          : 'bg-slate-900/85 backdrop-blur-md border border-slate-700/50 shadow-2xl shadow-black/40'
+                          ? 'bg-rose-950/85 text-rose-100'
+                          : 'bg-slate-900/85 text-slate-100'
                       }`}
                     >
                       {isWedding ? (
-                        /* Wedding Theme Loading Animation: Glowing Heart + Golden Rings */
+                        /* Romantic Wedding Loading Animation: Beating Heart & Sparkle Ring */
                         <div className="flex flex-col items-center text-center space-y-3">
-                          <div className="relative flex items-center justify-center w-14 h-14">
+                          <div className="relative flex items-center justify-center w-16 h-16">
                             <motion.div
-                              animate={{ scale: [1, 1.35, 1], opacity: [0.25, 0.65, 0.25] }}
-                              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                              className="absolute inset-0 rounded-full bg-rose-400/30 blur-sm"
+                              animate={{ scale: [1, 1.35, 1], opacity: [0.6, 0.2, 0.6] }}
+                              transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                              className="absolute inset-0 rounded-full border-2 border-rose-400/60"
                             />
                             <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ repeat: Infinity, duration: 5, ease: "linear" }}
-                              className="absolute inset-0.5 rounded-full border border-dashed border-amber-300/70"
-                            />
-                            <motion.div
-                              animate={{ scale: [1, 1.18, 1] }}
-                              transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                              className="relative z-10 text-rose-400"
+                              animate={{ scale: [1, 1.15, 1] }}
+                              transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
+                              className="relative z-10"
                             >
                               <Heart size={26} className="fill-rose-500/80 text-rose-300 drop-shadow-md" />
                             </motion.div>
@@ -518,7 +618,7 @@ export default function LandingPage({ onStartSession }) {
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Button: Mulai Sekarang */}
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
@@ -530,12 +630,22 @@ export default function LandingPage({ onStartSession }) {
         </motion.button>
       </div>
 
-      {/* Slide-over Drawer for Configuration */}
+      {/* Slide-over Drawer for Configuration (Only mounted/opened from configuration page) */}
       <LandingConfigDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         config={config}
         onUpdateConfig={handleUpdateConfig}
+        onGoLive={handleGoLive}
+      />
+
+      {/* Session Access Code Modal (Opens if requireSessionCode is active) */}
+      <SessionCodeModal
+        isOpen={isSessionCodeModalOpen}
+        onClose={() => setIsSessionCodeModalOpen(false)}
+        onSuccess={proceedSessionLaunch}
+        expectedCode={config.sessionCode || '1234'}
+        theme={config.theme}
       />
     </div>
   );

@@ -11,6 +11,16 @@ export default function App() {
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [downloadFilename, setDownloadFilename] = useState('');
 
+  // Detect live mode from URL path or query parameters
+  const [isLiveMode, setIsLiveMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      const search = new URLSearchParams(window.location.search);
+      return path === '/live' || search.get('mode') === 'live' || search.get('live') === 'true';
+    }
+    return false;
+  });
+
   // Detect URL path to display dedicated mobile download page if accessed via /download/:filename
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -19,6 +29,8 @@ export default function App() {
         const file = path.replace(/^\/download\//, '').split('?')[0];
         setDownloadFilename(file);
         setCurrentStep('DOWNLOAD');
+      } else if (path === '/live') {
+        setIsLiveMode(true);
       }
     }
   }, []);
@@ -49,7 +61,12 @@ export default function App() {
         <DownloadPage filename={downloadFilename} />
       )}
 
-      {currentStep === 'LANDING' && <LandingPage onStartSession={handleStartLanding} />}
+      {currentStep === 'LANDING' && (
+        <LandingPage
+          onStartSession={handleStartLanding}
+          isLiveMode={isLiveMode}
+        />
+      )}
 
       {currentStep === 'FRAME_PICKER' && (
         <FrameSelector

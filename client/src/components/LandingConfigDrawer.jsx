@@ -19,7 +19,11 @@ import {
   Copy,
   Zap,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Play,
+  KeyRound,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { preloadAndCacheVideo } from '../utils/videoCache.js';
 import { sliceAndStoreInIndexedDB, uploadChunksWithProgress } from '../utils/chunkUploader.js';
@@ -62,7 +66,8 @@ export default function LandingConfigDrawer({
   isOpen,
   onClose,
   config,
-  onUpdateConfig
+  onUpdateConfig,
+  onGoLive
 }) {
   // Hanya 2 Tab: 'media_theme' (Media & Tema) dan 'printer' (Konfigurasi Printer)
   const [activeTab, setActiveTab] = useState('media_theme'); // 'media_theme' | 'printer'
@@ -94,6 +99,11 @@ export default function LandingConfigDrawer({
     onUpdateConfig({ videoUrl: '', enableVideo: false });
     setUploadStatus('');
     setUploadError(null);
+  };
+
+  const handleGenerateRandomCode = () => {
+    const randomPin = String(Math.floor(1000 + Math.random() * 9000));
+    onUpdateConfig({ sessionCode: randomPin, requireSessionCode: true });
   };
 
   const handleVideoFileUpload = async (e) => {
@@ -214,6 +224,8 @@ export default function LandingConfigDrawer({
       videoRatio: 'auto',
       isTitleCustom: false,
       isSubtitleCustom: false,
+      requireSessionCode: false,
+      sessionCode: '1234',
       printerName: 'Default System Printer',
       paperSize: '4R',
       printCopies: 1,
@@ -250,14 +262,31 @@ export default function LandingConfigDrawer({
                     Pengaturan Photobooth
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Konfigurasi tampilan acara dan perangkat printer
+                    Konfigurasi tampilan acara, kode sesi & printer
                   </p>
                 </div>
                 <button
                   onClick={onClose}
+                  aria-label="Tutup Pengaturan"
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X size={20} />
+                </button>
+              </div>
+
+              {/* Quick Go Live Action Banner */}
+              <div className="px-4 py-2.5 bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-amber-500/10 border-b border-rose-100 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-rose-950 font-medium">
+                  <Play size={13} className="text-rose-500 fill-rose-500" />
+                  <span>Siap mulai sesi photobooth?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onGoLive}
+                  className="flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                >
+                  <span>Go Live</span>
+                  <ExternalLink size={11} />
                 </button>
               </div>
 
@@ -291,52 +320,43 @@ export default function LandingConfigDrawer({
 
               {/* Drawer Body Scrollable */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
-                {/* TAB 1: MEDIA & TEMA (Menggabungkan Tema, Teks Konten & Media Video) */}
+                {/* TAB 1: MEDIA & TEMA */}
                 {activeTab === 'media_theme' && (
                   <div className="space-y-5">
-                    {/* Seksi A: Pilihan Tema Visual */}
-                    <div className="space-y-2.5">
+                    {/* Seksi A: Pilihan Tema Visual (1 LINE SAJA) */}
+                    <div className="space-y-1.5">
                       <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <Palette size={14} className="text-rose-500" />
-                        <span>Pilihan Tema Visual</span>
+                        <Palette size={13} className="text-rose-500" />
+                        <span>Pilihan Tema Tampilan</span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {/* Tepat 1 Baris (1 Line) */}
+                      <div className="grid grid-cols-2 gap-2">
                         {Object.values(THEME_PRESETS).map((preset) => {
                           const isSelected = (config.theme || 'general') === preset.id;
                           return (
-                            <div
+                            <button
                               key={preset.id}
+                              type="button"
                               onClick={() => handleSelectTheme(preset.id)}
-                              className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                              className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
                                 isSelected
-                                  ? 'border-rose-500 bg-rose-50/50 shadow-2xs'
-                                  : 'border-slate-200 hover:border-slate-300 bg-white'
+                                  ? 'border-rose-500 bg-rose-50 text-rose-800 shadow-2xs font-bold'
+                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
                               }`}
                             >
-                              <div>
-                                <div className="text-xs font-bold text-slate-800">
-                                  {preset.name}
-                                </div>
-                                <div className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
-                                  {preset.id === 'wedding' ? 'Nuansa cinta & pernikahan' : 'Ceria & universal'}
-                                </div>
-                              </div>
-                              {isSelected && (
-                                <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0">
-                                  <Check size={12} />
-                                </div>
-                              )}
-                            </div>
+                              <span className="truncate">{preset.name}</span>
+                              {isSelected && <Check size={14} className="text-rose-500 shrink-0 ml-1" />}
+                            </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* Seksi B: Teks & Informasi Acara */}
+                    {/* Seksi B: Teks Pengantar & Informasi Acara */}
                     <div className="space-y-3 pt-1 border-t border-slate-100">
                       <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <Type size={14} className="text-rose-500" />
-                        <span>Teks & Informasi Acara</span>
+                        <Type size={13} className="text-rose-500" />
+                        <span>Teks Pengantar & Informasi Acara</span>
                       </div>
 
                       <div>
@@ -357,7 +377,7 @@ export default function LandingConfigDrawer({
 
                       <div>
                         <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                          Sub-Judul (Instruksi)
+                          Sub-Judul (Teks Pengantar Tamu)
                         </label>
                         <textarea
                           rows={2}
@@ -391,7 +411,7 @@ export default function LandingConfigDrawer({
                         </div>
                         <div>
                           <label className="text-[10px] font-medium text-slate-600 block mb-0.5">
-                            Nama Pasangan / Acara (Frame Bawah, 1 Baris):
+                            Nama Pasangan / Acara (Frame Bawah):
                           </label>
                           <input
                             type="text"
@@ -404,15 +424,17 @@ export default function LandingConfigDrawer({
                       </div>
                     </div>
 
-                    {/* Seksi C: Media Video Pengantar & Upload */}
+                    {/* Seksi C: Konfigurasi Media Video Pengantar */}
                     <div className="space-y-3 pt-1 border-t border-slate-100">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Video size={13} className="text-rose-500" />
+                        <span>Konfigurasi Media Video</span>
+                      </div>
+
                       <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div className="flex items-center gap-2">
-                          <Video size={16} className="text-rose-500" />
-                          <div>
-                            <div className="text-xs font-bold text-slate-800">Tampilkan Video Pengantar</div>
-                            <div className="text-[10px] text-slate-500">Gantikan kotak hadiah dengan video berbingkai</div>
-                          </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800">Tampilkan Video Pengantar</div>
+                          <div className="text-[10px] text-slate-500">Gantikan kotak hadiah dengan video berbingkai</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -425,17 +447,17 @@ export default function LandingConfigDrawer({
                         </label>
                       </div>
 
-                      {/* Orientasi Video / Aspect Ratio Selector */}
+                      {/* Orientasi Video / Aspect Ratio Selector (1 Line) */}
                       <div>
                         <label className="text-[11px] font-semibold text-slate-700 block mb-1">
                           Ukuran & Aspek Rasio Video:
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-4 gap-1.5">
                           {[
                             { id: 'auto', label: 'Otomatis' },
-                            { id: 'portrait-photo', label: 'Portrait 3:4' },
-                            { id: 'portrait', label: 'Portrait 9:16' },
-                            { id: 'landscape', label: 'Landscape 16:9' }
+                            { id: 'portrait-photo', label: '3:4' },
+                            { id: 'portrait', label: '9:16' },
+                            { id: 'landscape', label: '16:9' }
                           ].map((item) => (
                             <button
                               key={item.id}
@@ -549,6 +571,62 @@ export default function LandingConfigDrawer({
                           </p>
                         )}
                       </div>
+                    </div>
+
+                    {/* Seksi D: Konfigurasi Kode Sesi (Access PIN) */}
+                    <div className="space-y-3 pt-1 border-t border-slate-100">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-rose-500" />
+                        <span>Kode Sesi & Akses Photobooth</span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div>
+                          <div className="text-xs font-bold text-slate-800">Wajibkan Kode Sesi untuk Mulai</div>
+                          <div className="text-[10px] text-slate-500">
+                            Tamu harus memasukkan PIN sebelum memilih frame foto
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(config.requireSessionCode)}
+                            onChange={() => onUpdateConfig({ requireSessionCode: !config.requireSessionCode })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                        </label>
+                      </div>
+
+                      {config.requireSessionCode && (
+                        <div className="p-3 bg-rose-50/40 border border-rose-200/70 rounded-xl space-y-2">
+                          <label className="text-[11px] font-semibold text-slate-700 block">
+                            Kode Sesi Aktif (Passcode):
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={config.sessionCode ?? '1234'}
+                              onChange={(e) => onUpdateConfig({ sessionCode: e.target.value })}
+                              placeholder="Contoh: 1234"
+                              maxLength={8}
+                              className="flex-1 px-3 py-1.5 text-sm font-mono font-bold rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-rose-500 text-slate-800"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleGenerateRandomCode}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 text-rose-600 font-semibold text-xs transition-colors cursor-pointer"
+                              title="Acak PIN 4 Digit"
+                            >
+                              <RefreshCw size={12} />
+                              <span>Acak PIN</span>
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            Bagikan kode ini kepada tamu yang telah terdaftar untuk membuka sesi foto.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

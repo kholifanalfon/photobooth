@@ -24,7 +24,7 @@ test.after(() => {
 const externalRewritePlugin = {
   name: 'external-rewrite',
   setup(build) {
-    build.onResolve({ filter: /^(react|react-dom|framer-motion|lucide-react|\.\.\/utils\/|\.\/)/ }, (args) => {
+    build.onResolve({ filter: /^(react|react-dom|framer-motion|lucide-react|\.\.\/utils\/)/ }, (args) => {
       const resolved = args.path.startsWith('.')
         ? 'file://' + path.resolve(componentsDir, args.path)
         : import.meta.resolve(args.path);
@@ -58,6 +58,8 @@ test('LandingConfigDrawer - 2 Tab Architecture & Printer Configuration', async (
     enableVideo: false,
     videoRatio: 'auto',
     theme: 'wedding',
+    requireSessionCode: false,
+    sessionCode: '1234',
     printerName: 'Default System Printer',
     paperSize: '4R',
     printCopies: 2,
@@ -71,33 +73,37 @@ test('LandingConfigDrawer - 2 Tab Architecture & Printer Configuration', async (
         isOpen: true,
         onClose: () => {},
         config: baseConfig,
-        onUpdateConfig: () => {}
+        onUpdateConfig: () => {},
+        onGoLive: () => {}
       })
     );
 
     assert.ok(html.includes('Media &amp; Tema') || html.includes('Media & Tema'), 'Must render Media & Tema tab');
     assert.ok(html.includes('Konfigurasi Printer'), 'Must render Konfigurasi Printer tab');
     assert.ok(!html.includes('<span>Konten &amp; Teks</span>') && !html.includes('<span>Konten & Teks</span>'), 'Old Konten & Teks tab must be gone');
+    assert.ok(html.includes('Go Live'), 'Must render Go Live banner/button');
   });
 
-  await t.test('renders Media & Tema sections (Theme presets, Event text, and Video upload)', () => {
+  await t.test('renders Media & Tema sections (Theme presets 1-line, Event text, Video upload, and Session Code)', () => {
     const html = renderToStaticMarkup(
       React.createElement(LandingConfigDrawer, {
         isOpen: true,
         onClose: () => {},
         config: baseConfig,
-        onUpdateConfig: () => {}
+        onUpdateConfig: () => {},
+        onGoLive: () => {}
       })
     );
 
-    assert.ok(html.includes('Pilihan Tema Visual'), 'Must render theme preset section');
+    assert.ok(html.includes('Pilihan Tema Tampilan'), 'Must render theme preset section');
     assert.ok(html.includes('Pernikahan Romantis'), 'Must render wedding theme name');
     assert.ok(html.includes('Umum &amp; Ceria') || html.includes('Umum & Ceria'), 'Must render general theme name');
-    assert.ok(html.includes('Teks &amp; Informasi Acara') || html.includes('Teks & Informasi Acara'), 'Must render text info section');
+    assert.ok(html.includes('Teks Pengantar &amp; Informasi Acara') || html.includes('Teks Pengantar & Informasi Acara'), 'Must render text info section');
     assert.ok(html.includes('Tanggal Acara (Frame Atas)'), 'Must render top frame date input');
     assert.ok(html.includes('Nama Pasangan / Acara'), 'Must render bottom frame couple names input');
     assert.ok(html.includes('Tampilkan Video Pengantar'), 'Must render video toggle');
     assert.ok(html.includes('Chunking 1.5MB'), 'Must render chunking badge');
+    assert.ok(html.includes('Wajibkan Kode Sesi untuk Mulai'), 'Must render session code toggle');
   });
 
   await t.test('exports THEME_PRESETS and PRINTER_PRESETS with valid items', () => {

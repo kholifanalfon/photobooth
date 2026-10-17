@@ -202,6 +202,21 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
   });
 });
 
+function findNode(tree, predicate) {
+  if (!tree) return null;
+  if (predicate(tree)) return tree;
+  const children = Array.isArray(tree.props?.children)
+    ? tree.props.children
+    : [tree.props?.children].filter(Boolean);
+  for (const child of children) {
+    if (child && typeof child === 'object') {
+      const found = findNode(child, predicate);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 test('LandingPage Interactive Event Contracts', async (t) => {
   await t.test('clicking gift box plays sound effect via audioFx', () => {
     let soundPlayed = false;
@@ -212,8 +227,8 @@ test('LandingPage Interactive Event Contracts', async (t) => {
 
     try {
       const tree = renderComponentTree(LandingPage, { onStartSession: () => {} }, [false]);
-      const mainContainer = tree.props.children[2];
-      const giftBox = mainContainer.props.children[2];
+      const giftBox = findNode(tree, (n) => n.props?.role === 'button');
+      assert.ok(giftBox, 'Gift box must exist in tree');
       assert.strictEqual(typeof giftBox.props.onClick, 'function');
       giftBox.props.onClick();
       assert.strictEqual(soundPlayed, true, 'Gift box click must invoke playGiftPopSound');
@@ -230,8 +245,8 @@ test('LandingPage Interactive Event Contracts', async (t) => {
       [false]
     );
 
-    const mainContainer = tree.props.children[2];
-    const ctaButton = mainContainer.props.children[3];
+    const ctaButton = findNode(tree, (n) => typeof n.props?.onClick === 'function' && String(n.props?.className || '').includes('rounded-2xl font-bold'));
+    assert.ok(ctaButton, 'CTA button must exist in tree');
     assert.strictEqual(typeof ctaButton.props.onClick, 'function');
 
     ctaButton.props.onClick();
