@@ -38,11 +38,25 @@ export default defineConfig(({ mode }) => {
     port = 5173;
   }
 
+  // Resolve backend server port for automatic proxy
+  const serverPort = serverEnv.PORT || rootEnv.PORT || '5025';
+  const backendTarget = `http://localhost:${serverPort}`;
+
   return {
     plugins: [react()],
     server: {
       port,
-      host: true
+      host: true,
+      proxy: {
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true
+        },
+        '/uploads': {
+          target: backendTarget,
+          changeOrigin: true
+        }
+      }
     }
   };
 });

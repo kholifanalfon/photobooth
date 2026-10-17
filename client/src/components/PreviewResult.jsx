@@ -19,7 +19,8 @@ export function resolveApiUrl(path, customBaseUrl) {
     ) {
       base = import.meta.env.VITE_API_BASE_URL;
     } else {
-      base = 'http://localhost:5000';
+      // In browser Vite dev or production SPA, empty base allows relative path through Vite proxy / Express router
+      base = typeof window !== 'undefined' ? '' : 'http://localhost:5000';
     }
   }
 
@@ -153,11 +154,11 @@ export default function PreviewResult({
         printTimerRef.current = null;
       }, 3000);
     } catch (err) {
-      // Fallback: native browser printing for kiosks without print agent
+      // Fallback: trigger native browser window print dialog
+      setPrintStatus(null);
       if (typeof window !== 'undefined' && typeof window.print === 'function') {
         window.print();
       }
-      setPrintStatus(null);
     } finally {
       setIsPrinting(false);
     }
@@ -258,5 +259,3 @@ export default function PreviewResult({
     </div>
   );
 }
-
-export { PreviewResult };
