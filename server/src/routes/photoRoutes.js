@@ -7,12 +7,16 @@ const { prisma } = require('../db');
 
 const router = express.Router();
 const uploadsDir = path.resolve(__dirname, '../../uploads');
+const tempChunksDir = path.resolve(uploadsDir, 'temp_chunks');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+if (!fs.existsSync(tempChunksDir)) {
+  fs.mkdirSync(tempChunksDir, { recursive: true });
+}
 
-// Multer storage configuration for persistent landing video uploads
+// Multer storage configuration for persistent direct landing video uploads
 const videoStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -39,7 +43,115 @@ const uploadVideoMiddleware = multer({
   }
 }).single('video');
 
-// POST /api/photos/upload-video
+// Multer storage for chunked uploads
+const chunkStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadId = (req.body.uploadId || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
+    const sessionChunkDir = path.join(tempChunksDir, uploadId);
+    if (!fs.existsSync(sessionChunkDir)) {
+      fs.mkdirSync(sessionChunkDir, { recursive: true });
+    }
+    cb(null, sessionChunkDir);
+  },
+  filename: (req, file, cb) => {
+    const chunkIndex = parseInt(req.body.chunkIndex, 10);
+    const safeIndex = isNaN(chunkIndex) ? Date.now() : chunkIndex;
+    cb(null, `chunk_${safeIndex}`);
+  }
+});
+
+const uploadChunkMiddleware = multer({
+  storage: chunkStorage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB max per single chunk
+}).single('chunk');
+
+// POST /api/photos/upload-chunk
+router.post('/upload-chunk', (req, res) => {
+  uploadChunkMiddleware(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Gagal menyimpan chunk' });
+    }
+    const { uploadId, chunkIndex, totalChunks } = req.body;
+    if (!uploadId || chunkIndex === undefined || !totalChunks) {
+      return res.status(400).json({ error: 'uploadId, chunkIndex, dan totalChunks wajib disertakan' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Data binary chunk tidak ditemukan' });
+    }
+
+    return res.json({
+      success: true,
+      uploadId,
+      chunkIndex: parseInt(chunkIndex, 10),
+      totalChunks: parseInt(totalChunks, 10)
+    });
+  });
+});
+
+// POST /api/photos/merge-chunks
+router.post('/merge-chunks', async (req, res) => {
+  try {
+    const { uploadId, totalChunks, originalName } = req.body;
+    if (!uploadId || !totalChunks) {
+      return res.status(400).json({ error: 'uploadId dan totalChunks wajib disertakan' });
+    }
+
+    const safeUploadId = String(uploadId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const sessionChunkDir = path.join(tempChunksDir, safeUploadId);
+
+    if (!fs.existsSync(sessionChunkDir)) {
+      return res.status(404).json({ error: 'Sesi chunk upload tidak ditemukan atau telah kedaluwarsa' });
+    }
+
+    const numChunks = parseInt(totalChunks, 10);
+    const ext = path.extname(originalName || 'video.mp4').toLowerCase() || '.mp4';
+    const finalFilename = `video_landing_${Date.now()}${ext}`;
+    const finalFilepath = path.join(uploadsDir, finalFilename);
+
+    const writeStream = fs.createWriteStream(finalFilepath);
+
+    for (let i = 0; i < numChunks; i++) {
+      const chunkFile = path.join(sessionChunkDir, `chunk_${i}`);
+      if (!fs.existsSync(chunkFile)) {
+        writeStream.destroy();
+        await fs.promises.unlink(finalFilepath).catch(() => {});
+        return res.status(400).json({ error: `Chunk ke-${i} tidak ditemukan di server` });
+      }
+
+      const chunkBuffer = await fs.promises.readFile(chunkFile);
+      const canContinue = writeStream.write(chunkBuffer);
+      if (!canContinue) {
+        await new Promise((resolve) => writeStream.once('drain', resolve));
+      }
+    }
+
+    writeStream.end();
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+
+    // Cleanup session temp chunk directory
+    await fs.promises.rm(sessionChunkDir, { recursive: true, force: true }).catch(() => {});
+
+    const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `${req.protocol}://${req.headers.host}` : 'http://localhost:5000');
+    const videoUrl = `${host}/uploads/${finalFilename}`;
+    const relativeUrl = `/uploads/${finalFilename}`;
+    const stats = await fs.promises.stat(finalFilepath);
+
+    return res.json({
+      success: true,
+      filename: finalFilename,
+      videoUrl,
+      relativeUrl,
+      size: stats.size
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Gagal menggabungkan chunk video' });
+  }
+});
+
+// POST /api/photos/upload-video (single-file fallback)
 router.post('/upload-video', (req, res) => {
   uploadVideoMiddleware(req, res, (err) => {
     if (err) {
