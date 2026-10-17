@@ -92,9 +92,9 @@ export default function FrameSelector({ onConfirm, onBack }) {
         <div className="w-14 sm:w-20"></div>
       </div>
 
-      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-5 items-stretch my-auto overflow-hidden">
-        {/* Layout Options */}
-        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-center">
+      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch my-auto overflow-hidden">
+        {/* Layout Options (Open Flat Layout without Outer Card) */}
+        <div className="flex flex-col justify-center">
           <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
             1. Pilih Tata Letak Foto
           </h3>
@@ -115,9 +115,9 @@ export default function FrameSelector({ onConfirm, onBack }) {
                       setSelectedLayout(key);
                     }
                   }}
-                  className={`cursor-pointer p-2 sm:p-2.5 rounded-xl border-2 transition-all flex flex-col items-center text-center ${
+                  className={`cursor-pointer p-2 sm:p-2.5 rounded-xl border transition-all flex flex-col items-center text-center ${
                     active
-                      ? 'border-rose-500 bg-rose-50/40 scale-[1.02]'
+                      ? 'border-rose-500 bg-rose-50/50 scale-[1.02]'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
@@ -130,8 +130,8 @@ export default function FrameSelector({ onConfirm, onBack }) {
           </div>
         </div>
 
-        {/* Color Palette */}
-        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between gap-3">
+        {/* Color Palette (Open Flat Layout without Outer Card) */}
+        <div className="flex flex-col justify-between gap-3">
           <div>
             <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
               2. Pilih Warna Bingkai
@@ -147,7 +147,7 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     aria-pressed={active}
                     onClick={() => setSelectedPalette(p)}
                     className={`flex flex-col items-center p-1.5 sm:p-2 rounded-xl border transition-all focus:outline-none cursor-pointer ${
-                      active ? 'border-rose-500 bg-rose-50/30' : 'border-slate-200 hover:bg-slate-50'
+                      active ? 'border-rose-500 bg-rose-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
                     <div

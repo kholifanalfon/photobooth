@@ -188,7 +188,7 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-800 p-3 sm:p-5 md:p-8 select-none overflow-hidden">
+    <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-800 p-3 sm:p-5 md:p-8 select-none overflow-hidden">
       <div className="text-center mb-1 shrink-0">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
         <p className="text-slate-500 text-xs">
@@ -196,13 +196,13 @@ export default function PreviewResult({
         </p>
       </div>
 
-      {/* Frame Preview Card (Flat Container, scaled to fit remaining viewport) */}
-      <div className="max-h-[46vh] sm:max-h-[55vh] flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto shrink">
+      {/* Frame Preview (Open Flat Display without Outer Card Container) */}
+      <div className="max-h-[48vh] sm:max-h-[56vh] flex items-center justify-center my-auto shrink">
         {compositeUrl ? (
           <img
             src={compositeUrl}
             alt="Composited Result"
-            className="max-h-[42vh] sm:max-h-[50vh] object-contain rounded-lg border border-slate-100"
+            className="max-h-[46vh] sm:max-h-[54vh] object-contain rounded-xl shadow-xs"
           />
         ) : (
           <div className="text-slate-400 text-xs sm:text-sm">Merender komposit...</div>
