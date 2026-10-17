@@ -4,7 +4,7 @@ export function getYoutubeEmbedUrl(url) {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
   if (match && match[1]) {
     const videoId = match[1];
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1`;
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1&enablejsapi=1`;
   }
   return null;
 }
@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
 
 export default function LandingPage({ onStartSession }) {
   const videoElemRef = useRef(null);
+  const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [config, setConfig] = useState(() => {
@@ -127,7 +128,7 @@ export default function LandingPage({ onStartSession }) {
       )}
 
       {/* Main Container without card wrapper */}
-      <div className="z-10 flex flex-col items-center max-w-md w-full text-center px-4 my-auto">
+      <div className="z-10 flex flex-col items-center max-w-lg sm:max-w-xl w-full text-center px-4 my-auto">
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -141,9 +142,10 @@ export default function LandingPage({ onStartSession }) {
 
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {config.enableVideo && config.videoUrl ? (
-          <div className="relative mb-5 sm:mb-6 w-full max-w-[280px] sm:max-w-[340px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
+          <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
             {getYoutubeEmbedUrl(config.videoUrl) ? (
               <iframe
+                ref={iframeRef}
                 src={getYoutubeEmbedUrl(config.videoUrl)}
                 title="YouTube Video Preview"
                 className="w-full h-full border-0"
