@@ -3,7 +3,7 @@ export function getYoutubeEmbedUrl(url) {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|youtube-nocookie\.com\/(?:embed\/|v\/))([\w-]{11})/);
   if (match && match[1]) {
     const videoId = match[1];
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1&enablejsapi=1`;
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`;
   }
   return null;
 }
@@ -13,7 +13,7 @@ export function getGoogleDriveEmbedUrl(url) {
   const match = url.match(/drive\.google\.com\/(?:file\/d\/([a-zA-Z0-9_-]+)|open\?id=([a-zA-Z0-9_-]+)|uc\?id=([a-zA-Z0-9_-]+))/i);
   if (match) {
     const fileId = match[1] || match[2] || match[3];
-    return `https://drive.google.com/file/d/${fileId}/preview`;
+    return `https://drive.google.com/file/d/${fileId}/preview?autoplay=1`;
   }
   return null;
 }
@@ -37,11 +37,13 @@ const DEFAULT_CONFIG = {
 };
 
 export default function LandingPage({ onStartSession }) {
-  const videoElemRef = useRef(null);
-  const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [ytError, setYtError] = useState(null);
+  const iframeRef = useRef(null);
+  const videoElemRef = useRef(null);
+
+  // Initialize config safely from localStorage
   const [config, setConfig] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -55,8 +57,6 @@ export default function LandingPage({ onStartSession }) {
     }
     return DEFAULT_CONFIG;
   });
-
-  const activeTheme = THEME_PRESETS[config.theme] || THEME_PRESETS.general;
 
   const handleUpdateConfig = (updates) => {
     setConfig((prev) => {
@@ -85,6 +85,14 @@ export default function LandingPage({ onStartSession }) {
     }, 800);
   };
 
+  const hasActiveVideo = config.enableVideo && Boolean((config.videoUrl || '').trim());
+  const ytEmbedUrl = getYoutubeEmbedUrl(config.videoUrl);
+  const gdriveEmbedUrl = getGoogleDriveEmbedUrl(config.videoUrl);
+
+  useEffect(() => {
+    setYtError(null);
+  }, [config.videoUrl]);
+
   const postToYouTube = (func, args = []) => {
     try {
       if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -96,70 +104,39 @@ export default function LandingPage({ onStartSession }) {
     } catch (e) {}
   };
 
-  const hasActiveVideo = config.enableVideo && Boolean((config.videoUrl || '').trim());
-  const ytEmbedUrl = getYoutubeEmbedUrl(config.videoUrl);
-  const gdriveEmbedUrl = getGoogleDriveEmbedUrl(config.videoUrl);
-
+  // Autoplay attempt: Trigger play immediately upon load + gesture fallback
   useEffect(() => {
-    setYtError(null);
     if (!hasActiveVideo) return;
 
-    const triggerAutoplayNow = () => {
+    postToYouTube('mute');
+    postToYouTube('playVideo');
+
+    if (videoElemRef.current) {
+      videoElemRef.current.muted = true;
+      const playPromise = videoElemRef.current.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {});
+      }
+    }
+
+    const handleInteraction = () => {
       postToYouTube('mute');
       postToYouTube('playVideo');
-      if (videoElemRef.current) {
-        videoElemRef.current.defaultMuted = true;
-        videoElemRef.current.muted = true;
+      if (videoElemRef.current && videoElemRef.current.paused) {
         videoElemRef.current.play().catch(() => {});
       }
     };
 
-    // 1. Eksekusi instan saat komponen termount
-    triggerAutoplayNow();
-
-    // 2. Eksekusi pada event document ready (DOMContentLoaded & readystatechange)
-    const handleDocReady = () => {
-      triggerAutoplayNow();
-      try {
-        document.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-        window.dispatchEvent(new Event('touchstart'));
-      } catch (e) {}
-    };
-
-    if (typeof document !== 'undefined') {
-      if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        handleDocReady();
-      } else {
-        document.addEventListener('DOMContentLoaded', handleDocReady, { once: true });
-        document.addEventListener('readystatechange', handleDocReady, { once: true });
-      }
-    }
-
-    // 3. Timers bertingkat setelah document ready saat iframe YouTube siap
-    const timers = [150, 400, 800, 1500, 2500].map((delay) =>
-      setTimeout(triggerAutoplayNow, delay)
-    );
-
-    // 4. Gesture listener fallback (sentuhan/klik pertama pengguna di layar)
-    const handleInteraction = () => {
-      triggerAutoplayNow();
-    };
-
     if (typeof window !== 'undefined') {
-      window.addEventListener('touchstart', handleInteraction, { passive: true });
-      window.addEventListener('pointerdown', handleInteraction, { passive: true });
-      window.addEventListener('click', handleInteraction);
+      window.addEventListener('pointerdown', handleInteraction, { once: true });
+      window.addEventListener('touchstart', handleInteraction, { once: true });
+      window.addEventListener('click', handleInteraction, { once: true });
     }
 
     return () => {
-      timers.forEach(clearTimeout);
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('DOMContentLoaded', handleDocReady);
-        document.removeEventListener('readystatechange', handleDocReady);
-      }
       if (typeof window !== 'undefined') {
-        window.removeEventListener('touchstart', handleInteraction);
         window.removeEventListener('pointerdown', handleInteraction);
+        window.removeEventListener('touchstart', handleInteraction);
         window.removeEventListener('click', handleInteraction);
       }
     };
@@ -168,6 +145,9 @@ export default function LandingPage({ onStartSession }) {
   // YouTube postMessage event listener for error 150/101 detection
   useEffect(() => {
     const handleMessage = (e) => {
+      if (!e.origin || (!e.origin.includes('youtube.com') && !e.origin.includes('youtube-nocookie.com'))) {
+        return;
+      }
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
         if (!data) return;
@@ -191,6 +171,7 @@ export default function LandingPage({ onStartSession }) {
     };
   }, []);
 
+  const activeTheme = THEME_PRESETS[config.theme] || THEME_PRESETS.general;
   const isWedding = config.theme === 'wedding';
 
   return (
@@ -202,7 +183,7 @@ export default function LandingPage({ onStartSession }) {
         onClick={() => setIsDrawerOpen(true)}
         aria-label="Buka Pengaturan Landing"
         title="Konfigurasi Judul, Video & Tema"
-        className="absolute top-3 left-3 sm:top-5 sm:left-5 z-20 p-2 sm:p-2.5 rounded-xl bg-white/80 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs"
+        className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 p-2 sm:p-2.5 rounded-xl bg-white/80 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs"
       >
         <SlidersHorizontal size={17} className="sm:w-5 sm:h-5" />
       </button>
@@ -244,7 +225,7 @@ export default function LandingPage({ onStartSession }) {
         </>
       )}
 
-      {/* Main Container without card wrapper */}
+      {/* Main Container */}
       <div className="z-10 flex flex-col items-center max-w-lg sm:max-w-xl w-full text-center px-4 my-auto">
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
@@ -259,7 +240,10 @@ export default function LandingPage({ onStartSession }) {
 
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
-          <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
+          <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black select-none">
+            {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
+            <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
+
             {ytEmbedUrl ? (
               <>
                 <iframe
@@ -271,13 +255,13 @@ export default function LandingPage({ onStartSession }) {
                     postToYouTube('mute');
                     postToYouTube('playVideo');
                   }}
-                  className="w-full h-full border-0 pointer-events-auto"
+                  className="w-full h-full border-0 pointer-events-none select-none scale-[1.02]"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
                 {ytError && (
-                  <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-10">
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-20">
                     <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
                     <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
                       {ytError}
@@ -297,7 +281,7 @@ export default function LandingPage({ onStartSession }) {
                 key={config.videoUrl}
                 src={gdriveEmbedUrl}
                 title="Google Drive Video Player"
-                className="w-full h-full border-0 pointer-events-auto"
+                className="absolute -top-[52px] -bottom-[52px] -left-[2px] -right-[2px] w-[calc(100%+4px)] h-[calc(100%+104px)] border-0 pointer-events-none select-none"
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -308,9 +292,8 @@ export default function LandingPage({ onStartSession }) {
                 autoPlay
                 loop
                 muted
-                controls
                 playsInline
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover pointer-events-none select-none"
               />
             )}
           </div>

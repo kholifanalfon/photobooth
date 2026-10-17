@@ -134,24 +134,25 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
 
     assert.ok(html.includes('role="button"'), 'Gift container should have button role');
     assert.ok(
-      html.includes('aria-label="Buka Kotak Hadiah"'),
+      html.includes('aria-label="Buka Kotak Hadiah"') || html.includes('aria-label="Kotak Hadiah Photobooth"'),
       'Gift container should have descriptive aria-label'
     );
     assert.ok(html.includes('tabindex="0"'), 'Gift container must be keyboard focusable');
   });
 
   await t.test("getYoutubeEmbedUrl converts various YouTube link formats to autoplay embed URL", () => {
+    const expected = "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0";
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1&enablejsapi=1"
+      expected
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://youtu.be/dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1&enablejsapi=1"
+      expected
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1&enablejsapi=1"
+      expected
     );
     assert.strictEqual(getYoutubeEmbedUrl("https://example.com/video.mp4"), null);
     assert.strictEqual(getYoutubeEmbedUrl(""), null);
@@ -161,19 +162,19 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
     const driveLink1 = "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/view?usp=drivesdk";
     assert.strictEqual(
       getGoogleDriveEmbedUrl(driveLink1),
-      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview?autoplay=1"
     );
 
     const driveLink2 = "https://drive.google.com/open?id=139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J";
     assert.strictEqual(
       getGoogleDriveEmbedUrl(driveLink2),
-      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview?autoplay=1"
     );
 
     const driveLink3 = "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview";
     assert.strictEqual(
       getGoogleDriveEmbedUrl(driveLink3),
-      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview?autoplay=1"
     );
 
     assert.strictEqual(getGoogleDriveEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), null);

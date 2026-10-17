@@ -83,12 +83,12 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
   };
 
   const handleSelectTheme = (themeId) => {
-    const preset = THEME_PRESETS[themeId];
-    if (preset) {
+    const theme = THEME_PRESETS[themeId];
+    if (theme) {
       onUpdateConfig({
         theme: themeId,
-        title: config.isTitleCustom ? config.title : preset.defaultTitle,
-        subtitle: config.isSubtitleCustom ? config.subtitle : preset.defaultSubtitle
+        title: config.isTitleCustom ? config.title : theme.defaultTitle,
+        subtitle: config.isSubtitleCustom ? config.subtitle : theme.defaultSubtitle
       });
     }
   };
@@ -285,16 +285,16 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                       </div>
                       <div className="mt-1.5 p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] text-amber-800 space-y-1">
                         <p className="font-bold flex items-center gap-1 text-amber-900">
-                          <Info size={13} className="shrink-0" /> Panduan Link Video:
+                          <Info size={13} className="shrink-0" /> Karakteristik Sumber Video:
                         </p>
                         <p className="leading-relaxed">
-                          • <strong>YouTube:</strong> Mendukung link watch, shorts, atau youtu.be.
+                          • <strong>YouTube:</strong> Otomatis berputar (autoplay) dalam kondisi senyap (mute) sesuai kebijakan browser modern.
                         </p>
                         <p className="leading-relaxed">
-                          • <strong>Google Drive:</strong> Mendukung share link (/view). Pastikan akses file diatur ke <em>"Siapa saja yang memiliki link"</em> (Anyone with the link).
+                          • <strong>Google Drive:</strong> Pemutar Google Drive menampilkan tombol <em>Play</em> di tengah (sistem Google Drive tidak mengizinkan autoplay otomatis dari luar).
                         </p>
                         <p className="leading-relaxed">
-                          • <strong>File Lokal:</strong> Anda juga dapat mengunggah file video (MP4/WebM) langsung dari perangkat di bawah ini.
+                          • <strong>Unggah File Lokal (MP4/WebM):</strong> Paling direkomendasikan jika ingin autoplay langsung 100% instan tanpa perlu ketuk layar sama sekali.
                         </p>
                       </div>
                     </div>
