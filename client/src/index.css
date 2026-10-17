@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:ital,wght@0,600;0,700;1,400;1,600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -18,4 +20,12 @@ body {
   user-select: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
+}
+
+.font-romantic {
+  font-family: 'Great Vibes', 'Playfair Display', cursive, serif;
+}
+
+.font-romantic-serif {
+  font-family: 'Playfair Display', Georgia, serif;
 }

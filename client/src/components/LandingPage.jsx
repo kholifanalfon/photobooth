@@ -246,7 +246,7 @@ export default function LandingPage({ onStartSession }) {
         </>
       )}
 
-      {/* Main Container - Expands responsively when Hero Video is active */}
+      {/* Main Container */}
       <div
         className={`z-10 flex flex-col items-center w-full text-center px-3 sm:px-6 my-auto transition-all duration-300 ${
           hasActiveVideo
@@ -256,68 +256,57 @@ export default function LandingPage({ onStartSession }) {
             : 'max-w-lg sm:max-w-xl'
         }`}
       >
-        <motion.h1
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`font-extrabold ${activeTheme.headingClass} tracking-tight transition-all duration-300 ${
-            hasActiveVideo
-              ? 'text-lg sm:text-2xl md:text-3xl mb-1'
-              : 'text-2xl sm:text-3xl md:text-4xl mb-1.5'
-          }`}
-        >
-          {config.title || activeTheme.defaultTitle}
-        </motion.h1>
-        <p
-          className={`${activeTheme.subheadingClass} font-normal transition-all duration-300 ${
-            hasActiveVideo
-              ? 'text-xs sm:text-sm mb-3 sm:mb-4 max-w-md line-clamp-2'
-              : 'text-xs sm:text-sm md:text-base mb-4 sm:mb-5 max-w-sm'
-          }`}
-        >
-          {config.subtitle || activeTheme.defaultSubtitle}
-        </p>
+        {/* If video is not active, render title & subtitle above gift box */}
+        {!hasActiveVideo ? (
+          <motion.h1
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`font-extrabold ${activeTheme.headingClass} tracking-tight mb-1.5 ${
+              isWedding ? 'font-romantic text-4xl sm:text-5xl font-normal text-rose-950' : 'text-2xl sm:text-3xl md:text-4xl'
+            }`}
+          >
+            {config.title || activeTheme.defaultTitle}
+          </motion.h1>
+        ) : null}
+
+        {!hasActiveVideo ? (
+          <p
+            className={`${activeTheme.subheadingClass} font-normal text-xs sm:text-sm md:text-base mb-4 sm:mb-5 max-w-sm ${
+              isWedding ? 'font-romantic-serif italic' : ''
+            }`}
+          >
+            {config.subtitle || activeTheme.defaultSubtitle}
+          </p>
+        ) : null}
 
         {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
             className={`relative mb-4 sm:mb-5 mx-auto select-none transition-all duration-300 ${
               isPortrait
-                ? 'w-auto max-w-[300px] sm:max-w-[360px]'
+                ? 'w-auto max-w-[310px] sm:max-w-[370px]'
                 : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[860px]'
             }`}
           >
-            {/* Thematic Outer Frame Wrapping Video */}
+            {/* Thematic Outer Frame Wrapping Title and Video */}
             <div
-              className={`relative p-2 sm:p-3 sm:pb-3.5 rounded-3xl transition-all duration-300 ${
+              className={`relative p-2.5 sm:p-3.5 rounded-3xl transition-all duration-300 ${
                 isWedding
                   ? 'bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 border-2 border-rose-200/90 shadow-2xl ring-1 ring-amber-300/40 shadow-rose-200/50'
                   : 'bg-white/95 border border-slate-200/90 shadow-2xl ring-1 ring-slate-100 shadow-slate-300/40'
               }`}
             >
-              {/* Wedding Thematic Corner Ornaments & Ribbon */}
+              {/* Wedding Thematic Corner Filigree Accents */}
               {isWedding ? (
                 <>
-                  {/* Top-Left Corner Filigree Accent */}
                   <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-rose-300 rounded-tl-xl pointer-events-none" />
-                  {/* Top-Right Corner Filigree Accent */}
                   <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-rose-300 rounded-tr-xl pointer-events-none" />
-                  {/* Bottom-Left Corner Filigree Accent */}
                   <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-rose-300 rounded-bl-xl pointer-events-none" />
-                  {/* Bottom-Right Corner Filigree Accent */}
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-rose-300 rounded-br-xl pointer-events-none" />
-
-                  {/* Wedding Badge Header */}
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-gradient-to-r from-rose-400 to-rose-500 text-white text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase rounded-full shadow-sm flex items-center gap-1.5 z-20 pointer-events-none whitespace-nowrap">
-                    <Heart size={10} className="fill-white" />
-                    <span>Wedding Celebration</span>
-                    <Heart size={10} className="fill-white" />
-                  </div>
                 </>
               ) : (
                 <>
-                  {/* General Thematic Washi Tape Top Accent */}
                   <div className="absolute -top-2.5 left-6 w-12 sm:w-14 h-4 sm:h-5 bg-rose-200/80 backdrop-blur-2xs -rotate-2 border-l border-r border-dashed border-rose-300 shadow-2xs pointer-events-none rounded-2xs z-20" />
-                  {/* General Badge Footer */}
                   <div className="absolute -bottom-2.5 right-5 px-2.5 py-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full shadow-xs flex items-center gap-1 z-20 pointer-events-none tracking-wide">
                     <Sparkles size={10} />
                     <span>PHOTOBOOTH</span>
@@ -325,12 +314,36 @@ export default function LandingPage({ onStartSession }) {
                 </>
               )}
 
+              {/* Header Title directly attached on the frame */}
+              <div className="pt-1 pb-2 sm:pb-3 px-3 text-center select-none">
+                <h1
+                  className={`tracking-wide leading-tight transition-all duration-300 ${
+                    isWedding
+                      ? 'font-romantic text-3xl sm:text-4xl md:text-5xl text-rose-950 font-normal drop-shadow-2xs'
+                      : 'text-base sm:text-lg md:text-xl font-extrabold text-slate-800 tracking-tight'
+                  }`}
+                >
+                  {config.title || activeTheme.defaultTitle}
+                </h1>
+                {(config.subtitle || activeTheme.defaultSubtitle) && (
+                  <p
+                    className={`transition-all duration-300 mt-0.5 line-clamp-1 ${
+                      isWedding
+                        ? 'font-romantic-serif italic text-xs sm:text-sm text-rose-800/80'
+                        : 'text-[11px] sm:text-xs text-slate-500 font-medium'
+                    }`}
+                  >
+                    {config.subtitle || activeTheme.defaultSubtitle}
+                  </p>
+                )}
+              </div>
+
               {/* Inner Video Viewport with Borderless Cropping & Interaction Lock */}
               <div
                 className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 ${
                   isPortrait
-                    ? 'w-full aspect-[9/16] max-h-[54vh] sm:max-h-[60vh]'
-                    : 'w-full aspect-video max-h-[54vh] sm:max-h-[60vh]'
+                    ? 'w-full aspect-[9/16] max-h-[50vh] sm:max-h-[55vh]'
+                    : 'w-full aspect-video max-h-[50vh] sm:max-h-[56vh]'
                 }`}
               >
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
