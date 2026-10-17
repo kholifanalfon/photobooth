@@ -81,14 +81,14 @@ export default function LandingPage({ onStartSession }) {
           </motion.div>
         </div>
 
-        {/* CTA Button (Flat Solid) */}
+        {/* Compact CTA Button (Flat Solid) */}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full sm:w-auto px-8 sm:px-12 py-3.5 sm:py-4 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-lg sm:text-xl rounded-xl transition-colors flex items-center justify-center gap-2.5 cursor-pointer shadow-sm"
+          className="px-6 sm:px-8 py-2.5 sm:py-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-base sm:text-lg rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
         >
-          <Camera size={22} className="sm:w-6 sm:h-6" />
+          <Camera size={20} className="sm:w-5 sm:h-5" />
           Mulai Sekarang
         </motion.button>
       </div>

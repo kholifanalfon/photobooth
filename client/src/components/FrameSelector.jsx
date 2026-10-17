@@ -82,14 +82,14 @@ export default function FrameSelector({ onConfirm, onBack }) {
         <button
           onClick={onBack}
           aria-label="Kembali"
-          className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 font-semibold text-sm sm:text-base text-slate-700 transition-colors cursor-pointer shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 font-semibold text-xs sm:text-sm text-slate-700 transition-colors cursor-pointer shadow-xs"
         >
-          <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" /> Kembali
+          <ArrowLeft size={15} className="sm:w-4 sm:h-4" /> Kembali
         </button>
         <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 text-center">
           Pilih Template & Warna Frame
         </h2>
-        <div className="w-16 sm:w-24"></div>
+        <div className="w-16 sm:w-20"></div>
       </div>
 
       <div className="max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-start">
@@ -146,15 +146,15 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     aria-label={p.name}
                     aria-pressed={active}
                     onClick={() => setSelectedPalette(p)}
-                    className={`flex flex-col items-center p-2.5 sm:p-3 rounded-xl border transition-all focus:outline-none cursor-pointer ${
+                    className={`flex flex-col items-center p-2 sm:p-2.5 rounded-xl border transition-all focus:outline-none cursor-pointer ${
                       active ? 'border-rose-500 bg-rose-50/30' : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <div
-                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-slate-300 mb-1.5 sm:mb-2 flex items-center justify-center shadow-xs"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-300 mb-1.5 flex items-center justify-center shadow-xs"
                       style={{ backgroundColor: p.hex }}
                     >
-                      {active && <Check size={18} className={`sm:w-5 sm:h-5 ${p.hex === '#1E1E24' ? 'text-white' : 'text-slate-800'}`} />}
+                      {active && <Check size={16} className={`sm:w-4 sm:h-4 ${p.hex === '#1E1E24' ? 'text-white' : 'text-slate-800'}`} />}
                     </div>
                     <span className="text-[11px] sm:text-xs font-medium text-slate-700">{p.name}</span>
                   </button>
@@ -165,9 +165,9 @@ export default function FrameSelector({ onConfirm, onBack }) {
 
           <button
             onClick={handleConfirm}
-            className="w-full py-3.5 sm:py-4 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-base sm:text-lg rounded-xl shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            className="w-full py-2.5 sm:py-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-sm sm:text-base rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
-            Lanjut ke Kamera <ArrowRight size={18} className="sm:w-5 sm:h-5" />
+            Lanjut ke Kamera <ArrowRight size={16} className="sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>

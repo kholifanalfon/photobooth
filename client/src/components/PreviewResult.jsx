@@ -188,8 +188,8 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen w-full bg-slate-100 text-slate-800 p-4 sm:p-6 md:p-10 select-none">
-      <div className="text-center mb-4 sm:mb-6">
+    <div className="flex flex-col items-center justify-between min-h-screen w-full bg-slate-100 text-slate-800 p-4 sm:p-6 md:p-8 select-none">
+      <div className="text-center mb-3 sm:mb-4">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1">Hasil Fotomu Siap! 🎉</h2>
         <p className="text-slate-500 text-xs sm:text-sm">
           Cetak langsung atau scan QR code untuk menyimpan di ponsel.
@@ -197,7 +197,7 @@ export default function PreviewResult({
       </div>
 
       {/* Frame Preview Card (Flat Container) */}
-      <div className="max-h-[52vh] sm:max-h-[60vh] flex items-center justify-center p-3 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto">
+      <div className="max-h-[52vh] sm:max-h-[60vh] flex items-center justify-center p-2.5 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto">
         {compositeUrl ? (
           <img
             src={compositeUrl}
@@ -210,37 +210,37 @@ export default function PreviewResult({
       </div>
 
       {printStatus && (
-        <div className="mt-3 flex items-center gap-2 text-emerald-700 font-semibold text-xs sm:text-sm bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 animate-fade-in text-center">
-          <CheckCircle2 size={16} className="shrink-0" /> {printStatus}
+        <div className="mt-2.5 flex items-center gap-2 text-emerald-700 font-semibold text-xs sm:text-sm bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-200 animate-fade-in text-center">
+          <CheckCircle2 size={15} className="shrink-0" /> {printStatus}
         </div>
       )}
 
-      {/* Action Buttons (Flat Solid Design) */}
-      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-4 sm:mt-6 w-full max-w-xl">
+      {/* Action Buttons (Compact Flat Solid Design) */}
+      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-3 sm:mt-5 w-full max-w-lg">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[140px] py-3.5 sm:py-4 px-4 sm:px-6 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-sm sm:text-base transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[130px] py-2.5 sm:py-3 px-3.5 sm:px-5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <Printer size={18} className="sm:w-5 sm:h-5" /> Print Foto
+          <Printer size={16} className="sm:w-[18px] sm:h-[18px]" /> Print Foto
         </button>
 
         <button
           onClick={handleDownloadQr}
           disabled={isUploading || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[140px] py-3.5 sm:py-4 px-4 sm:px-6 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-sm sm:text-base transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[130px] py-2.5 sm:py-3 px-3.5 sm:px-5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <QrCode size={18} className="sm:w-5 sm:h-5" /> Download (QR)
+          <QrCode size={16} className="sm:w-[18px] sm:h-[18px]" /> Download (QR)
         </button>
 
         <button
           onClick={() => setIsResetOpen(true)}
           type="button"
-          className="w-full md:w-auto py-3.5 sm:py-4 px-5 sm:px-6 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-2 text-sm sm:text-base transition-colors cursor-pointer active:scale-98"
+          className="w-full sm:w-auto py-2.5 sm:py-3 px-4 sm:px-5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <RefreshCcw size={16} className="sm:w-[18px] sm:h-[18px] text-slate-500" /> Mulai Sesi Baru
+          <RefreshCcw size={15} className="text-slate-500" /> Mulai Sesi Baru
         </button>
       </div>
 

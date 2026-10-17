@@ -286,7 +286,7 @@ export default function CameraSession({
           <p className="text-rose-600 font-bold text-base sm:text-lg mb-4">{cameraError}</p>
           <button
             onClick={handleCancel}
-            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors cursor-pointer text-sm"
+            className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors cursor-pointer text-sm"
           >
             Kembali ke Menu
           </button>
@@ -303,16 +303,16 @@ export default function CameraSession({
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
       {/* Header Info */}
-      <div className="z-10 flex items-center justify-between w-full max-w-3xl mb-2 sm:mb-4">
+      <div className="z-10 flex items-center justify-between w-full max-w-3xl mb-2 sm:mb-3">
         <button
           onClick={handleCancel}
           aria-label="Batalkan Sesi"
-          className="text-slate-600 hover:text-slate-900 font-medium text-xs sm:text-sm px-3 py-1.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+          className="text-slate-600 hover:text-slate-900 font-medium text-xs sm:text-sm px-2.5 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
         >
           Batalkan Sesi
         </button>
 
-        <div className="bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-xs font-bold text-xs sm:text-sm text-slate-700">
+        <div className="bg-white px-3.5 py-1 rounded-full border border-slate-200 shadow-xs font-bold text-xs sm:text-sm text-slate-700">
           Pose ke <span className="text-rose-600 font-extrabold text-sm sm:text-base">{currentPose + 1}</span> dari {totalPhotos}
         </div>
 
@@ -322,9 +322,9 @@ export default function CameraSession({
           aria-label="Ganti Kamera"
           title="Ganti Kamera (Depan / Belakang)"
           disabled={countdown !== null || Boolean(poseReviewPhoto)}
-          className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
+          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
         >
-          <RefreshCw size={15} />
+          <RefreshCw size={14} />
           <span className="hidden sm:inline">{facingMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}</span>
         </button>
       </div>
@@ -359,7 +359,7 @@ export default function CameraSession({
               alt={`Review Pose ${currentPose + 1}`}
               className="w-full h-full object-cover"
             />
-            <div className="absolute top-4 bg-white/90 backdrop-blur-xs px-3.5 py-1 rounded-full border border-slate-200 text-slate-800 font-bold text-xs sm:text-sm shadow-sm">
+            <div className="absolute top-3 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full border border-slate-200 text-slate-800 font-bold text-xs shadow-xs">
               ✨ Review Pose {currentPose + 1}
             </div>
           </div>
@@ -384,21 +384,21 @@ export default function CameraSession({
       </div>
 
       {/* Bottom Controls */}
-      <div className="z-10 flex flex-col items-center gap-3 w-full max-w-md pt-2 sm:pt-4">
+      <div className="z-10 flex flex-col items-center gap-2.5 w-full max-w-md pt-2 sm:pt-3">
         {poseReviewPhoto ? (
-          <div className="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 w-full">
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full">
             <button
               onClick={handleRetake}
-              className="w-full sm:flex-1 py-3.5 sm:py-4 px-4 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all cursor-pointer active:scale-98"
+              className="w-full sm:flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all cursor-pointer active:scale-98"
             >
-              <RotateCcw size={18} className="sm:w-5 sm:h-5 text-slate-500" />
+              <RotateCcw size={16} className="text-slate-500" />
               Foto Ulang (Retake)
             </button>
             <button
               onClick={handleAcceptPhoto}
-              className="w-full sm:flex-1 py-3.5 sm:py-4 px-4 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-98"
+              className="w-full sm:flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-98"
             >
-              <Check size={18} className="sm:w-5 sm:h-5" />
+              <Check size={16} />
               Gunakan Foto Ini
             </button>
           </div>
@@ -406,13 +406,13 @@ export default function CameraSession({
           <button
             disabled={countdown !== null}
             onClick={triggerCaptureSequence}
-            className={`w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl font-bold text-lg sm:text-xl flex items-center justify-center gap-2.5 shadow-sm transition-colors cursor-pointer ${
+            className={`w-full sm:w-auto px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold text-base sm:text-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer ${
               countdown !== null
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white'
             }`}
           >
-            <Camera size={22} className="sm:w-6 sm:h-6" />
+            <Camera size={20} className="sm:w-5 sm:h-5" />
             {countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
           </button>
         )}

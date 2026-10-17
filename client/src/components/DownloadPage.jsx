@@ -75,61 +75,61 @@ export default function DownloadPage({ filename }) {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="w-full bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col items-center gap-4"
+          className="w-full bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col items-center gap-3.5"
         >
           {/* Photo Frame Container (Clean Flat Border) */}
-          <div className="relative w-full max-w-[320px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+          <div className="relative w-full max-w-[300px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
             {safeFilename ? (
               <img
                 src={photoUrl}
                 alt="Photobooth Result"
-                className="w-full h-auto object-contain max-h-[50vh]"
+                className="w-full h-auto object-contain max-h-[48vh]"
                 loading="eager"
               />
             ) : (
-              <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
-                <ImageIcon size={44} />
+              <div className="h-60 flex flex-col items-center justify-center text-slate-400 gap-2">
+                <ImageIcon size={40} />
                 <span className="text-sm">Foto tidak ditemukan</span>
               </div>
             )}
           </div>
 
-          <div className="text-center mt-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+          <div className="text-center mt-0.5">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
               Foto Anda Siap Diunduh!
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               Simpan kenangan spesial ini langsung ke galeri smartphone Anda dalam resolusi penuh.
             </p>
           </div>
 
-          {/* Action Buttons (Flat Solid Design) */}
-          <div className="w-full flex flex-col gap-2.5 pt-1">
+          {/* Action Buttons (Compact Flat Solid Design) */}
+          <div className="w-full flex flex-col gap-2 pt-1">
             <button
               onClick={handleDownload}
               disabled={downloading || !safeFilename}
-              className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-colors cursor-pointer ${
+              className={`w-full py-2.5 sm:py-3 px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer ${
                 downloading
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-sm'
+                  : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-xs'
               }`}
             >
-              <Download size={18} className={downloading ? 'animate-bounce' : ''} />
+              <Download size={16} className={downloading ? 'animate-bounce' : ''} />
               <span>{downloading ? 'Mengunduh Foto...' : 'Unduh Foto Sekarang'}</span>
             </button>
 
             <button
               onClick={handleShare}
-              className="w-full py-3 px-6 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+              className="w-full py-2.5 px-5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
             >
               {copied ? (
                 <>
-                  <Check size={16} className="text-emerald-600" />
+                  <Check size={15} className="text-emerald-600" />
                   <span className="text-emerald-600 font-medium">Link Berhasil Disalin!</span>
                 </>
               ) : (
                 <>
-                  <Share2 size={16} />
+                  <Share2 size={15} />
                   <span>Bagikan Link Foto</span>
                 </>
               )}
