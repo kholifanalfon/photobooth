@@ -276,45 +276,60 @@ export default function LandingPage({ onStartSession }) {
                 : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[840px]'
             }`}
           >
-            {/* Thematic Outer Frame Snugly Wrapping Video without blank space */}
+            {/* Thematic Outer Frame Snugly Wrapping Video (Hidden while video is loading) */}
             <div
-              className={`relative p-2 sm:p-2.5 rounded-3xl transition-all duration-300 ${
-                isWedding
+              className={`relative p-2 sm:p-2.5 rounded-3xl transition-all duration-500 ${
+                isVideoLoading
+                  ? 'bg-transparent border-transparent shadow-none ring-0'
+                  : isWedding
                   ? 'bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 border-2 border-rose-200/90 shadow-2xl ring-1 ring-amber-300/40 shadow-rose-200/50'
                   : 'bg-white/95 border border-slate-200/90 shadow-2xl ring-1 ring-slate-100 shadow-slate-300/40'
               }`}
             >
-              {/* Wedding Thematic Corner Filigree Accents */}
-              {isWedding ? (
-                <>
-                  <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-rose-300 rounded-tl-xl pointer-events-none" />
-                  <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-rose-300 rounded-tr-xl pointer-events-none" />
-                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-rose-300 rounded-bl-xl pointer-events-none" />
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-rose-300 rounded-br-xl pointer-events-none" />
-                </>
-              ) : (
-                <>
-                  <div className="absolute -top-2.5 left-6 w-12 sm:w-14 h-4 sm:h-5 bg-rose-200/80 backdrop-blur-2xs -rotate-2 border-l border-r border-dashed border-rose-300 shadow-2xs pointer-events-none rounded-2xs z-20" />
-                  <div className="absolute -bottom-2.5 right-5 px-2.5 py-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full shadow-xs flex items-center gap-1 z-20 pointer-events-none tracking-wide">
-                    <Sparkles size={10} />
-                    <span>PHOTOBOOTH</span>
-                  </div>
-                </>
+              {/* Wedding Thematic Corner Filigree Accents (Hidden while loading) */}
+              {!isVideoLoading && (
+                isWedding ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-rose-300 rounded-tl-xl pointer-events-none" />
+                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-rose-300 rounded-tr-xl pointer-events-none" />
+                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-rose-300 rounded-bl-xl pointer-events-none" />
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-rose-300 rounded-br-xl pointer-events-none" />
+                  </motion.div>
+                ) : (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+                    <div className="absolute -top-2.5 left-6 w-12 sm:w-14 h-4 sm:h-5 bg-rose-200/80 backdrop-blur-2xs -rotate-2 border-l border-r border-dashed border-rose-300 shadow-2xs pointer-events-none rounded-2xs z-20" />
+                    <div className="absolute -bottom-2.5 right-5 px-2.5 py-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full shadow-xs flex items-center gap-1 z-20 pointer-events-none tracking-wide">
+                      <Sparkles size={10} />
+                      <span>PHOTOBOOTH</span>
+                    </div>
+                  </motion.div>
+                )
               )}
 
-              {/* Frame Header Top: Tanggal Acara Berlangsung */}
-              <div className="py-1 px-2 text-center flex items-center justify-center gap-1.5 select-none border-b border-rose-100/70 mb-1.5">
-                <Sparkles size={11} className="text-amber-400" />
-                <span className="text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase text-rose-800/85">
-                  {config.eventDate || 'Saturday, 17 October 2026'}
-                </span>
-                <Sparkles size={11} className="text-amber-400" />
-              </div>
+              {/* Frame Header Top: Tanggal Acara Berlangsung (Hidden while loading) */}
+              {!isVideoLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="py-1 px-2 text-center flex items-center justify-center gap-1.5 select-none border-b border-rose-100/70 mb-1.5"
+                >
+                  <Sparkles size={11} className="text-amber-400" />
+                  <span className="text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase text-rose-800/85">
+                    {config.eventDate || 'Saturday, 17 October 2026'}
+                  </span>
+                  <Sparkles size={11} className="text-amber-400" />
+                </motion.div>
+              )}
 
               {/* Inner Video Viewport Fitted Snugly to Video Size */}
               <div
-                style={exactNumericRatio ? { aspectRatio: exactNumericRatio } : {}}
-                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 flex items-center justify-center ${getAspectRatioClasses()}`}
+                style={!isVideoLoading && exactNumericRatio ? { aspectRatio: exactNumericRatio } : {}}
+                className={`relative rounded-2xl overflow-hidden select-none flex items-center justify-center transition-all duration-500 ${
+                  isVideoLoading
+                    ? 'w-[260px] sm:w-[320px] h-[220px] sm:h-[260px] mx-auto bg-transparent border-0'
+                    : `bg-black border border-slate-900/10 ${getAspectRatioClasses()}`
+                }`}
               >
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
                 <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
@@ -348,11 +363,15 @@ export default function LandingPage({ onStartSession }) {
                 <AnimatePresence>
                   {isVideoLoading && (
                     <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-black/85 via-black/80 to-black/90 backdrop-blur-2xs select-none"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.35 }}
+                      className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-5 rounded-2xl select-none ${
+                        isWedding
+                          ? 'bg-rose-950/85 backdrop-blur-md border border-rose-300/30 shadow-2xl shadow-rose-900/30'
+                          : 'bg-slate-900/85 backdrop-blur-md border border-slate-700/50 shadow-2xl shadow-black/40'
+                      }`}
                     >
                       {isWedding ? (
                         /* Wedding Theme Loading Animation: Glowing Heart + Golden Rings */
@@ -422,12 +441,19 @@ export default function LandingPage({ onStartSession }) {
                 </AnimatePresence>
               </div>
 
-              {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line */}
-              <div className="pt-1.5 pb-0.5 px-2 text-center border-t border-rose-100/70 mt-1.5 select-none">
-                <p className="font-romantic text-base sm:text-lg text-rose-950 truncate max-w-[270px] sm:max-w-[330px] mx-auto leading-tight">
-                  {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
-                </p>
-              </div>
+              {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line (Hidden while loading) */}
+              {!isVideoLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="pt-1.5 pb-0.5 px-2 text-center border-t border-rose-100/70 mt-1.5 select-none"
+                >
+                  <p className="font-romantic text-base sm:text-lg text-rose-950 truncate max-w-[270px] sm:max-w-[330px] mx-auto leading-tight">
+                    {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
+                  </p>
+                </motion.div>
+              )}
             </div>
           </div>
         ) : (
