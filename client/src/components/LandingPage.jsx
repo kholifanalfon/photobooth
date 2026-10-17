@@ -441,17 +441,33 @@ export default function LandingPage({ onStartSession }) {
                 </AnimatePresence>
               </div>
 
-              {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line (Hidden while loading) */}
+              {/* Frame Footer Bottom: Nama Pengantin Terbaca Jelas & Elegan */}
               {!isVideoLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
-                  className="pt-1.5 pb-0.5 px-2 text-center border-t border-rose-100/70 mt-1.5 select-none"
+                  className="pt-2 pb-1 px-2 text-center border-t border-rose-200/80 mt-2 select-none flex items-center justify-center"
                 >
-                  <p className="font-romantic text-base sm:text-lg text-rose-950 truncate max-w-[270px] sm:max-w-[330px] mx-auto leading-tight">
-                    {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
-                  </p>
+                  <div className="inline-flex items-center justify-center gap-2 px-3.5 py-1 rounded-full bg-white/95 border border-rose-200/90 shadow-2xs max-w-full">
+                    {isWedding ? (
+                      <Heart size={12} className="text-rose-500 fill-rose-400 shrink-0" />
+                    ) : (
+                      <Sparkles size={12} className="text-amber-500 shrink-0" />
+                    )}
+                    <span className={`truncate max-w-[260px] sm:max-w-[340px] text-rose-950 font-bold tracking-wider ${
+                      isWedding
+                        ? 'font-romantic-serif text-xs sm:text-sm uppercase'
+                        : 'text-xs sm:text-sm'
+                    }`}>
+                      {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
+                    </span>
+                    {isWedding ? (
+                      <Heart size={12} className="text-rose-500 fill-rose-400 shrink-0" />
+                    ) : (
+                      <Sparkles size={12} className="text-amber-500 shrink-0" />
+                    )}
+                  </div>
                 </motion.div>
               )}
             </div>
