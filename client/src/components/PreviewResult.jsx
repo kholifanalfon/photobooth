@@ -188,42 +188,42 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-[100dvh] h-auto w-full bg-slate-100 text-slate-800 p-3 sm:p-5 md:p-8 select-none">
-      <div className="text-center mb-2 sm:mb-3">
-        <h2 className="text-xl sm:text-3xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
-        <p className="text-slate-500 text-xs sm:text-sm">
+    <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-800 p-3 sm:p-5 md:p-8 select-none overflow-hidden">
+      <div className="text-center mb-1 shrink-0">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
+        <p className="text-slate-500 text-xs">
           Cetak langsung atau scan QR code untuk menyimpan di ponsel.
         </p>
       </div>
 
-      {/* Frame Preview Card (Flat Container) */}
-      <div className="max-h-[50vh] sm:max-h-[58vh] flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto">
+      {/* Frame Preview Card (Flat Container, scaled to fit remaining viewport) */}
+      <div className="max-h-[46vh] sm:max-h-[55vh] flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto shrink">
         {compositeUrl ? (
           <img
             src={compositeUrl}
             alt="Composited Result"
-            className="max-h-[46vh] sm:max-h-[54vh] object-contain rounded-lg border border-slate-100"
+            className="max-h-[42vh] sm:max-h-[50vh] object-contain rounded-lg border border-slate-100"
           />
         ) : (
-          <div className="text-slate-400 text-sm">Merender komposit...</div>
+          <div className="text-slate-400 text-xs sm:text-sm">Merender komposit...</div>
         )}
       </div>
 
       {printStatus && (
-        <div className="mt-2 flex items-center gap-2 text-emerald-700 font-semibold text-xs sm:text-sm bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-200 animate-fade-in text-center">
-          <CheckCircle2 size={15} className="shrink-0" /> {printStatus}
+        <div className="mt-1 flex items-center gap-1.5 text-emerald-700 font-semibold text-xs bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 animate-fade-in text-center shrink-0">
+          <CheckCircle2 size={14} className="shrink-0" /> {printStatus}
         </div>
       )}
 
       {/* Action Buttons (Compact Flat Solid Design with single-line text) */}
-      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-3 sm:mt-4 w-full max-w-xl">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-2 sm:mt-4 w-full max-w-xl shrink-0">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[140px] whitespace-nowrap py-2.5 sm:py-3 px-3.5 sm:px-5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <Printer size={16} className="sm:w-[18px] sm:h-[18px] shrink-0" />
+          <Printer size={15} className="shrink-0" />
           <span>Print Foto</span>
         </button>
 
@@ -231,18 +231,18 @@ export default function PreviewResult({
           onClick={handleDownloadQr}
           disabled={isUploading || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[155px] whitespace-nowrap py-2.5 sm:py-3 px-3.5 sm:px-5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[145px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <QrCode size={16} className="sm:w-[18px] sm:h-[18px] shrink-0" />
+          <QrCode size={15} className="shrink-0" />
           <span>Download (QR)</span>
         </button>
 
         <button
           onClick={() => setIsResetOpen(true)}
           type="button"
-          className="w-full sm:w-auto min-w-[140px] whitespace-nowrap py-2.5 sm:py-3 px-4 sm:px-5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="w-full sm:w-auto min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <RefreshCcw size={15} className="text-slate-500 shrink-0" />
+          <RefreshCcw size={14} className="text-slate-500 shrink-0" />
           <span>Mulai Sesi Baru</span>
         </button>
       </div>

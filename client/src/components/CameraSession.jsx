@@ -281,7 +281,7 @@ export default function CameraSession({
 
   if (cameraError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[100dvh] h-auto bg-slate-50 text-slate-800 p-6">
+      <div className="flex flex-col items-center justify-center h-full h-[100dvh] bg-slate-50 text-slate-800 p-6 overflow-hidden">
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm">
           <p className="text-rose-600 font-bold text-base sm:text-lg mb-4">{cameraError}</p>
           <button
@@ -298,22 +298,22 @@ export default function CameraSession({
   const isMirrored = facingMode === 'user';
 
   return (
-    <div className="relative flex flex-col items-center justify-between min-h-[100dvh] h-auto w-full bg-slate-100 text-slate-800 overflow-hidden select-none p-3 sm:p-5">
+    <div className="relative flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-800 overflow-hidden select-none p-2.5 sm:p-4">
       {/* Screen Flash Overlay */}
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
       {/* Header Info */}
-      <div className="z-10 flex items-center justify-between w-full max-w-3xl mb-1.5 sm:mb-3">
+      <div className="z-10 flex items-center justify-between w-full max-w-2xl shrink-0 mb-1">
         <button
           onClick={handleCancel}
           aria-label="Batalkan Sesi"
-          className="text-slate-600 hover:text-slate-900 font-medium text-xs sm:text-sm px-2.5 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+          className="text-slate-600 hover:text-slate-900 font-medium text-xs px-2 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
         >
           Batalkan Sesi
         </button>
 
-        <div className="bg-white px-3.5 py-1 rounded-full border border-slate-200 shadow-xs font-bold text-xs sm:text-sm text-slate-700">
-          Pose ke <span className="text-rose-600 font-extrabold text-sm sm:text-base">{currentPose + 1}</span> dari {totalPhotos}
+        <div className="bg-white px-3 py-0.5 rounded-full border border-slate-200 shadow-xs font-bold text-xs text-slate-700">
+          Pose ke <span className="text-rose-600 font-extrabold text-sm">{currentPose + 1}</span> dari {totalPhotos}
         </div>
 
         {/* Switch Camera Button for mobile / tablet devices */}
@@ -322,20 +322,20 @@ export default function CameraSession({
           aria-label="Ganti Kamera"
           title="Ganti Kamera (Depan / Belakang)"
           disabled={countdown !== null || Boolean(poseReviewPhoto)}
-          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
+          className="p-1 sm:px-2.5 sm:py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 flex items-center gap-1 text-xs font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-xs"
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={13} />
           <span className="hidden sm:inline">{facingMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}</span>
         </button>
       </div>
 
       {/* Main Viewfinder / Pose Review Card */}
-      <div className="relative z-10 w-full max-w-2xl aspect-[3/4] sm:aspect-[4/3] max-h-[58vh] sm:max-h-[64vh] bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-300 shadow-sm flex items-center justify-center my-auto">
+      <div className="relative z-10 w-full max-w-xl aspect-[3/4] sm:aspect-[4/3] max-h-[54vh] sm:max-h-[60vh] bg-slate-900 rounded-2xl overflow-hidden border border-slate-300 shadow-sm flex items-center justify-center my-auto shrink">
         {/* Loading Spinner until video stream is actively playing */}
         {!isVideoReady && !poseReviewPhoto && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-900 z-20">
-            <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-rose-500" />
-            <span className="text-xs sm:text-sm font-medium text-slate-300">Menghubungkan kamera...</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 bg-slate-900 z-20">
+            <Loader2 className="w-7 h-7 sm:w-9 sm:h-9 animate-spin text-rose-500" />
+            <span className="text-xs font-medium text-slate-300">Menghubungkan kamera...</span>
           </div>
         )}
 
@@ -359,7 +359,7 @@ export default function CameraSession({
               alt={`Review Pose ${currentPose + 1}`}
               className="w-full h-full object-cover"
             />
-            <div className="absolute top-3 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full border border-slate-200 text-slate-800 font-bold text-xs shadow-xs">
+            <div className="absolute top-2.5 bg-white/90 backdrop-blur-xs px-3 py-0.5 rounded-full border border-slate-200 text-slate-800 font-bold text-[11px] shadow-xs">
               ✨ Review Pose {currentPose + 1}
             </div>
           </div>
@@ -375,7 +375,7 @@ export default function CameraSession({
               exit={{ scale: 1.5, opacity: 0 }}
               className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none z-30"
             >
-              <span className="text-8xl sm:text-9xl font-black text-white">
+              <span className="text-7xl sm:text-9xl font-black text-white">
                 {countdown}
               </span>
             </motion.div>
@@ -384,21 +384,21 @@ export default function CameraSession({
       </div>
 
       {/* Bottom Controls */}
-      <div className="z-10 flex flex-col items-center gap-2 w-full max-w-md pt-2">
+      <div className="z-10 flex flex-col items-center gap-2 w-full max-w-sm pt-1 shrink-0">
         {poseReviewPhoto ? (
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full">
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full">
             <button
               onClick={handleRetake}
-              className="w-full sm:flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all cursor-pointer active:scale-98"
+              className="w-full sm:flex-1 py-2 sm:py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all cursor-pointer active:scale-98"
             >
-              <RotateCcw size={16} className="text-slate-500" />
+              <RotateCcw size={15} className="text-slate-500" />
               Foto Ulang (Retake)
             </button>
             <button
               onClick={handleAcceptPhoto}
-              className="w-full sm:flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-98"
+              className="w-full sm:flex-1 py-2 sm:py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-98"
             >
-              <Check size={16} />
+              <Check size={15} />
               Gunakan Foto Ini
             </button>
           </div>
@@ -406,13 +406,13 @@ export default function CameraSession({
           <button
             disabled={countdown !== null}
             onClick={triggerCaptureSequence}
-            className={`w-full sm:w-auto px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold text-base sm:text-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer ${
+            className={`w-full sm:w-auto px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer ${
               countdown !== null
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white'
             }`}
           >
-            <Camera size={20} className="sm:w-5 sm:h-5" />
+            <Camera size={18} className="sm:w-5 sm:h-5" />
             {countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
           </button>
         )}
