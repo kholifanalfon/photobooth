@@ -13,12 +13,38 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Static uploads serving
+// Static uploads serving with explicit headers for image downloads
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+app.use(
+  '/uploads',
+  express.static(uploadsDir, {
+    setHeaders: (res, filePath) => {
+      // Allow cross-origin access and prompt download or display
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  })
+);
+
+// Dedicated direct download endpoint: /api/photos/download/:filename
+// Forces Content-Disposition: attachment for mobile browser downloads
+app.get('/api/photos/download/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filepath = path.join(uploadsDir, filename);
+
+  if (!fs.existsSync(filepath)) {
+    return res.status(404).json({ error: 'File foto tidak ditemukan' });
+  }
+
+  res.download(filepath, filename, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).json({ error: 'Gagal mengunduh file foto' });
+    }
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
