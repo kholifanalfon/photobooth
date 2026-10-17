@@ -441,24 +441,24 @@ export default function LandingPage({ onStartSession }) {
                 </AnimatePresence>
               </div>
 
-              {/* Frame Footer Bottom: Nama Pengantin Romantis & Sangat Terbaca Jelas */}
+              {/* Frame Footer Bottom: Nama Pengantin Romantis Selaras dengan Title + Letter Spacing */}
               {!isVideoLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
-                  className="pt-2 pb-1 px-2 text-center border-t border-rose-200/80 mt-1.5 select-none flex items-center justify-center"
+                  className="pt-2 pb-1.5 px-2 text-center border-t border-rose-200/80 mt-1.5 select-none flex items-center justify-center"
                 >
-                  <div className="inline-flex items-center justify-center gap-2 px-4 py-1 rounded-full bg-white/95 border border-rose-200/90 shadow-2xs max-w-full">
+                  <div className="inline-flex items-center justify-center gap-2.5 px-5 py-1 rounded-full bg-white/95 border border-rose-200/90 shadow-2xs max-w-full">
                     {isWedding ? (
                       <Heart size={14} className="text-rose-500 fill-rose-400 shrink-0 animate-pulse" />
                     ) : (
                       <Sparkles size={13} className="text-amber-500 shrink-0" />
                     )}
-                    <span className={`truncate max-w-[270px] sm:max-w-[360px] text-rose-950 font-bold ${
+                    <span className={`truncate max-w-[280px] sm:max-w-[400px] text-rose-950 ${
                       isWedding
-                        ? 'font-dancing text-lg sm:text-xl md:text-2xl leading-tight drop-shadow-2xs'
-                        : 'text-xs sm:text-sm font-semibold'
+                        ? 'font-romantic text-2xl sm:text-3xl font-normal tracking-wider sm:tracking-widest leading-none drop-shadow-2xs py-0.5'
+                        : 'text-xs sm:text-sm font-semibold tracking-wider'
                     }`}>
                       {config.coupleNames || (isWedding ? 'The Wedding Celebration' : 'Special Celebration')}
                     </span>
