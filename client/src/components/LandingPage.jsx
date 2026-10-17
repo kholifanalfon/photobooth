@@ -274,22 +274,23 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
             <SlidersHorizontal size={17} className="text-rose-500 sm:w-5 sm:h-5" />
             <span className="text-xs font-bold text-slate-700 hidden sm:inline">Konfigurasi</span>
           </button>
+        </div>
+      )}
 
-          {/* Go Live Button */}
+      {/* Top Right: Tombol Go Live di mode konfigurasi OR Fullscreen di mode live */}
+      {!isLiveMode ? (
+        <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2">
           <button
             onClick={handleGoLive}
             aria-label="Luncurkan Halaman Live"
             title="Buka Halaman Live Photobooth di Tab Baru (Tanpa Tombol Setting & Fullscreen)"
-            className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-md shadow-rose-200 transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-200 hover:shadow-lg hover:shadow-rose-300 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
           >
-            <Play size={13} className="fill-white" />
+            <Play size={14} className="fill-white" />
             <span>Go Live</span>
           </button>
         </div>
-      )}
-
-      {/* Top Right Fullscreen Button (Tampil di Mode Live untuk kenyamanan operator) */}
-      {isLiveMode && (
+      ) : (
         <button
           onClick={toggleFullscreen}
           aria-label={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
