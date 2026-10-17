@@ -143,15 +143,15 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
   await t.test("getYoutubeEmbedUrl converts various YouTube link formats to autoplay embed URL", () => {
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&muted=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1"
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://youtu.be/dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&muted=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1"
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"),
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&muted=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=1&playsinline=1"
     );
     assert.strictEqual(getYoutubeEmbedUrl("https://example.com/video.mp4"), null);
     assert.strictEqual(getYoutubeEmbedUrl(""), null);
