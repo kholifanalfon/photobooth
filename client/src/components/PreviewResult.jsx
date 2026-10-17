@@ -215,32 +215,35 @@ export default function PreviewResult({
         </div>
       )}
 
-      {/* Action Buttons (Compact Flat Solid Design) */}
-      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-3 sm:mt-5 w-full max-w-lg">
+      {/* Action Buttons (Compact Flat Solid Design with single-line text) */}
+      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-3 sm:mt-5 w-full max-w-xl">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[130px] py-2.5 sm:py-3 px-3.5 sm:px-5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[140px] whitespace-nowrap py-2.5 sm:py-3 px-3.5 sm:px-5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <Printer size={16} className="sm:w-[18px] sm:h-[18px]" /> Print Foto
+          <Printer size={16} className="sm:w-[18px] sm:h-[18px] shrink-0" />
+          <span>Print Foto</span>
         </button>
 
         <button
           onClick={handleDownloadQr}
           disabled={isUploading || !compositeUrl}
           type="button"
-          className="flex-1 min-w-[130px] py-2.5 sm:py-3 px-3.5 sm:px-5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 min-w-[155px] whitespace-nowrap py-2.5 sm:py-3 px-3.5 sm:px-5 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <QrCode size={16} className="sm:w-[18px] sm:h-[18px]" /> Download (QR)
+          <QrCode size={16} className="sm:w-[18px] sm:h-[18px] shrink-0" />
+          <span>Download (QR)</span>
         </button>
 
         <button
           onClick={() => setIsResetOpen(true)}
           type="button"
-          className="w-full sm:w-auto py-2.5 sm:py-3 px-4 sm:px-5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="w-full sm:w-auto min-w-[140px] whitespace-nowrap py-2.5 sm:py-3 px-4 sm:px-5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
-          <RefreshCcw size={15} className="text-slate-500" /> Mulai Sesi Baru
+          <RefreshCcw size={15} className="text-slate-500 shrink-0" />
+          <span>Mulai Sesi Baru</span>
         </button>
       </div>
 
