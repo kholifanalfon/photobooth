@@ -4,7 +4,7 @@ export function getYoutubeEmbedUrl(url) {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
   if (match && match[1]) {
     const videoId = match[1];
-    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`;
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&muted=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`;
   }
   return null;
 }
@@ -147,7 +147,7 @@ export default function LandingPage({ onStartSession }) {
                 src={getYoutubeEmbedUrl(config.videoUrl)}
                 title="YouTube Video Preview"
                 className="w-full h-full border-0 pointer-events-none"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
             ) : (
