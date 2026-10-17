@@ -170,8 +170,6 @@ export default function CameraSession({
     }
 
     clearTimers();
-
-    // Explicit ephemeral security purge of volatile captured image memory
     capturedPhotosRef.current = [];
     setCapturedPhotos([]);
     setPoseReviewPhoto(null);
@@ -215,12 +213,9 @@ export default function CameraSession({
       photoData = 'data:image/jpeg;base64,mock';
     }
 
-    timeoutRef.current = setTimeout(() => {
-      setIsFlashing(false);
-      setCountdown(null);
-      // Put captured photo into review state instead of jumping directly to next pose
-      setPoseReviewPhoto(photoData);
-    }, 300);
+    setTimeout(() => setIsFlashing(false), 200);
+    setCountdown(null);
+    setPoseReviewPhoto(photoData);
   };
 
   const handleRetake = () => {
@@ -229,7 +224,6 @@ export default function CameraSession({
 
   const handleAcceptPhoto = () => {
     if (!poseReviewPhoto) return;
-
     const nextPhotos = [...capturedPhotosRef.current, poseReviewPhoto];
     capturedPhotosRef.current = nextPhotos;
     setCapturedPhotos(nextPhotos);
@@ -298,7 +292,7 @@ export default function CameraSession({
   const isMirrored = facingMode === 'user';
 
   return (
-    <div className="relative flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-800 overflow-hidden select-none p-2.5 sm:p-4">
+    <div className="relative flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-800 overflow-hidden select-none p-2.5 sm:p-4">
       {/* Screen Flash Overlay */}
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
@@ -358,21 +352,16 @@ export default function CameraSession({
           }`}
         />
 
-        {/* Pose Review Overlay */}
+        {/* Pose Review Overlay Snapshot (if photo captured) */}
         {poseReviewPhoto && (
-          <div className="absolute inset-0 z-30 bg-slate-900 flex flex-col items-center justify-center">
-            <img
-              src={poseReviewPhoto}
-              alt={`Review Pose ${currentPose + 1}`}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-2.5 bg-white/90 backdrop-blur-xs px-3 py-0.5 rounded-full border border-slate-200 text-slate-800 font-bold text-[11px] shadow-xs">
-              ✨ Review Pose {currentPose + 1}
-            </div>
-          </div>
+          <img
+            src={poseReviewPhoto}
+            alt="Review Pose"
+            className="absolute inset-0 w-full h-full object-cover z-20"
+          />
         )}
 
-        {/* Large Countdown Overlay */}
+        {/* Big Countdown Overlay */}
         <AnimatePresence>
           {countdown !== null && countdown > 0 && (
             <motion.div

@@ -50,7 +50,7 @@ async function buildAndImportComponent(entryName) {
   return import(`file://${outFile}`);
 }
 
-const { default: LandingPage, getYoutubeEmbedUrl, parseEmbedCode } = await buildAndImportComponent('LandingPage');
+const { default: LandingPage, getYoutubeEmbedUrl, getGoogleDriveEmbedUrl } = await buildAndImportComponent('LandingPage');
 const { default: FrameSelector, PALETTES } = await buildAndImportComponent('FrameSelector');
 
 // Helper to render component tree with mock state dispatcher for event handler inspection
@@ -157,36 +157,29 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
     assert.strictEqual(getYoutubeEmbedUrl(""), null);
   });
 
-  await t.test("parseEmbedCode extracts iframe, video, and direct URL correctly", () => {
-    // 1. Raw iframe
-    const rawIframe = '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allow="accelerometer; encrypted-media" allowfullscreen></iframe>';
-    const res1 = parseEmbedCode(rawIframe);
-    assert.strictEqual(res1.type, "iframe");
-    assert.ok(res1.src.includes("https://www.youtube.com/embed/dQw4w9WgXcQ"));
-    assert.ok(res1.src.includes("enablejsapi=1"));
-    assert.ok(res1.allow.includes("autoplay"));
+  await t.test("getGoogleDriveEmbedUrl converts Google Drive links to preview embed URL", () => {
+    const driveLink1 = "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/view?usp=drivesdk";
+    assert.strictEqual(
+      getGoogleDriveEmbedUrl(driveLink1),
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+    );
 
-    // 2. Responsive wrapper from generator
-    const responsiveSnippet = '<div style="position: relative; padding-bottom: 56.25%;"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;mute=1"></iframe></div>';
-    const res2 = parseEmbedCode(responsiveSnippet);
-    assert.strictEqual(res2.type, "iframe");
-    assert.ok(res2.src.includes("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"));
-    assert.ok(res2.src.includes("enablejsapi=1"));
-    assert.ok(!res2.src.includes("&amp;"));
+    const driveLink2 = "https://drive.google.com/open?id=139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J";
+    assert.strictEqual(
+      getGoogleDriveEmbedUrl(driveLink2),
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+    );
 
-    // 3. Direct YouTube URL pasted into embed code
-    const res3 = parseEmbedCode("https://youtu.be/dQw4w9WgXcQ");
-    assert.strictEqual(res3.type, "iframe");
-    assert.ok(res3.src.includes("https://www.youtube.com/embed/dQw4w9WgXcQ"));
+    const driveLink3 = "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview";
+    assert.strictEqual(
+      getGoogleDriveEmbedUrl(driveLink3),
+      "https://drive.google.com/file/d/139l0bRfr33m_g1pM1TrvWsA9fZqd1e-J/preview"
+    );
 
-    // 4. Video tag
-    const res4 = parseEmbedCode('<video src="https://example.com/video.mp4"></video>');
-    assert.strictEqual(res4.type, "video");
-    assert.strictEqual(res4.src, "https://example.com/video.mp4");
-
-    // 5. Empty / null
-    assert.strictEqual(parseEmbedCode(""), null);
-    assert.strictEqual(parseEmbedCode(null), null);
+    assert.strictEqual(getGoogleDriveEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), null);
+    assert.strictEqual(getGoogleDriveEmbedUrl("https://example.com/video.mp4"), null);
+    assert.strictEqual(getGoogleDriveEmbedUrl(""), null);
+    assert.strictEqual(getGoogleDriveEmbedUrl(null), null);
   });
 });
 

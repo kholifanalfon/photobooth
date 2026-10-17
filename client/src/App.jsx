@@ -44,7 +44,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-full h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col justify-center">
+    <div className="w-full h-full h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col justify-center bg-slate-50">
       {currentStep === 'DOWNLOAD' && (
         <DownloadPage filename={downloadFilename} />
       )}
