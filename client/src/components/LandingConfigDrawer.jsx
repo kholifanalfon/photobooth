@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, SlidersHorizontal, Video, Type, Palette, Upload, RefreshCw, Check, Info } from 'lucide-react';
+import { X, SlidersHorizontal, Video, Type, Palette, Upload, RefreshCw, Check, Info, ClipboardPaste } from 'lucide-react';
 
 export const THEME_PRESETS = {
   general: {
@@ -48,6 +48,30 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
 
   const handleToggleVideo = () => {
     onUpdateConfig({ enableVideo: !config.enableVideo });
+  };
+
+  const handleClearVideoUrl = () => {
+    onUpdateConfig({ videoUrl: '' });
+  };
+
+  const handlePasteVideoUrl = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          onUpdateConfig({ videoUrl: text.trim(), enableVideo: true });
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Clipboard readText failed or not permitted', err);
+    }
+    if (typeof window !== 'undefined') {
+      const promptVal = window.prompt('Tempel link video baru di sini:', '');
+      if (promptVal && promptVal.trim()) {
+        onUpdateConfig({ videoUrl: promptVal.trim(), enableVideo: true });
+      }
+    }
   };
 
   const handleVideoFileUpload = (e) => {
@@ -213,16 +237,39 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      URL Video (YouTube / MP4 / WebM / Link Langsung)
-                    </label>
-                    <input
-                      type="url"
-                      value={config.videoUrl || ''}
-                      onChange={handleVideoUrlChange}
-                      placeholder="https://www.youtube.com/watch?v=... atau link MP4"
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">
+                        URL Video (YouTube / MP4 / WebM)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handlePasteVideoUrl}
+                        title="Tempel link dari clipboard (otomatis mengganti link saat ini)"
+                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                      >
+                        <ClipboardPaste size={12} />
+                        <span>Paste Link</span>
+                      </button>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        type="url"
+                        value={config.videoUrl || ''}
+                        onChange={handleVideoUrlChange}
+                        placeholder="https://www.youtube.com/watch?v=... atau link MP4"
+                        className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                      />
+                      {config.videoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleClearVideoUrl}
+                          title="Hapus Link Saat Ini"
+                          className="absolute right-2.5 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
                     <div className="mt-1.5 p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] text-amber-800 space-y-1">
                       <p className="font-bold flex items-center gap-1 text-amber-900">
                         <Info size={13} className="shrink-0" /> Catatan Pemutaran Video YouTube:
