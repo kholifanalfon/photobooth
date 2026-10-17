@@ -1,13 +1,67 @@
-
 export function getYoutubeEmbedUrl(url) {
   if (!url || typeof url !== 'string') return null;
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|youtube-nocookie\.com\/(?:embed\/|v\/))([\w-]{11})/);
   if (match && match[1]) {
     const videoId = match[1];
     return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&playsinline=1&enablejsapi=1`;
   }
   return null;
 }
+
+export function parseEmbedCode(code) {
+  if (!code || typeof code !== 'string') return null;
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+
+  // 1. Extract explicit iframe tag and src & allow
+  const iframeMatch = trimmed.match(/<iframe\b[^>]*\ssrc=["']([^"']+)["']/i);
+  if (iframeMatch && iframeMatch[1]) {
+    let src = iframeMatch[1].replace(/&amp;/g, '&');
+
+    const allowMatch = trimmed.match(/allow=["']([^"']+)["']/i);
+    let allow = allowMatch ? allowMatch[1] : 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    if (!allow.includes('autoplay')) {
+      allow += '; autoplay';
+    }
+
+    if ((src.includes('youtube.com') || src.includes('youtube-nocookie.com')) && !src.includes('enablejsapi=')) {
+      const sep = src.includes('?') ? '&' : '?';
+      src = `${src}${sep}enablejsapi=1`;
+    }
+
+    return { type: 'iframe', src, allow };
+  }
+
+  // 2. Extract direct video tag
+  const videoMatch = trimmed.match(/<video\b[^>]*\ssrc=["']([^"']+)["']/i);
+  if (videoMatch && videoMatch[1]) {
+    return { type: 'video', src: videoMatch[1] };
+  }
+
+  // 3. Direct YouTube URL entered in embed code box
+  const directYt = getYoutubeEmbedUrl(trimmed);
+  if (directYt) {
+    return {
+      type: 'iframe',
+      src: directYt,
+      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+    };
+  }
+
+  // 4. Any loose src attribute containing http/https
+  const looseSrcMatch = trimmed.match(/src=["'](https?:\/\/[^"']+)["']/i);
+  if (looseSrcMatch && looseSrcMatch[1]) {
+    return {
+      type: 'iframe',
+      src: looseSrcMatch[1].replace(/&amp;/g, '&'),
+      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+    };
+  }
+
+  // 5. Fallback raw html
+  return { type: 'html', html: trimmed };
+}
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle } from 'lucide-react';
@@ -88,9 +142,15 @@ export default function LandingPage({ onStartSession }) {
     } catch (e) {}
   };
 
+  const parsedEmbed = config.videoInputMode === 'code' ? parseEmbedCode(config.embedCode) : null;
+  const hasActiveVideo =
+    config.enableVideo &&
+    ((config.videoInputMode === 'code' && parsedEmbed) ||
+      ((config.videoInputMode || 'url') === 'url' && (config.videoUrl || '').trim().length > 0));
+
   useEffect(() => {
     setYtError(null);
-    if (!config.enableVideo || !config.videoUrl) return;
+    if (!hasActiveVideo) return;
 
     const triggerAutoplayNow = () => {
       postToYouTube('mute');
@@ -151,7 +211,7 @@ export default function LandingPage({ onStartSession }) {
         window.removeEventListener('click', handleInteraction);
       }
     };
-  }, [config.videoUrl, config.enableVideo, config.videoInputMode, config.embedCode]);
+  }, [config.videoUrl, config.enableVideo, config.videoInputMode, config.embedCode, hasActiveVideo]);
 
   // YouTube postMessage event listener for error 150/101 detection
   useEffect(() => {
@@ -180,10 +240,6 @@ export default function LandingPage({ onStartSession }) {
   }, []);
 
   const isWedding = config.theme === 'wedding';
-  const hasActiveVideo =
-    config.enableVideo &&
-    ((config.videoInputMode === 'code' && config.embedCode) ||
-      ((config.videoInputMode || 'url') === 'url' && config.videoUrl));
 
   return (
     <div
@@ -252,12 +308,57 @@ export default function LandingPage({ onStartSession }) {
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
-            {config.videoInputMode === 'code' && config.embedCode ? (
-              <div
-                key={config.embedCode}
-                className="w-full h-full relative flex items-center justify-center [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0 [&_iframe]:absolute [&_iframe]:inset-0 [&_video]:w-full [&_video]:h-full"
-                dangerouslySetInnerHTML={{ __html: config.embedCode }}
-              />
+            {config.videoInputMode === 'code' && parsedEmbed ? (
+              parsedEmbed.type === 'iframe' ? (
+                <>
+                  <iframe
+                    key={parsedEmbed.src}
+                    ref={iframeRef}
+                    src={parsedEmbed.src}
+                    title="YouTube Video Embed"
+                    onLoad={() => {
+                      postToYouTube('mute');
+                      postToYouTube('playVideo');
+                    }}
+                    className="w-full h-full border-0 absolute inset-0 pointer-events-auto"
+                    allow={parsedEmbed.allow}
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                  {ytError && (
+                    <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-10">
+                      <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
+                      <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
+                        {ytError}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsDrawerOpen(true)}
+                        className="mt-2.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                      >
+                        Buka Pengaturan Video
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : parsedEmbed.type === 'video' ? (
+                <video
+                  ref={videoElemRef}
+                  src={parsedEmbed.src}
+                  autoPlay
+                  loop
+                  muted
+                  controls
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  key={config.embedCode}
+                  className="w-full h-full relative [&_*]:box-border [&_div]:!w-full [&_div]:!h-full [&_div]:!p-0 [&_iframe]:!w-full [&_iframe]:!h-full [&_iframe]:!border-0 [&_iframe]:!absolute [&_iframe]:!inset-0 [&_video]:!w-full [&_video]:!h-full [&_video]:object-cover"
+                  dangerouslySetInnerHTML={{ __html: parsedEmbed.html }}
+                />
+              )
             ) : getYoutubeEmbedUrl(config.videoUrl) ? (
               <>
                 <iframe
