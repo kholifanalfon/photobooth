@@ -277,75 +277,124 @@ export default function LandingPage({ onStartSession }) {
           {config.subtitle || activeTheme.defaultSubtitle}
         </p>
 
-        {/* Center Display: Hero Cinema Video Preview OR Animated Gift Box */}
+        {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
-            className={`relative mb-4 sm:mb-5 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-xl sm:shadow-2xl bg-black select-none mx-auto transition-all duration-300 ${
+            className={`relative mb-4 sm:mb-5 mx-auto select-none transition-all duration-300 ${
               isPortrait
-                ? 'w-auto aspect-[9/16] max-h-[56vh] sm:max-h-[62vh] max-w-[280px] sm:max-w-[340px]'
-                : 'w-full max-w-[480px] sm:max-w-[680px] md:max-w-[840px] aspect-video max-h-[56vh] sm:max-h-[62vh]'
+                ? 'w-auto max-w-[300px] sm:max-w-[360px]'
+                : 'w-full max-w-[500px] sm:max-w-[700px] md:max-w-[860px]'
             }`}
           >
-            {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
-            <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
+            {/* Thematic Outer Frame Wrapping Video */}
+            <div
+              className={`relative p-2 sm:p-3 sm:pb-3.5 rounded-3xl transition-all duration-300 ${
+                isWedding
+                  ? 'bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 border-2 border-rose-200/90 shadow-2xl ring-1 ring-amber-300/40 shadow-rose-200/50'
+                  : 'bg-white/95 border border-slate-200/90 shadow-2xl ring-1 ring-slate-100 shadow-slate-300/40'
+              }`}
+            >
+              {/* Wedding Thematic Corner Ornaments & Ribbon */}
+              {isWedding ? (
+                <>
+                  {/* Top-Left Corner Filigree Accent */}
+                  <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-rose-300 rounded-tl-xl pointer-events-none" />
+                  {/* Top-Right Corner Filigree Accent */}
+                  <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-rose-300 rounded-tr-xl pointer-events-none" />
+                  {/* Bottom-Left Corner Filigree Accent */}
+                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-rose-300 rounded-bl-xl pointer-events-none" />
+                  {/* Bottom-Right Corner Filigree Accent */}
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-rose-300 rounded-br-xl pointer-events-none" />
 
-            {ytEmbedUrl ? (
-              <>
-                <iframe
-                  key={config.videoUrl}
-                  ref={iframeRef}
-                  src={ytEmbedUrl}
-                  title="YouTube Video Preview"
-                  onLoad={() => {
-                    postToYouTube('mute');
-                    postToYouTube('playVideo');
-                  }}
-                  className="w-full h-full border-0 pointer-events-none select-none scale-[1.02]"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allowFullScreen
-                />
-                {ytError && (
-                  <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-20">
-                    <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
-                    <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
-                      {ytError}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsDrawerOpen(true)}
-                      className="mt-2.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-                    >
-                      Buka Pengaturan Video
-                    </button>
+                  {/* Wedding Badge Header */}
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-gradient-to-r from-rose-400 to-rose-500 text-white text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase rounded-full shadow-sm flex items-center gap-1.5 z-20 pointer-events-none whitespace-nowrap">
+                    <Heart size={10} className="fill-white" />
+                    <span>Wedding Celebration</span>
+                    <Heart size={10} className="fill-white" />
                   </div>
+                </>
+              ) : (
+                <>
+                  {/* General Thematic Washi Tape Top Accent */}
+                  <div className="absolute -top-2.5 left-6 w-12 sm:w-14 h-4 sm:h-5 bg-rose-200/80 backdrop-blur-2xs -rotate-2 border-l border-r border-dashed border-rose-300 shadow-2xs pointer-events-none rounded-2xs z-20" />
+                  {/* General Badge Footer */}
+                  <div className="absolute -bottom-2.5 right-5 px-2.5 py-0.5 bg-rose-500 text-white text-[10px] font-bold rounded-full shadow-xs flex items-center gap-1 z-20 pointer-events-none tracking-wide">
+                    <Sparkles size={10} />
+                    <span>PHOTOBOOTH</span>
+                  </div>
+                </>
+              )}
+
+              {/* Inner Video Viewport with Borderless Cropping & Interaction Lock */}
+              <div
+                className={`relative rounded-2xl overflow-hidden bg-black select-none border border-slate-900/10 ${
+                  isPortrait
+                    ? 'w-full aspect-[9/16] max-h-[54vh] sm:max-h-[60vh]'
+                    : 'w-full aspect-video max-h-[54vh] sm:max-h-[60vh]'
+                }`}
+              >
+                {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
+                <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
+
+                {ytEmbedUrl ? (
+                  <>
+                    <iframe
+                      key={config.videoUrl}
+                      ref={iframeRef}
+                      src={ytEmbedUrl}
+                      title="YouTube Video Preview"
+                      onLoad={() => {
+                        postToYouTube('mute');
+                        postToYouTube('playVideo');
+                      }}
+                      className="w-full h-full border-0 pointer-events-none select-none scale-[1.02]"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                    {ytError && (
+                      <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-20">
+                        <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5 shrink-0" />
+                        <p className="text-xs text-slate-100 leading-relaxed font-medium max-w-xs">
+                          {ytError}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsDrawerOpen(true)}
+                          className="mt-2.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                        >
+                          Buka Pengaturan Video
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : gdriveEmbedUrl ? (
+                  <iframe
+                    key={config.videoUrl}
+                    src={gdriveEmbedUrl}
+                    title="Google Drive Video Player"
+                    className="absolute -top-[52px] -bottom-[52px] -left-[2px] -right-[2px] w-[calc(100%+4px)] h-[calc(100%+104px)] border-0 pointer-events-none select-none"
+                    allow="autoplay; encrypted-media; fullscreen"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    ref={videoElemRef}
+                    src={config.videoUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    onLoadedMetadata={(e) => {
+                      if (e.target && e.target.videoWidth && e.target.videoHeight) {
+                        setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
+                      }
+                    }}
+                    className="w-full h-full object-cover pointer-events-none select-none"
+                  />
                 )}
-              </>
-            ) : gdriveEmbedUrl ? (
-              <iframe
-                key={config.videoUrl}
-                src={gdriveEmbedUrl}
-                title="Google Drive Video Player"
-                className="absolute -top-[52px] -bottom-[52px] -left-[2px] -right-[2px] w-[calc(100%+4px)] h-[calc(100%+104px)] border-0 pointer-events-none select-none"
-                allow="autoplay; encrypted-media; fullscreen"
-                allowFullScreen
-              />
-            ) : (
-              <video
-                ref={videoElemRef}
-                src={config.videoUrl}
-                autoPlay
-                loop
-                muted
-                playsInline
-                onLoadedMetadata={(e) => {
-                  if (e.target && e.target.videoWidth && e.target.videoHeight) {
-                    setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
-                  }
-                }}
-                className="w-full h-full object-cover pointer-events-none select-none"
-              />
-            )}
+              </div>
+            </div>
           </div>
         ) : (
           /* Gift Box Graphic (Flat Solid) */
