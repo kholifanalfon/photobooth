@@ -52,7 +52,13 @@ const DEFAULT_CONFIG = {
   videoRatio: 'auto', // 'auto' | 'portrait' | 'portrait-photo' | 'landscape' | 'square'
   theme: 'general',
   isTitleCustom: false,
-  isSubtitleCustom: false
+  isSubtitleCustom: false,
+  // Printer defaults
+  printerName: 'Default System Printer',
+  paperSize: '4R',
+  printCopies: 1,
+  printMethod: 'kiosk',
+  autoPrint: false
 };
 
 export default function LandingPage({ onStartSession }) {

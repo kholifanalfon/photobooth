@@ -5,33 +5,8 @@ import { composePhotosToFrame } from '../utils/canvasCompositor.js';
 import QrModal from './QrModal.jsx';
 import ResetConfirmModal from './ResetConfirmModal.jsx';
 
-/**
- * Resolves the target API URL based on configuration or environment.
- * Supports standalone (e.g. http://localhost:5000) or proxied setups (e.g. relative /api).
- */
-export function resolveApiUrl(path, customBaseUrl) {
-  let base = customBaseUrl;
-  if (base === undefined) {
-    if (
-      typeof import.meta !== 'undefined' &&
-      import.meta.env &&
-      import.meta.env.VITE_API_BASE_URL !== undefined
-    ) {
-      base = import.meta.env.VITE_API_BASE_URL;
-    } else {
-      // In browser Vite dev or production SPA, empty base allows relative path through Vite proxy / Express router
-      base = typeof window !== 'undefined' ? '' : 'http://localhost:5000';
-    }
-  }
-
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  if (!base) {
-    return normalizedPath;
-  }
-
-  const cleanBase = String(base).replace(/\/+$/, '');
-  return `${cleanBase}${normalizedPath}`;
-}
+import { resolveApiUrl } from '../utils/apiConfig.js';
+export { resolveApiUrl };
 
 export default function PreviewResult({
   photos = [],
@@ -128,6 +103,24 @@ export default function PreviewResult({
   const handlePrint = async () => {
     if (!compositeUrl) return;
 
+    let printerConfig = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        printerConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
+      } catch (e) {}
+    }
+
+    const printMethod = printerConfig.printMethod || 'kiosk';
+    const copies = Number(printerConfig.printCopies) || 1;
+    const printerName = printerConfig.printerName || 'Default System Printer';
+
+    if (printMethod === 'browser') {
+      if (typeof window !== 'undefined' && typeof window.print === 'function') {
+        window.print();
+      }
+      return;
+    }
+
     setIsPrinting(true);
     setPrintStatus('Mengirim ke printer...');
 
@@ -137,7 +130,8 @@ export default function PreviewResult({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          copies: 1,
+          copies,
+          printerName,
           sessionId: sessionId || undefined
         })
       });
