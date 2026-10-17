@@ -50,7 +50,7 @@ async function buildAndImportComponent(entryName) {
   return import(`file://${outFile}`);
 }
 
-const { default: LandingPage, getYoutubeEmbedUrl, getGoogleDriveEmbedUrl } = await buildAndImportComponent('LandingPage');
+const { default: LandingPage, getYoutubeEmbedUrl, getGoogleDriveEmbedUrl, detectVideoAspectRatio } = await buildAndImportComponent('LandingPage');
 const { default: FrameSelector, PALETTES } = await buildAndImportComponent('FrameSelector');
 
 // Helper to render component tree with mock state dispatcher for event handler inspection
@@ -181,6 +181,24 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
     assert.strictEqual(getGoogleDriveEmbedUrl("https://example.com/video.mp4"), null);
     assert.strictEqual(getGoogleDriveEmbedUrl(""), null);
     assert.strictEqual(getGoogleDriveEmbedUrl(null), null);
+  });
+
+  await t.test("detectVideoAspectRatio detects landscape and portrait correctly", () => {
+    // Explicit overrides
+    assert.strictEqual(detectVideoAspectRatio("https://youtu.be/xxx", "portrait"), "portrait");
+    assert.strictEqual(detectVideoAspectRatio("https://youtube.com/shorts/xxx", "landscape"), "landscape");
+
+    // Auto detection from URL
+    assert.strictEqual(detectVideoAspectRatio("https://www.youtube.com/shorts/dQw4w9WgXcQ", "auto"), "portrait");
+    assert.strictEqual(detectVideoAspectRatio("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "auto"), "landscape");
+
+    // Auto detection from HTML5 video element metadata
+    assert.strictEqual(detectVideoAspectRatio("blob:http://localhost/video", "auto", "portrait"), "portrait");
+    assert.strictEqual(detectVideoAspectRatio("blob:http://localhost/video", "auto", "landscape"), "landscape");
+
+    // Fallback defaults
+    assert.strictEqual(detectVideoAspectRatio("", "auto"), "landscape");
+    assert.strictEqual(detectVideoAspectRatio(null, "auto"), "landscape");
   });
 });
 

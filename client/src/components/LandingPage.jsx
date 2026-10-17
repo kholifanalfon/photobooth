@@ -18,6 +18,21 @@ export function getGoogleDriveEmbedUrl(url) {
   return null;
 }
 
+export function detectVideoAspectRatio(url, explicitRatio = 'auto', detectedFromElement = null) {
+  if (explicitRatio === 'portrait' || explicitRatio === 'landscape') {
+    return explicitRatio;
+  }
+  if (detectedFromElement === 'portrait' || detectedFromElement === 'landscape') {
+    return detectedFromElement;
+  }
+  if (url && typeof url === 'string') {
+    if (url.includes('/shorts/')) {
+      return 'portrait';
+    }
+  }
+  return 'landscape';
+}
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle } from 'lucide-react';
@@ -31,6 +46,7 @@ const DEFAULT_CONFIG = {
   subtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
   videoUrl: '',
   enableVideo: false,
+  videoRatio: 'auto', // 'auto' | 'landscape' | 'portrait'
   theme: 'general',
   isTitleCustom: false,
   isSubtitleCustom: false
@@ -40,6 +56,7 @@ export default function LandingPage({ onStartSession }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [ytError, setYtError] = useState(null);
+  const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
   const iframeRef = useRef(null);
   const videoElemRef = useRef(null);
 
@@ -89,8 +106,12 @@ export default function LandingPage({ onStartSession }) {
   const ytEmbedUrl = getYoutubeEmbedUrl(config.videoUrl);
   const gdriveEmbedUrl = getGoogleDriveEmbedUrl(config.videoUrl);
 
+  const effectiveRatio = detectVideoAspectRatio(config.videoUrl, config.videoRatio, elementDetectedRatio);
+  const isPortrait = effectiveRatio === 'portrait';
+
   useEffect(() => {
     setYtError(null);
+    setElementDetectedRatio(null);
   }, [config.videoUrl]);
 
   const postToYouTube = (func, args = []) => {
@@ -240,7 +261,13 @@ export default function LandingPage({ onStartSession }) {
 
         {/* Center Display: Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
-          <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black select-none">
+          <div
+            className={`relative mb-5 sm:mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black select-none mx-auto transition-all duration-300 ${
+              isPortrait
+                ? 'w-auto aspect-[9/16] max-h-[44vh] sm:max-h-[48vh] max-w-[240px] sm:max-w-[280px]'
+                : 'w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video'
+            }`}
+          >
             {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
             <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
 
@@ -293,6 +320,11 @@ export default function LandingPage({ onStartSession }) {
                 loop
                 muted
                 playsInline
+                onLoadedMetadata={(e) => {
+                  if (e.target && e.target.videoWidth && e.target.videoHeight) {
+                    setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
+                  }
+                }}
                 className="w-full h-full object-cover pointer-events-none select-none"
               />
             )}

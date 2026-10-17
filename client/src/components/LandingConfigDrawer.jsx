@@ -100,6 +100,7 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
       subtitle: currentTheme.defaultSubtitle,
       videoUrl: '',
       enableVideo: false,
+      videoRatio: 'auto',
       isTitleCustom: false,
       isSubtitleCustom: false
     });
@@ -118,125 +119,126 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
             className="absolute inset-0 bg-black/40 backdrop-blur-2xs transition-opacity"
           />
 
-          {/* Drawer Panel */}
+          {/* Drawer Content */}
           <div className="fixed inset-y-0 left-0 max-w-full flex">
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="w-screen max-w-sm sm:max-w-md bg-white shadow-2xl flex flex-col h-full border-r border-slate-200"
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-screen max-w-sm sm:max-w-md bg-white shadow-2xl flex flex-col h-full"
             >
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 shrink-0 bg-slate-50/50">
+              {/* Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-rose-50 text-rose-500 border border-rose-100">
-                    <SlidersHorizontal size={17} />
+                  <div className="p-2 bg-rose-100 text-rose-600 rounded-xl">
+                    <SlidersHorizontal size={18} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm sm:text-base text-slate-800">
-                      Pengaturan Landing Page
-                    </h3>
-                    <p className="text-[11px] text-slate-400">Sesuaikan teks, video latar, & tema</p>
+                    <h2 className="text-base font-bold text-slate-800">Pengaturan Tampilan</h2>
+                    <p className="text-xs text-slate-500">Kustomisasi Halaman Awal Photobooth</p>
                   </div>
                 </div>
                 <button
                   onClick={onClose}
-                  aria-label="Tutup Pengaturan"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex border-b border-slate-200 px-3 pt-2 bg-slate-50/30 shrink-0 gap-1">
+              <div className="flex border-b border-slate-200 px-4 pt-2 bg-slate-50/30 gap-1">
                 <button
                   type="button"
                   onClick={() => setActiveTab('content')}
-                  className={`flex items-center gap-1.5 py-2 px-3 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activeTab === 'content'
-                      ? 'border-rose-500 text-rose-600 bg-white rounded-t-lg'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                      ? 'border-rose-500 text-rose-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  <Type size={14} />
-                  <span>Konten Teks</span>
+                  <Type size={16} />
+                  <span>Teks & Konten</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('video')}
-                  className={`flex items-center gap-1.5 py-2 px-3 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activeTab === 'video'
-                      ? 'border-rose-500 text-rose-600 bg-white rounded-t-lg'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                      ? 'border-rose-500 text-rose-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  <Video size={14} />
-                  <span>Video Preview</span>
+                  <Video size={16} />
+                  <span>Media Video</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('theme')}
-                  className={`flex items-center gap-1.5 py-2 px-3 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 py-2.5 px-3 border-b-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activeTab === 'theme'
-                      ? 'border-rose-500 text-rose-600 bg-white rounded-t-lg'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                      ? 'border-rose-500 text-rose-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  <Palette size={14} />
-                  <span>Preset Tema</span>
+                  <Palette size={16} />
+                  <span>Tema Acara</span>
                 </button>
               </div>
 
-              {/* Drawer Content */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* TAB 1: TEXT CONTENT */}
+              {/* Drawer Body Scrollable */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                {/* TAB 1: CONTENT SETTINGS */}
                 {activeTab === 'content' && (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Judul Utama (Heading)
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Judul Utama (Headline)
                       </label>
                       <input
                         type="text"
-                        value={config.title || ''}
+                        value={config.title}
                         onChange={(e) => {
-                          handleTitleChange(e);
                           onUpdateConfig({ isTitleCustom: true });
+                          handleTitleChange(e);
                         }}
-                        placeholder="Capture The Magic! ✨"
+                        placeholder="Contoh: Capture The Magic! ✨"
                         className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                       />
-                      <p className="text-[11px] text-slate-400 mt-1">Dapat diisi teks bebas sesuai nama acara atau brand Anda.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Teks utama yang tampil di atas kotak hadiah / video.
+                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Sub-judul (Keterangan)
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Sub-Judul (Instruksi)
                       </label>
                       <textarea
                         rows={3}
-                        value={config.subtitle || ''}
+                        value={config.subtitle}
                         onChange={(e) => {
-                          handleSubtitleChange(e);
                           onUpdateConfig({ isSubtitleCustom: true });
+                          handleSubtitleChange(e);
                         }}
-                        placeholder="Sentuh tombol untuk memulai sesi fotomu."
+                        placeholder="Contoh: Sentuh tombol untuk membuka kotak hadiah..."
                         className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-none"
                       />
-                      <p className="text-[11px] text-slate-400 mt-1">Petunjuk atau ucapan selamat datang bagi pengunjung.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Petunjuk singkat untuk tamu undangan / pengguna booth.
+                      </p>
                     </div>
                   </div>
                 )}
 
-                {/* TAB 2: VIDEO CONFIGURATION */}
+                {/* TAB 2: VIDEO SETTINGS */}
                 {activeTab === 'video' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
                       <div>
-                        <span className="text-xs font-bold text-slate-800 block">Tampilkan Video di Landing</span>
-                        <span className="text-[11px] text-slate-500">Gantikan kotak hadiah dengan video preview/teaser</span>
+                        <div className="text-xs font-bold text-slate-800">Tampilkan Video di Layar Utama</div>
+                        <div className="text-[11px] text-slate-500">Gantikan kotak hadiah dengan pemutar video</div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
@@ -272,8 +274,7 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                           placeholder="https://www.youtube.com/... atau https://drive.google.com/..."
                           className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                         />
-                        {config.videoUrl && (
-                          <button
+                        {config.videoUrl && (                          <button
                             type="button"
                             onClick={handleClearVideoUrl}
                             title="Hapus Link Saat Ini"
@@ -297,6 +298,37 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                           • <strong>Unggah File Lokal (MP4/WebM):</strong> Paling direkomendasikan jika ingin autoplay langsung 100% instan tanpa perlu ketuk layar sama sekali.
                         </p>
                       </div>
+                    </div>
+
+                    {/* Orientasi Video / Aspect Ratio Selector */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                        Orientasi / Aspek Rasio Video:
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'auto', label: 'Otomatis', desc: 'Deteksi Otomatis' },
+                          { id: 'landscape', label: 'Landscape', desc: '16:9 Lebar' },
+                          { id: 'portrait', label: 'Portrait', desc: '9:16 Tegak' }
+                        ].map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => onUpdateConfig({ videoRatio: item.id })}
+                            className={`p-2.5 rounded-xl text-center border text-xs transition-all cursor-pointer ${
+                              (config.videoRatio || 'auto') === item.id
+                                ? 'border-rose-500 bg-rose-50/80 text-rose-700 shadow-2xs font-bold'
+                                : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-600 font-medium'
+                            }`}
+                          >
+                            <div>{item.label}</div>
+                            <div className="text-[10px] opacity-75 mt-0.5">{item.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Pilih <em>Otomatis</em> untuk deteksi langsung (misal: YouTube Shorts / video vertikal), atau kunci ke Landscape/Portrait sesuai format video.
+                      </p>
                     </div>
 
                     <div className="relative">
@@ -360,20 +392,20 @@ export default function LandingConfigDrawer({ isOpen, onClose, config, onUpdateC
                 )}
               </div>
 
-              {/* Drawer Footer Actions */}
-              <div className="p-3 border-t border-slate-200 bg-slate-50/70 shrink-0 flex items-center justify-between gap-2">
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={handleResetToDefault}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                 >
-                  <RefreshCw size={13} />
+                  <RefreshCw size={14} />
                   <span>Reset Default</span>
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-black rounded-xl transition-colors cursor-pointer shadow-xs"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   Selesai
                 </button>
