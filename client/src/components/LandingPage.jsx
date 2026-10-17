@@ -90,25 +90,46 @@ export default function LandingPage({ onStartSession }) {
     setYtError(null);
     if (!config.enableVideo || !config.videoUrl) return;
 
-    // Direct autoplay triggers as iframe loads
-    const t1 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 300);
-    const t2 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 800);
-    const t3 = setTimeout(() => { postToYouTube('mute'); postToYouTube('playVideo'); }, 1600);
-
-    // Immediate autoplay for HTML5 video
-    if (videoElemRef.current) {
-      videoElemRef.current.defaultMuted = true;
-      videoElemRef.current.muted = true;
-      videoElemRef.current.play().catch(() => {});
-    }
-
-    // Touch and click gesture fallback to guarantee play on any interaction
-    const handleInteraction = () => {
+    const triggerAutoplayNow = () => {
       postToYouTube('mute');
       postToYouTube('playVideo');
       if (videoElemRef.current) {
+        videoElemRef.current.defaultMuted = true;
+        videoElemRef.current.muted = true;
         videoElemRef.current.play().catch(() => {});
       }
+    };
+
+    // 1. Eksekusi instan saat komponen termount
+    triggerAutoplayNow();
+
+    // 2. Eksekusi pada event document ready (DOMContentLoaded & readystatechange)
+    const handleDocReady = () => {
+      triggerAutoplayNow();
+      try {
+        // Dispatch synthetic gesture pada dokumen saat ready
+        document.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        window.dispatchEvent(new Event('touchstart'));
+      } catch (e) {}
+    };
+
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        handleDocReady();
+      } else {
+        document.addEventListener('DOMContentLoaded', handleDocReady, { once: true });
+        document.addEventListener('readystatechange', handleDocReady, { once: true });
+      }
+    }
+
+    // 3. Timers bertingkat setelah document ready saat iframe YouTube siap
+    const timers = [150, 400, 800, 1500, 2500].map((delay) =>
+      setTimeout(triggerAutoplayNow, delay)
+    );
+
+    // 4. Gesture listener fallback (sentuhan/klik pertama pengguna di layar)
+    const handleInteraction = () => {
+      triggerAutoplayNow();
     };
 
     if (typeof window !== 'undefined') {
@@ -118,9 +139,11 @@ export default function LandingPage({ onStartSession }) {
     }
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
+      timers.forEach(clearTimeout);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('DOMContentLoaded', handleDocReady);
+        document.removeEventListener('readystatechange', handleDocReady);
+      }
       if (typeof window !== 'undefined') {
         window.removeEventListener('touchstart', handleInteraction);
         window.removeEventListener('pointerdown', handleInteraction);
