@@ -20,6 +20,8 @@ const DEFAULT_CONFIG = {
   title: 'Capture The Magic! ✨',
   subtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
   videoUrl: '',
+  embedCode: '',
+  videoInputMode: 'url',
   enableVideo: false,
   theme: 'general',
   isTitleCustom: false,
@@ -107,7 +109,6 @@ export default function LandingPage({ onStartSession }) {
     const handleDocReady = () => {
       triggerAutoplayNow();
       try {
-        // Dispatch synthetic gesture pada dokumen saat ready
         document.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         window.dispatchEvent(new Event('touchstart'));
       } catch (e) {}
@@ -150,7 +151,7 @@ export default function LandingPage({ onStartSession }) {
         window.removeEventListener('click', handleInteraction);
       }
     };
-  }, [config.videoUrl, config.enableVideo]);
+  }, [config.videoUrl, config.enableVideo, config.videoInputMode, config.embedCode]);
 
   // YouTube postMessage event listener for error 150/101 detection
   useEffect(() => {
@@ -179,6 +180,10 @@ export default function LandingPage({ onStartSession }) {
   }, []);
 
   const isWedding = config.theme === 'wedding';
+  const hasActiveVideo =
+    config.enableVideo &&
+    ((config.videoInputMode === 'code' && config.embedCode) ||
+      ((config.videoInputMode || 'url') === 'url' && config.videoUrl));
 
   return (
     <div
@@ -245,9 +250,15 @@ export default function LandingPage({ onStartSession }) {
         </p>
 
         {/* Center Display: Video Preview OR Animated Gift Box */}
-        {config.enableVideo && config.videoUrl ? (
+        {hasActiveVideo ? (
           <div className="relative mb-5 sm:mb-6 w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black">
-            {getYoutubeEmbedUrl(config.videoUrl) ? (
+            {config.videoInputMode === 'code' && config.embedCode ? (
+              <div
+                key={config.embedCode}
+                className="w-full h-full relative flex items-center justify-center [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0 [&_iframe]:absolute [&_iframe]:inset-0 [&_video]:w-full [&_video]:h-full"
+                dangerouslySetInnerHTML={{ __html: config.embedCode }}
+              />
+            ) : getYoutubeEmbedUrl(config.videoUrl) ? (
               <>
                 <iframe
                   key={config.videoUrl}
