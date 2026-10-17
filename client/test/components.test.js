@@ -59,10 +59,12 @@ function renderComponentTree(Component, props, initialStates = []) {
   let stateIndex = 0;
   React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher.current = {
     useState: (initial) => {
-      const value = stateIndex < initialStates.length ? initialStates[stateIndex] : initial;
+      const value = stateIndex < initialStates.length ? initialStates[stateIndex] : (typeof initial === "function" ? initial() : initial);
       stateIndex += 1;
       return [value, () => {}];
-    }
+    },
+    useRef: (initial) => ({ current: initial || null }),
+    useEffect: () => {}
   };
 
   try {
@@ -141,15 +143,15 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
   await t.test("getYoutubeEmbedUrl converts various YouTube link formats to autoplay embed URL", () => {
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
-      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1"
+      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://youtu.be/dQw4w9WgXcQ"),
-      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1"
+      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
     );
     assert.strictEqual(
       getYoutubeEmbedUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ"),
-      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1"
+      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1"
     );
     assert.strictEqual(getYoutubeEmbedUrl("https://example.com/video.mp4"), null);
     assert.strictEqual(getYoutubeEmbedUrl(""), null);
