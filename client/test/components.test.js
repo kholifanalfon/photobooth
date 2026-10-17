@@ -238,8 +238,9 @@ test('FrameSelector Interactive Event Contracts', async (t) => {
       onConfirm: () => {}
     });
 
-    const topBar = tree.props.children[0];
-    const backButton = topBar.props.children[0];
+    const fixedBottomBar = tree.props.children[2];
+    const buttonContainer = fixedBottomBar.props.children;
+    const backButton = buttonContainer.props.children[0];
     assert.strictEqual(typeof backButton.props.onClick, 'function');
     backButton.props.onClick();
     assert.strictEqual(backTriggered, true, 'Back button click must invoke onBack');
@@ -252,9 +253,9 @@ test('FrameSelector Interactive Event Contracts', async (t) => {
       onConfirm: (data) => { confirmedData = data; }
     });
 
-    const mainGrid = tree.props.children[1];
-    const paletteCard = mainGrid.props.children[1];
-    const confirmButton = paletteCard.props.children[1];
+    const fixedBottomBar = tree.props.children[2];
+    const buttonContainer = fixedBottomBar.props.children;
+    const confirmButton = buttonContainer.props.children[1];
     assert.strictEqual(typeof confirmButton.props.onClick, 'function');
 
     confirmButton.props.onClick();

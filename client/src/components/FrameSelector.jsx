@@ -77,23 +77,17 @@ export default function FrameSelector({ onConfirm, onBack }) {
   };
 
   return (
-    <div className="flex flex-col h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 p-3 sm:p-5 md:p-8 select-none overflow-hidden">
-      <div className="flex items-center justify-between max-w-4xl mx-auto w-full mb-2 sm:mb-4 shrink-0">
-        <button
-          onClick={onBack}
-          aria-label="Kembali"
-          className="flex items-center gap-1.5 px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 font-semibold text-xs sm:text-sm text-slate-700 transition-colors cursor-pointer shadow-xs"
-        >
-          <ArrowLeft size={14} className="sm:w-4 sm:h-4" /> Kembali
-        </button>
-        <h2 className="text-lg sm:text-2xl font-extrabold text-slate-900 text-center">
+    <div className="relative flex flex-col justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 select-none overflow-hidden pb-20 sm:pb-24">
+      {/* Header (Title Only) */}
+      <div className="flex items-center justify-center max-w-4xl mx-auto w-full pt-3 sm:pt-5 px-4 shrink-0">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 text-center tracking-tight">
           Pilih Template & Warna Frame
         </h2>
-        <div className="w-14 sm:w-20"></div>
       </div>
 
-      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch my-auto p-1">
-        {/* Layout Options (Open Flat Layout with padding to prevent border clipping) */}
+      {/* Main Content (Center) */}
+      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-center my-auto px-4 p-1">
+        {/* Layout Options (Open Flat Layout) */}
         <div className="flex flex-col justify-center">
           <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
             1. Pilih Tata Letak Foto
@@ -130,8 +124,8 @@ export default function FrameSelector({ onConfirm, onBack }) {
           </div>
         </div>
 
-        {/* Color Palette (Open Flat Layout with padding to prevent border clipping) */}
-        <div className="flex flex-col justify-between gap-3 p-1">
+        {/* Color Palette (Open Flat Layout) */}
+        <div className="flex flex-col justify-center gap-2 p-1">
           <div>
             <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
               2. Pilih Warna Bingkai
@@ -162,10 +156,22 @@ export default function FrameSelector({ onConfirm, onBack }) {
               })}
             </div>
           </div>
+        </div>
+      </div>
 
+      {/* Fixed Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 sm:py-4">
+        <div className="max-w-md mx-auto w-full flex items-center gap-2.5">
+          <button
+            onClick={onBack}
+            aria-label="Kembali"
+            className="w-1/3 py-2.5 sm:py-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <ArrowLeft size={15} /> Kembali
+          </button>
           <button
             onClick={handleConfirm}
-            className="w-full py-2.5 sm:py-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            className="w-2/3 py-2.5 sm:py-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
             Lanjut ke Kamera <ArrowRight size={15} />
           </button>
