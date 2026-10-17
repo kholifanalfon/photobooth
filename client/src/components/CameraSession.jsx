@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Loader2, RotateCcw, Check, RefreshCw } from 'lucide-react';
+import { Camera, Loader2, RotateCcw, Check, RefreshCw, X } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
@@ -308,9 +308,10 @@ export default function CameraSession({
           <button
             onClick={handleCancel}
             aria-label="Batalkan Sesi"
-            className="text-slate-600 hover:text-slate-900 font-medium text-xs px-2 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+            title="Batalkan Sesi"
+            className="p-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer shadow-xs"
           >
-            Batalkan Sesi
+            <X size={16} />
           </button>
         </div>
 
