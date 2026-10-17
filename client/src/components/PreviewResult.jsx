@@ -187,21 +187,21 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen w-full bg-slate-900 text-white p-6 md:p-10 select-none">
+    <div className="flex flex-col items-center justify-between min-h-screen w-full bg-slate-900 text-white p-4 sm:p-6 md:p-10 select-none">
       <div className="text-center mb-6">
-        <h2 className="text-3xl font-black mb-1">Hasil Fotomu Siap! 🎉</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className="text-2xl sm:text-3xl font-black mb-1">Hasil Fotomu Siap! 🎉</h2>
+        <p className="text-slate-400 text-xs sm:text-sm">
           Cetak langsung atau scan QR code untuk menyimpan di ponsel.
         </p>
       </div>
 
       {/* Frame Preview Card */}
-      <div className="max-h-[60vh] flex items-center justify-center p-2 bg-slate-800/60 rounded-2xl border border-slate-700 shadow-2xl">
+      <div className="max-h-[52vh] sm:max-h-[60vh] flex items-center justify-center p-2 bg-slate-800/60 rounded-2xl border border-slate-700 shadow-2xl my-auto">
         {compositeUrl ? (
           <img
             src={compositeUrl}
             alt="Composited Result"
-            className="max-h-[58vh] object-contain rounded-lg shadow-lg"
+            className="max-h-[48vh] sm:max-h-[58vh] object-contain rounded-lg shadow-lg"
           />
         ) : (
           <div className="text-slate-400">Merender komposit...</div>
@@ -215,7 +215,7 @@ export default function PreviewResult({
       )}
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center justify-center gap-4 mt-6 w-full max-w-xl">
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-4 sm:mt-6 w-full max-w-xl">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}

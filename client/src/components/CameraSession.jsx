@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Loader2, RotateCcw, Check } from 'lucide-react';
+import { Camera, Loader2, RotateCcw, Check, RefreshCw } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 
@@ -23,6 +23,7 @@ export default function CameraSession({
   const [cameraError, setCameraError] = useState(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [poseReviewPhoto, setPoseReviewPhoto] = useState(null);
+  const [facingMode, setFacingMode] = useState('user');
 
   const totalPhotos =
     layoutConfig?.photoCount ||
@@ -41,23 +42,36 @@ export default function CameraSession({
           throw new Error('WebRTC getUserMedia is not supported');
         }
 
+        // Stop existing tracks if switching camera
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+
         // Tiered constraints: try HD first, fallback to standard if rejected
         let stream = null;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              facingMode: 'user',
+              facingMode: facingMode,
               width: { ideal: 1920 },
               height: { ideal: 1080 }
             },
             audio: false
           });
         } catch (initialErr) {
-          // Fallback to basic video constraints
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-          });
+          // Fallback to basic video constraints with facingMode
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: facingMode },
+              audio: false
+            });
+          } catch (secondaryErr) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            });
+          }
         }
 
         if (!mounted) {
@@ -126,7 +140,13 @@ export default function CameraSession({
         streamRef.current = null;
       }
     };
-  }, []);
+  }, [facingMode]);
+
+  const toggleCamera = () => {
+    if (countdown !== null || poseReviewPhoto) return;
+    setIsVideoReady(false);
+    setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
+  };
 
   const clearTimers = () => {
     if (intervalRef.current) {
@@ -180,9 +200,11 @@ export default function CameraSession({
       const ctx = canvas.getContext('2d');
 
       if (ctx) {
-        // Mirror horizontally to match viewfinder preview
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
+        if (facingMode === 'user') {
+          // Mirror horizontally for front selfie camera
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
         if (video) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         }
@@ -260,10 +282,10 @@ export default function CameraSession({
   if (cameraError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-6">
-        <p className="text-rose-400 font-bold text-xl mb-4">{cameraError}</p>
+        <p className="text-rose-400 font-bold text-lg sm:text-xl mb-4 text-center">{cameraError}</p>
         <button
           onClick={handleCancel}
-          className="px-6 py-3 bg-white text-slate-900 rounded-full font-bold hover:bg-slate-100 transition-colors"
+          className="px-6 py-3 bg-white text-slate-900 rounded-full font-bold hover:bg-slate-100 transition-colors cursor-pointer"
         >
           Kembali ke Menu
         </button>
@@ -271,33 +293,47 @@ export default function CameraSession({
     );
   }
 
+  const isMirrored = facingMode === 'user';
+
   return (
-    <div className="relative flex flex-col items-center justify-between min-h-screen w-full bg-slate-950 overflow-hidden select-none p-6">
+    <div className="relative flex flex-col items-center justify-between min-h-screen w-full bg-slate-950 overflow-hidden select-none p-3 sm:p-6">
       {/* Screen Flash Overlay */}
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
       {/* Header Info */}
-      <div className="z-10 flex items-center justify-between w-full max-w-4xl text-white">
+      <div className="z-10 flex items-center justify-between w-full max-w-4xl text-white mb-2 sm:mb-4">
         <button
           onClick={handleCancel}
           aria-label="Batalkan Sesi"
-          className="text-slate-400 hover:text-white font-medium transition-colors"
+          className="text-slate-400 hover:text-white font-medium text-xs sm:text-sm transition-colors cursor-pointer"
         >
           Batalkan Sesi
         </button>
-        <div className="bg-slate-800/80 backdrop-blur px-6 py-2 rounded-full border border-slate-700 font-bold text-sm">
-          Pose ke <span className="text-pink-400 text-base">{currentPose + 1}</span> dari {totalPhotos}
+
+        <div className="bg-slate-800/80 backdrop-blur px-3.5 sm:px-6 py-1.5 sm:py-2 rounded-full border border-slate-700 font-bold text-xs sm:text-sm">
+          Pose ke <span className="text-pink-400 text-sm sm:text-base">{currentPose + 1}</span> dari {totalPhotos}
         </div>
-        <div className="w-20" />
+
+        {/* Switch Camera Button for mobile / tablet devices */}
+        <button
+          onClick={toggleCamera}
+          aria-label="Ganti Kamera"
+          title="Ganti Kamera (Depan / Belakang)"
+          disabled={countdown !== null || Boolean(poseReviewPhoto)}
+          className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold disabled:opacity-40 transition-colors cursor-pointer"
+        >
+          <RefreshCw size={15} />
+          <span className="hidden sm:inline">{facingMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}</span>
+        </button>
       </div>
 
       {/* Main Viewfinder / Pose Review */}
-      <div className="relative z-10 w-full max-w-3xl aspect-[4/3] bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex items-center justify-center">
+      <div className="relative z-10 w-full max-w-3xl aspect-[3/4] sm:aspect-[4/3] max-h-[62vh] sm:max-h-[68vh] bg-black rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-4 border-slate-800 shadow-2xl flex items-center justify-center my-auto">
         {/* Loading Spinner until video stream is actively playing */}
         {!isVideoReady && !poseReviewPhoto && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-900/90 z-20">
-            <Loader2 className="w-10 h-10 animate-spin text-pink-500" />
-            <span className="text-sm font-medium">Menghubungkan kamera...</span>
+            <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-pink-500" />
+            <span className="text-xs sm:text-sm font-medium">Menghubungkan kamera...</span>
           </div>
         )}
 
@@ -306,7 +342,9 @@ export default function CameraSession({
           autoPlay
           playsInline
           muted
-          className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+          className={`w-full h-full object-cover ${
+            isMirrored ? 'scale-x-[-1]' : ''
+          } transition-opacity duration-300 ${
             isVideoReady && !poseReviewPhoto ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -319,7 +357,7 @@ export default function CameraSession({
               alt={`Review Pose ${currentPose + 1}`}
               className="w-full h-full object-cover"
             />
-            <div className="absolute top-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 text-white font-bold text-sm">
+            <div className="absolute top-4 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 text-white font-bold text-xs sm:text-sm shadow-md">
               ✨ Review Pose {currentPose + 1}
             </div>
           </div>
@@ -335,7 +373,7 @@ export default function CameraSession({
               exit={{ scale: 1.5, opacity: 0 }}
               className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs pointer-events-none z-30"
             >
-              <span className="text-9xl font-black text-white drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]">
+              <span className="text-8xl sm:text-9xl font-black text-white drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]">
                 {countdown}
               </span>
             </motion.div>
@@ -344,21 +382,21 @@ export default function CameraSession({
       </div>
 
       {/* Bottom Controls */}
-      <div className="z-10 flex flex-col items-center gap-4">
+      <div className="z-10 flex flex-col items-center gap-3 w-full max-w-md pt-2 sm:pt-4">
         {poseReviewPhoto ? (
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 w-full">
             <button
               onClick={handleRetake}
-              className="px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-all cursor-pointer"
+              className="w-full sm:flex-1 py-3.5 sm:py-4 px-4 rounded-full font-bold text-sm sm:text-base flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-all cursor-pointer active:scale-98"
             >
-              <RotateCcw size={22} />
+              <RotateCcw size={18} className="sm:w-5 sm:h-5" />
               Foto Ulang (Retake)
             </button>
             <button
               onClick={handleAcceptPhoto}
-              className="px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
+              className="w-full sm:flex-1 py-3.5 sm:py-4 px-4 rounded-full font-bold text-sm sm:text-base flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white shadow-lg shadow-teal-500/25 transition-all cursor-pointer active:scale-98"
             >
-              <Check size={22} />
+              <Check size={18} className="sm:w-5 sm:h-5" />
               Gunakan Foto Ini
             </button>
           </div>
@@ -366,13 +404,13 @@ export default function CameraSession({
           <button
             disabled={countdown !== null}
             onClick={triggerCaptureSequence}
-            className={`px-10 py-5 rounded-full font-black text-2xl flex items-center gap-3 shadow-2xl transition-all ${
+            className={`w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-5 rounded-full font-black text-lg sm:text-2xl flex items-center justify-center gap-2.5 sm:gap-3 shadow-2xl transition-all cursor-pointer ${
               countdown !== null
                 ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                 : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:scale-105 active:scale-95 text-white shadow-pink-500/30'
             }`}
           >
-            <Camera size={28} />
+            <Camera size={24} className="sm:w-7 sm:h-7" />
             {countdown !== null ? 'Bersiap...' : 'Ambil Gambar'}
           </button>
         )}
