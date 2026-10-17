@@ -246,26 +246,44 @@ export default function LandingPage({ onStartSession }) {
         </>
       )}
 
-      {/* Main Container */}
-      <div className="z-10 flex flex-col items-center max-w-lg sm:max-w-xl w-full text-center px-4 my-auto">
+      {/* Main Container - Expands responsively when Hero Video is active */}
+      <div
+        className={`z-10 flex flex-col items-center w-full text-center px-3 sm:px-6 my-auto transition-all duration-300 ${
+          hasActiveVideo
+            ? isPortrait
+              ? 'max-w-md'
+              : 'max-w-4xl sm:max-w-5xl'
+            : 'max-w-lg sm:max-w-xl'
+        }`}
+      >
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`text-2xl sm:text-3xl md:text-4xl font-extrabold ${activeTheme.headingClass} tracking-tight mb-1.5`}
+          className={`font-extrabold ${activeTheme.headingClass} tracking-tight transition-all duration-300 ${
+            hasActiveVideo
+              ? 'text-lg sm:text-2xl md:text-3xl mb-1'
+              : 'text-2xl sm:text-3xl md:text-4xl mb-1.5'
+          }`}
         >
           {config.title || activeTheme.defaultTitle}
         </motion.h1>
-        <p className={`${activeTheme.subheadingClass} text-xs sm:text-sm md:text-base mb-4 sm:mb-5 font-normal max-w-sm`}>
+        <p
+          className={`${activeTheme.subheadingClass} font-normal transition-all duration-300 ${
+            hasActiveVideo
+              ? 'text-xs sm:text-sm mb-3 sm:mb-4 max-w-md line-clamp-2'
+              : 'text-xs sm:text-sm md:text-base mb-4 sm:mb-5 max-w-sm'
+          }`}
+        >
           {config.subtitle || activeTheme.defaultSubtitle}
         </p>
 
-        {/* Center Display: Video Preview OR Animated Gift Box */}
+        {/* Center Display: Hero Cinema Video Preview OR Animated Gift Box */}
         {hasActiveVideo ? (
           <div
-            className={`relative mb-5 sm:mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-black select-none mx-auto transition-all duration-300 ${
+            className={`relative mb-4 sm:mb-5 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-xl sm:shadow-2xl bg-black select-none mx-auto transition-all duration-300 ${
               isPortrait
-                ? 'w-auto aspect-[9/16] max-h-[44vh] sm:max-h-[48vh] max-w-[240px] sm:max-w-[280px]'
-                : 'w-full max-w-[360px] sm:max-w-[480px] md:max-w-[540px] aspect-video'
+                ? 'w-auto aspect-[9/16] max-h-[56vh] sm:max-h-[62vh] max-w-[280px] sm:max-w-[340px]'
+                : 'w-full max-w-[480px] sm:max-w-[680px] md:max-w-[840px] aspect-video max-h-[56vh] sm:max-h-[62vh]'
             }`}
           >
             {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
@@ -374,7 +392,7 @@ export default function LandingPage({ onStartSession }) {
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           onClick={handleStart}
-          className={`flex items-center justify-center gap-2.5 px-8 sm:px-10 py-3.5 sm:py-4 rounded-2xl font-bold text-base sm:text-lg shadow-md hover:shadow-lg transition-all cursor-pointer ${activeTheme.btnClass}`}
+          className={`flex items-center justify-center gap-2.5 px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl font-bold text-base sm:text-lg shadow-md hover:shadow-xl transition-all cursor-pointer ${activeTheme.btnClass}`}
         >
           <Camera size={20} className="sm:w-6 sm:h-6" />
           <span>Mulai Sekarang</span>
