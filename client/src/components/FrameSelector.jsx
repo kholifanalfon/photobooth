@@ -92,13 +92,13 @@ export default function FrameSelector({ onConfirm, onBack }) {
         <div className="w-14 sm:w-20"></div>
       </div>
 
-      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch my-auto overflow-hidden">
-        {/* Layout Options (Open Flat Layout without Outer Card) */}
+      <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch my-auto p-1">
+        {/* Layout Options (Open Flat Layout with padding to prevent border clipping) */}
         <div className="flex flex-col justify-center">
           <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
             1. Pilih Tata Letak Foto
           </h3>
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 p-1">
             {layouts.map(([key, config]) => {
               const active = selectedLayout === key;
               return (
@@ -115,9 +115,9 @@ export default function FrameSelector({ onConfirm, onBack }) {
                       setSelectedLayout(key);
                     }
                   }}
-                  className={`cursor-pointer p-2 sm:p-2.5 rounded-xl border transition-all flex flex-col items-center text-center ${
+                  className={`cursor-pointer p-2 sm:p-2.5 rounded-xl border-2 transition-all flex flex-col items-center text-center ${
                     active
-                      ? 'border-rose-500 bg-rose-50/50 scale-[1.02]'
+                      ? 'border-rose-500 bg-rose-50/50 shadow-xs scale-[1.02]'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
@@ -130,13 +130,13 @@ export default function FrameSelector({ onConfirm, onBack }) {
           </div>
         </div>
 
-        {/* Color Palette (Open Flat Layout without Outer Card) */}
-        <div className="flex flex-col justify-between gap-3">
+        {/* Color Palette (Open Flat Layout with padding to prevent border clipping) */}
+        <div className="flex flex-col justify-between gap-3 p-1">
           <div>
             <h3 className="font-bold text-xs sm:text-sm mb-2 text-slate-800">
               2. Pilih Warna Bingkai
             </h3>
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1">
               {PALETTES.map((p) => {
                 const active = selectedPalette.hex === p.hex;
                 return (
@@ -146,8 +146,8 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     aria-label={p.name}
                     aria-pressed={active}
                     onClick={() => setSelectedPalette(p)}
-                    className={`flex flex-col items-center p-1.5 sm:p-2 rounded-xl border transition-all focus:outline-none cursor-pointer ${
-                      active ? 'border-rose-500 bg-rose-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'
+                    className={`flex flex-col items-center p-1.5 sm:p-2 rounded-xl border-2 transition-all focus:outline-none cursor-pointer ${
+                      active ? 'border-rose-500 bg-rose-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
                     <div
