@@ -281,7 +281,7 @@ export default function CameraSession({
 
   if (cameraError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-800 p-6">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] h-auto bg-slate-50 text-slate-800 p-6">
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-sm">
           <p className="text-rose-600 font-bold text-base sm:text-lg mb-4">{cameraError}</p>
           <button
@@ -298,12 +298,12 @@ export default function CameraSession({
   const isMirrored = facingMode === 'user';
 
   return (
-    <div className="relative flex flex-col items-center justify-between min-h-screen w-full bg-slate-100 text-slate-800 overflow-hidden select-none p-3 sm:p-6">
+    <div className="relative flex flex-col items-center justify-between min-h-[100dvh] h-auto w-full bg-slate-100 text-slate-800 overflow-hidden select-none p-3 sm:p-5">
       {/* Screen Flash Overlay */}
       {isFlashing && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
       {/* Header Info */}
-      <div className="z-10 flex items-center justify-between w-full max-w-3xl mb-2 sm:mb-3">
+      <div className="z-10 flex items-center justify-between w-full max-w-3xl mb-1.5 sm:mb-3">
         <button
           onClick={handleCancel}
           aria-label="Batalkan Sesi"
@@ -330,7 +330,7 @@ export default function CameraSession({
       </div>
 
       {/* Main Viewfinder / Pose Review Card */}
-      <div className="relative z-10 w-full max-w-3xl aspect-[3/4] sm:aspect-[4/3] max-h-[62vh] sm:max-h-[68vh] bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-300 shadow-sm flex items-center justify-center my-auto">
+      <div className="relative z-10 w-full max-w-2xl aspect-[3/4] sm:aspect-[4/3] max-h-[58vh] sm:max-h-[64vh] bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-300 shadow-sm flex items-center justify-center my-auto">
         {/* Loading Spinner until video stream is actively playing */}
         {!isVideoReady && !poseReviewPhoto && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-900 z-20">
@@ -384,7 +384,7 @@ export default function CameraSession({
       </div>
 
       {/* Bottom Controls */}
-      <div className="z-10 flex flex-col items-center gap-2.5 w-full max-w-md pt-2 sm:pt-3">
+      <div className="z-10 flex flex-col items-center gap-2 w-full max-w-md pt-2">
         {poseReviewPhoto ? (
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full">
             <button

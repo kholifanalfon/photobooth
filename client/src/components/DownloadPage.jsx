@@ -53,9 +53,9 @@ export default function DownloadPage({ filename }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col items-center justify-between p-4 sm:p-6 select-none relative">
+    <div className="min-h-[100dvh] h-auto bg-slate-100 text-slate-800 flex flex-col items-center justify-between p-3 sm:p-5 select-none relative">
       {/* Header */}
-      <header className="w-full max-w-md flex items-center justify-between pt-2 pb-4 z-10 border-b border-slate-200">
+      <header className="w-full max-w-md flex items-center justify-between pt-1 pb-3 z-10 border-b border-slate-200">
         <a
           href="/"
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors font-medium"
@@ -70,41 +70,41 @@ export default function DownloadPage({ filename }) {
       </header>
 
       {/* Center Flat Card & Preview */}
-      <main className="w-full max-w-md flex flex-col items-center my-auto py-4 z-10">
+      <main className="w-full max-w-md flex flex-col items-center my-auto py-2 z-10">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="w-full bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col items-center gap-3.5"
+          className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm flex flex-col items-center gap-3"
         >
           {/* Photo Frame Container (Clean Flat Border) */}
-          <div className="relative w-full max-w-[300px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+          <div className="relative w-full max-w-[280px] sm:max-w-[300px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
             {safeFilename ? (
               <img
                 src={photoUrl}
                 alt="Photobooth Result"
-                className="w-full h-auto object-contain max-h-[48vh]"
+                className="w-full h-auto object-contain max-h-[46vh] sm:max-h-[48vh]"
                 loading="eager"
               />
             ) : (
-              <div className="h-60 flex flex-col items-center justify-center text-slate-400 gap-2">
-                <ImageIcon size={40} />
+              <div className="h-56 flex flex-col items-center justify-center text-slate-400 gap-2">
+                <ImageIcon size={36} />
                 <span className="text-sm">Foto tidak ditemukan</span>
               </div>
             )}
           </div>
 
           <div className="text-center mt-0.5">
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
+            <h1 className="text-base sm:text-lg font-bold text-slate-900">
               Foto Anda Siap Diunduh!
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-0.5">
               Simpan kenangan spesial ini langsung ke galeri smartphone Anda dalam resolusi penuh.
             </p>
           </div>
 
           {/* Action Buttons (Compact Flat Solid Design) */}
-          <div className="w-full flex flex-col gap-2 pt-1">
+          <div className="w-full flex flex-col gap-2 pt-0.5">
             <button
               onClick={handleDownload}
               disabled={downloading || !safeFilename}
@@ -120,7 +120,7 @@ export default function DownloadPage({ filename }) {
 
             <button
               onClick={handleShare}
-              className="w-full py-2.5 px-5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+              className="w-full py-2 sm:py-2.5 px-5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
             >
               {copied ? (
                 <>
@@ -139,7 +139,7 @@ export default function DownloadPage({ filename }) {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-md text-center py-3 z-10">
+      <footer className="w-full max-w-md text-center py-2 z-10">
         <p className="text-[11px] text-slate-400">
           Photobooth Experience &bull; Simpan foto sebelum sesi berakhir
         </p>

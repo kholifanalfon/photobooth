@@ -188,21 +188,21 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen w-full bg-slate-100 text-slate-800 p-4 sm:p-6 md:p-8 select-none">
-      <div className="text-center mb-3 sm:mb-4">
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1">Hasil Fotomu Siap! 🎉</h2>
+    <div className="flex flex-col items-center justify-between min-h-[100dvh] h-auto w-full bg-slate-100 text-slate-800 p-3 sm:p-5 md:p-8 select-none">
+      <div className="text-center mb-2 sm:mb-3">
+        <h2 className="text-xl sm:text-3xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
         <p className="text-slate-500 text-xs sm:text-sm">
           Cetak langsung atau scan QR code untuk menyimpan di ponsel.
         </p>
       </div>
 
       {/* Frame Preview Card (Flat Container) */}
-      <div className="max-h-[52vh] sm:max-h-[60vh] flex items-center justify-center p-2.5 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto">
+      <div className="max-h-[50vh] sm:max-h-[58vh] flex items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm my-auto">
         {compositeUrl ? (
           <img
             src={compositeUrl}
             alt="Composited Result"
-            className="max-h-[48vh] sm:max-h-[56vh] object-contain rounded-lg border border-slate-100"
+            className="max-h-[46vh] sm:max-h-[54vh] object-contain rounded-lg border border-slate-100"
           />
         ) : (
           <div className="text-slate-400 text-sm">Merender komposit...</div>
@@ -210,13 +210,13 @@ export default function PreviewResult({
       </div>
 
       {printStatus && (
-        <div className="mt-2.5 flex items-center gap-2 text-emerald-700 font-semibold text-xs sm:text-sm bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-200 animate-fade-in text-center">
+        <div className="mt-2 flex items-center gap-2 text-emerald-700 font-semibold text-xs sm:text-sm bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-200 animate-fade-in text-center">
           <CheckCircle2 size={15} className="shrink-0" /> {printStatus}
         </div>
       )}
 
       {/* Action Buttons (Compact Flat Solid Design with single-line text) */}
-      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-3 sm:mt-5 w-full max-w-xl">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-3 sm:mt-4 w-full max-w-xl">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}

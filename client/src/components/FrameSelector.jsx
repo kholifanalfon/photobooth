@@ -77,8 +77,8 @@ export default function FrameSelector({ onConfirm, onBack }) {
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-10 select-none">
-      <div className="flex items-center justify-between max-w-5xl mx-auto w-full mb-6 sm:mb-8">
+    <div className="flex flex-col min-h-[100dvh] h-auto w-full bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 select-none">
+      <div className="flex items-center justify-between max-w-5xl mx-auto w-full mb-4 sm:mb-6">
         <button
           onClick={onBack}
           aria-label="Kembali"
@@ -92,13 +92,13 @@ export default function FrameSelector({ onConfirm, onBack }) {
         <div className="w-16 sm:w-20"></div>
       </div>
 
-      <div className="max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-start">
+      <div className="max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-start my-auto pb-4">
         {/* Layout Options */}
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-base sm:text-lg mb-3 sm:mb-4 text-slate-800">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 className="font-bold text-sm sm:text-base mb-2.5 sm:mb-3 text-slate-800">
             1. Pilih Tata Letak Foto
           </h3>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             {layouts.map(([key, config]) => {
               const active = selectedLayout === key;
               return (
@@ -115,15 +115,15 @@ export default function FrameSelector({ onConfirm, onBack }) {
                       setSelectedLayout(key);
                     }
                   }}
-                  className={`cursor-pointer p-3 sm:p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center ${
+                  className={`cursor-pointer p-2.5 sm:p-3 rounded-xl border-2 transition-all flex flex-col items-center text-center ${
                     active
                       ? 'border-rose-500 bg-rose-50/40 scale-[1.02]'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
                   {renderLayoutThumbnail(key, config)}
-                  <span className="font-bold text-xs sm:text-sm text-slate-900 line-clamp-1">{config.name}</span>
-                  <span className="text-[11px] sm:text-xs text-slate-500 mt-0.5">{config.photoCount} Jepretan</span>
+                  <span className="font-bold text-xs text-slate-900 line-clamp-1">{config.name}</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">{config.photoCount} Jepretan</span>
                 </div>
               );
             })}
@@ -131,12 +131,12 @@ export default function FrameSelector({ onConfirm, onBack }) {
         </div>
 
         {/* Color Palette */}
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between gap-6">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4">
           <div>
-            <h3 className="font-bold text-base sm:text-lg mb-3 sm:mb-4 text-slate-800">
+            <h3 className="font-bold text-sm sm:text-base mb-2.5 sm:mb-3 text-slate-800">
               2. Pilih Warna Bingkai
             </h3>
-            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-2.5 sm:gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
               {PALETTES.map((p) => {
                 const active = selectedPalette.hex === p.hex;
                 return (
@@ -146,17 +146,17 @@ export default function FrameSelector({ onConfirm, onBack }) {
                     aria-label={p.name}
                     aria-pressed={active}
                     onClick={() => setSelectedPalette(p)}
-                    className={`flex flex-col items-center p-2 sm:p-2.5 rounded-xl border transition-all focus:outline-none cursor-pointer ${
+                    className={`flex flex-col items-center p-2 rounded-xl border transition-all focus:outline-none cursor-pointer ${
                       active ? 'border-rose-500 bg-rose-50/30' : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <div
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-300 mb-1.5 flex items-center justify-center shadow-xs"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-300 mb-1 flex items-center justify-center shadow-xs"
                       style={{ backgroundColor: p.hex }}
                     >
                       {active && <Check size={16} className={`sm:w-4 sm:h-4 ${p.hex === '#1E1E24' ? 'text-white' : 'text-slate-800'}`} />}
                     </div>
-                    <span className="text-[11px] sm:text-xs font-medium text-slate-700">{p.name}</span>
+                    <span className="text-[11px] font-medium text-slate-700">{p.name}</span>
                   </button>
                 );
               })}

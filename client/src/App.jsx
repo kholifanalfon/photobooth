@@ -44,7 +44,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full min-h-screen">
+    <div className="w-full min-h-[100dvh] flex flex-col justify-center">
       {currentStep === 'DOWNLOAD' && (
         <DownloadPage filename={downloadFilename} />
       )}
