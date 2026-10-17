@@ -34,7 +34,7 @@ export function detectVideoAspectRatio(url, explicitRatio = 'auto', detectedFrom
 }
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Camera, Gift, SlidersHorizontal, Heart, AlertCircle, Calendar } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
@@ -60,6 +60,7 @@ export default function LandingPage({ onStartSession }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
   const [exactNumericRatio, setExactNumericRatio] = useState(null);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
   const videoElemRef = useRef(null);
 
   // Initialize config safely from localStorage
@@ -114,6 +115,7 @@ export default function LandingPage({ onStartSession }) {
   useEffect(() => {
     setElementDetectedRatio(null);
     setExactNumericRatio(null);
+    setIsVideoLoading(true);
 
     if (isDirectVideoUrl(config.videoUrl)) {
       setCachedVideoSrc(getFastVideoUrl(config.videoUrl));
@@ -317,6 +319,7 @@ export default function LandingPage({ onStartSession }) {
                 {/* Transparent Interaction Lock Layer to ensure clean video without external pop-outs or clicks */}
                 <div className="absolute inset-0 z-10 select-none pointer-events-auto" />
 
+                {/* Video Element */}
                 <video
                   ref={videoElemRef}
                   src={cachedVideoSrc || config.videoUrl}
@@ -332,8 +335,91 @@ export default function LandingPage({ onStartSession }) {
                       setElementDetectedRatio(e.target.videoHeight > e.target.videoWidth ? 'portrait' : 'landscape');
                     }
                   }}
-                  className="w-full h-full object-contain pointer-events-none select-none"
+                  onLoadedData={() => setIsVideoLoading(false)}
+                  onCanPlay={() => setIsVideoLoading(false)}
+                  onPlaying={() => setIsVideoLoading(false)}
+                  onWaiting={() => setIsVideoLoading(true)}
+                  className={`w-full h-full object-contain pointer-events-none select-none transition-opacity duration-300 ${
+                    isVideoLoading ? 'opacity-0' : 'opacity-100'
+                  }`}
                 />
+
+                {/* Themed Video Loading Animation */}
+                <AnimatePresence>
+                  {isVideoLoading && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-black/85 via-black/80 to-black/90 backdrop-blur-2xs select-none"
+                    >
+                      {isWedding ? (
+                        /* Wedding Theme Loading Animation: Glowing Heart + Golden Rings */
+                        <div className="flex flex-col items-center text-center space-y-3">
+                          <div className="relative flex items-center justify-center w-14 h-14">
+                            <motion.div
+                              animate={{ scale: [1, 1.35, 1], opacity: [0.25, 0.65, 0.25] }}
+                              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                              className="absolute inset-0 rounded-full bg-rose-400/30 blur-sm"
+                            />
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ repeat: Infinity, duration: 5, ease: "linear" }}
+                              className="absolute inset-0.5 rounded-full border border-dashed border-amber-300/70"
+                            />
+                            <motion.div
+                              animate={{ scale: [1, 1.18, 1] }}
+                              transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                              className="relative z-10 text-rose-400"
+                            >
+                              <Heart size={26} className="fill-rose-500/80 text-rose-300 drop-shadow-md" />
+                            </motion.div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="font-romantic text-base sm:text-lg text-rose-200 tracking-wide drop-shadow-sm">
+                              Mempersiapkan Momen Bahagia
+                            </p>
+                            <div className="flex items-center justify-center gap-1.5 text-[10px] text-rose-200/75 font-medium">
+                              <Sparkles size={11} className="text-amber-300 animate-pulse" />
+                              <span>Memuat tayangan video cinta...</span>
+                              <Sparkles size={11} className="text-amber-300 animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* General Theme Loading Animation: Rotating Camera & Star Sparks */
+                        <div className="flex flex-col items-center text-center space-y-3">
+                          <div className="relative flex items-center justify-center w-14 h-14">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+                              className="absolute inset-0 rounded-2xl border-2 border-dashed border-rose-400/80"
+                            />
+                            <motion.div
+                              animate={{ y: [-2, 2, -2] }}
+                              transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                              className="relative z-10 text-rose-400"
+                            >
+                              <Camera size={24} className="text-rose-400 drop-shadow-sm" />
+                            </motion.div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs font-bold text-slate-100 tracking-wide">
+                              Menyiapkan Video Photobooth
+                            </p>
+                            <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-300 font-medium">
+                              <Sparkles size={11} className="text-amber-300 animate-pulse" />
+                              <span>Sesaat lagi siap...</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Frame Footer Bottom: Nama Pengantin Kecil dalam 1 Line */}
