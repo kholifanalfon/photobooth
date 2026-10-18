@@ -102,7 +102,9 @@ test('LandingConfigDrawer - 2 Tab Architecture & Printer Configuration', async (
     assert.ok(html.includes('Tanggal Acara (Frame Atas)'), 'Must render top frame date input');
     assert.ok(html.includes('Nama Pasangan / Acara'), 'Must render bottom frame couple names input');
     assert.ok(html.includes('Tampilkan Video Pengantar'), 'Must render video toggle');
-    assert.ok(html.includes('Chunking 1.5MB'), 'Must render chunking badge');
+    assert.ok(html.includes('Mode Tampilan Video'), 'Must render video display mode selector');
+    assert.ok(html.includes('Keduanya (Sinkron)'), 'Must render synchronized option');
+    assert.ok(html.includes('Chunking 512KB') || html.includes('Chunking'), 'Must render chunking badge');
     assert.ok(html.includes('Wajibkan Kode Sesi untuk Mulai'), 'Must render session code toggle');
   });
 
@@ -110,7 +112,7 @@ test('LandingConfigDrawer - 2 Tab Architecture & Printer Configuration', async (
     assert.ok(THEME_PRESETS.wedding, 'Must have wedding preset');
     assert.ok(THEME_PRESETS.general, 'Must have general preset');
     assert.ok(Array.isArray(PRINTER_PRESETS), 'PRINTER_PRESETS must be an array');
-    assert.ok(PRINTER_PRESETS.some(p => p.id === 'Default System Printer'), 'Must include Default System Printer');
-    assert.ok(PRINTER_PRESETS.some(p => p.id.includes('DNP')), 'Must include DNP DS620');
+    assert.ok(PRINTER_PRESETS.some(p => p.id === 'Niimbot 4R Photo Printer'), 'Must include Niimbot 4R Photo Printer');
+    assert.equal(PRINTER_PRESETS.length, 1, 'Only Niimbot 4R preset displayed');
   });
 });

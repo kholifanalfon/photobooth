@@ -43,3 +43,21 @@ test('POST /api/photos/upload-video returns 400 when no file is uploaded', async
   assert.strictEqual(res.status, 400);
   assert.ok(res.body.error);
 });
+
+test("POST /api/photos/upload-video handles image file uploads (JPG/PNG) and returns accessible mediaUrl", async () => {
+  const dummyImageBuffer = Buffer.from("fake png stream data");
+
+  const res = await request(app)
+    .post("/api/photos/upload-video")
+    .attach("video", dummyImageBuffer, "wedding_banner.png");
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.ok(res.body.filename);
+  assert.match(res.body.filename, /^image_landing_\d+\.png$/);
+  assert.ok(res.body.videoUrl);
+
+  const uploadedPath = path.join(uploadsDir, res.body.filename);
+  assert.ok(fs.existsSync(uploadedPath));
+  await fs.promises.unlink(uploadedPath).catch(() => {});
+});

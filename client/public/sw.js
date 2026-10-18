@@ -40,10 +40,25 @@ self.addEventListener('activate', (event) => {
 // Fetch: offline-ready caching strategy
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  const url = new URL(req.url);
+  let url;
+  try {
+    url = new URL(req.url);
+  } catch (_) {
+    return;
+  }
+
+  // Strictly only cache http: and https: schemes (ignores chrome-extension://, moz-extension://, etc.)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
 
   // Ignore non-GET requests (e.g. POST /api/print, POST /api/photos/upload)
   if (req.method !== 'GET') {
+    return;
+  }
+
+  // Pass through all /api/ requests directly to the network without caching
+  if (url.pathname.startsWith('/api/')) {
     return;
   }
 
@@ -69,20 +84,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle video requests from Cache API
-  if (url.pathname.match(/\.(mp4|webm|ogg)$/i) || url.pathname.includes('/uploads/video-')) {
-    event.respondWith(
-      caches.match(req).then((cached) => {
-        if (cached) return cached;
-        return fetch(req).then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
-            const clone = networkRes.clone();
-            caches.open('photobooth-video-cache-v1').then((cache) => cache.put(req, clone));
-          }
-          return networkRes;
-        }).catch(() => cached);
-      })
-    );
+  // Pass through video files and uploads directly to browser native engine.
+  // Service Workers cannot cache HTTP 206 Partial Content range requests and cause streaming aborts.
+  if (
+    url.pathname.match(/\.(mp4|webm|ogg|mov|m4v)$/i) ||
+    url.pathname.includes('/uploads/')
+  ) {
     return;
   }
 

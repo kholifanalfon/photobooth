@@ -65,14 +65,19 @@ export const FRAME_CONFIGS = {
  * @returns {{ cropX: number, cropY: number, cropW: number, cropH: number, scale: number }}
  */
 export function calculateCenterCrop(srcWidth, srcHeight, targetWidth, targetHeight) {
-  if (!srcWidth || !srcHeight || srcWidth <= 0 || srcHeight <= 0) {
-    return { cropX: 0, cropY: 0, cropW: targetWidth, cropH: targetHeight, scale: 1 };
+  const sW = Number(srcWidth) || 0;
+  const sH = Number(srcHeight) || 0;
+  const tW = Number(targetWidth) || 0;
+  const tH = Number(targetHeight) || 0;
+
+  if (sW <= 0 || sH <= 0 || tW <= 0 || tH <= 0) {
+    return { cropX: 0, cropY: 0, cropW: tW, cropH: tH, scale: 1 };
   }
-  const scale = Math.max(targetWidth / srcWidth, targetHeight / srcHeight);
-  const cropW = targetWidth / scale;
-  const cropH = targetHeight / scale;
-  const cropX = (srcWidth - cropW) / 2;
-  const cropY = (srcHeight - cropH) / 2;
+  const scale = Math.max(tW / sW, tH / sH);
+  const cropW = tW / scale;
+  const cropH = tH / scale;
+  const cropX = (sW - cropW) / 2;
+  const cropY = (sH - cropH) / 2;
   return { cropX, cropY, cropW, cropH, scale };
 }
 
@@ -88,32 +93,36 @@ export function calculateCenterCrop(srcWidth, srcHeight, targetWidth, targetHeig
  * @param {number|number[]} [radius=0]
  */
 export function drawRoundRect(ctx, x, y, width, height, radius = 0) {
+  const numX = Number(x) || 0;
+  const numY = Number(y) || 0;
+  const numW = Number(width) || 0;
+  const numH = Number(height) || 0;
   const normRadius = typeof radius === 'number'
     ? radius
-    : (Array.isArray(radius) && typeof radius[0] === 'number' ? radius[0] : 0);
+    : (Array.isArray(radius) && typeof radius[0] === 'number' ? radius[0] : (Number(radius) || 0));
 
   if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(x, y, width, height, radius);
+    ctx.roundRect(numX, numY, numW, numH, normRadius);
   } else if (typeof ctx.arcTo === 'function') {
-    const r = Math.min(Math.max(0, normRadius), width / 2, height / 2);
+    const r = Math.min(Math.max(0, normRadius), numW / 2, numH / 2);
     if (r <= 0) {
       if (typeof ctx.rect === 'function') {
-        ctx.rect(x, y, width, height);
+        ctx.rect(numX, numY, numW, numH);
       }
       return;
     }
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + width - r, y);
-    ctx.arcTo(x + width, y, x + width, y + r, r);
-    ctx.lineTo(x + width, y + height - r);
-    ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
-    ctx.lineTo(x + r, y + height);
-    ctx.arcTo(x, y + height, x, y + height - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
+    ctx.moveTo(numX + r, numY);
+    ctx.lineTo(numX + numW - r, numY);
+    ctx.arcTo(numX + numW, numY, numX + numW, numY + r, r);
+    ctx.lineTo(numX + numW, numY + numH - r);
+    ctx.arcTo(numX + numW, numY + numH, numX + numW - r, numY + numH, r);
+    ctx.lineTo(numX + r, numY + numH);
+    ctx.arcTo(numX, numY + numH, numX, numY + numH - r, r);
+    ctx.lineTo(numX, numY + r);
+    ctx.arcTo(numX, numY, numX + r, numY, r);
     ctx.closePath();
   } else if (typeof ctx.rect === 'function') {
-    ctx.rect(x, y, width, height);
+    ctx.rect(numX, numY, numW, numH);
   }
 }
 
@@ -157,10 +166,37 @@ export async function composePhotosToFrame(photos = [], options = {}) {
     textColor = '#1e293b',
     eventTitle = 'PHOTOBOOTH MEMORY',
     dateText = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }),
-    customCanvas = null
+    customCanvas = null,
+    customFrame = null
   } = options;
 
+  const isCustomFrame = Boolean(
+    customFrame &&
+    customFrame.enabled &&
+    Array.isArray(customFrame.slots) &&
+    customFrame.slots.length > 0
+  );
+
+  const isLandscape = customFrame?.orientation === 'landscape';
+  let customWidth = isLandscape ? 1800 : 1200;
+  let customHeight = isLandscape ? 1200 : 1800;
+
+  if (Number(customFrame?.width) > 0 && Number(customFrame?.height) > 0) {
+    const rawW = Number(customFrame.width);
+    const rawH = Number(customFrame.height);
+    if (isLandscape) {
+      customWidth = rawW >= rawH ? rawW : rawH;
+      customHeight = rawW >= rawH ? rawH : rawW;
+    } else {
+      customWidth = rawH >= rawW ? rawW : rawH;
+      customHeight = rawH >= rawW ? rawH : rawW;
+    }
+  }
+
   const config = FRAME_CONFIGS[layoutType] || FRAME_CONFIGS.STRIP_3;
+  const canvasWidth = isCustomFrame ? customWidth : config.canvasWidth;
+  const canvasHeight = isCustomFrame ? customHeight : config.canvasHeight;
+  const activeSlots = isCustomFrame ? customFrame.slots : config.slots;
 
   let canvas = customCanvas;
   if (!canvas) {
@@ -171,63 +207,163 @@ export async function composePhotosToFrame(photos = [], options = {}) {
     }
   }
 
-  canvas.width = config.canvasWidth;
-  canvas.height = config.canvasHeight;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('Could not get 2D context from canvas');
   }
 
-  // 1. Draw frame background
+  // 1. Draw frame base background
   ctx.fillStyle = frameColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 2. Draw slots with aspect-ratio centering crop
-  const radius = 12;
-  for (let i = 0; i < config.slots.length; i++) {
-    const slot = config.slots[i];
-    const photoSrc = photos[i];
+  // If customFrame has an image, determine if it should be drawn as BACKGROUND or OVERLAY:
+  // JPEGs have NO alpha transparency. Drawing an opaque JPEG on top of photos will ALWAYS cover and hide them.
+  // Therefore, JPEGs and any frame where layerMode !== 'overlay' MUST be drawn as background FIRST!
+  const isJpeg = Boolean(customFrame?.imageUrl && customFrame.imageUrl.match(/\.(jpe?g)($|\?)/i));
+  const isOverlayMode = Boolean(
+    isCustomFrame &&
+    customFrame.imageUrl &&
+    !isJpeg &&
+    (customFrame.layerMode === 'overlay' || customFrame.layerMode === 'front')
+  );
+
+  let frameImg = null;
+  if (isCustomFrame && customFrame.imageUrl) {
+    try {
+      frameImg = await loadImage(customFrame.imageUrl);
+    } catch (overlayErr) {
+      console.warn('Failed to load custom frame image:', overlayErr);
+    }
+  }
+
+  // Helper to draw custom frame image with custom position, scale, and optional mirroring
+  const drawCustomFrameImage = (img) => {
+    const imgX = Number(customFrame.imageX) || 0;
+    const imgY = Number(customFrame.imageY) || 0;
+    const imgW = Number(customFrame.imageWidth) > 0
+      ? Number(customFrame.imageWidth)
+      : (customFrame.imageMirror ? Math.round(canvas.width / 2) : canvas.width);
+    const imgH = Number(customFrame.imageHeight) > 0
+      ? Number(customFrame.imageHeight)
+      : canvas.height;
+
+    // Draw main frame image
+    ctx.drawImage(img, imgX, imgY, imgW, imgH);
+
+    // If mirror image is enabled, draw the mirrored frame image
+    if (customFrame.imageMirror) {
+      const mX = customFrame.mirrorImageX !== undefined && customFrame.mirrorImageX !== null
+        ? Number(customFrame.mirrorImageX)
+        : Math.round(canvas.width - imgX - imgW);
+      const mY = customFrame.mirrorImageY !== undefined && customFrame.mirrorImageY !== null
+        ? Number(customFrame.mirrorImageY)
+        : imgY;
+      const mW = Number(customFrame.mirrorImageWidth) > 0 ? Number(customFrame.mirrorImageWidth) : imgW;
+      const mH = Number(customFrame.mirrorImageHeight) > 0 ? Number(customFrame.mirrorImageHeight) : imgH;
+      const flip = Boolean(customFrame.mirrorImageFlip);
+
+      ctx.save();
+      if (flip) {
+        ctx.translate(mX + mW / 2, mY + mH / 2);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -mW / 2, -mH / 2, mW, mH);
+      } else {
+        ctx.drawImage(img, mX, mY, mW, mH);
+      }
+      ctx.restore();
+    }
+  };
+
+  // Draw custom frame image as background if not in overlay mode
+  if (isCustomFrame && frameImg && !isOverlayMode) {
+    drawCustomFrameImage(frameImg);
+  }
+
+  // 2. Draw slots with aspect-ratio centering crop matching exact configured width and height
+  for (let i = 0; i < activeSlots.length; i++) {
+    const slot = activeSlots[i];
+    const slotX = Number(slot.x) || 0;
+    const slotY = Number(slot.y) || 0;
+    const slotW = Number(slot.width) || 100;
+    const slotH = Number(slot.height) || 100;
+    const radius = Number(slot.radius) >= 0 ? Number(slot.radius) : (isCustomFrame ? 0 : 12);
+    const borderWidth = Number(slot.borderWidth) >= 0 ? Number(slot.borderWidth) : 0;
+    const borderColor = slot.borderColor || '#FFFFFF';
+
+    // For custom frames (e.g. double strip / mirror slots), support explicit slot.photoIndex or repeat photos if fewer taken than slots
+    const targetPhotoIdx = (slot.photoIndex !== undefined && slot.photoIndex !== null)
+      ? Number(slot.photoIndex)
+      : (photos.length > 0 ? i % photos.length : i);
+
+    const photoSrc = isCustomFrame
+      ? (photos[targetPhotoIdx] || (photos.length > 0 ? photos[targetPhotoIdx % photos.length] : null))
+      : photos[i];
 
     if (photoSrc) {
       const img = (typeof photoSrc === 'object' && photoSrc !== null && 'width' in photoSrc && 'height' in photoSrc)
         ? photoSrc
         : await loadImage(photoSrc);
 
-      // Center crop calculation
+      // Center crop calculation ensuring photo fills exact slot width and height (cover mode)
       const { cropX, cropY, cropW, cropH } = calculateCenterCrop(
         img.width,
         img.height,
-        slot.width,
-        slot.height
+        slotW,
+        slotH
       );
 
       ctx.save();
-      // Rounded slot clip
+      // Rounded slot clip using exact slot width and height
       ctx.beginPath();
-      drawRoundRect(ctx, slot.x, slot.y, slot.width, slot.height, radius);
+      drawRoundRect(ctx, slotX, slotY, slotW, slotH, radius);
       ctx.clip();
 
-      ctx.drawImage(img, cropX, cropY, cropW, cropH, slot.x, slot.y, slot.width, slot.height);
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, slotX, slotY, slotW, slotH);
       ctx.restore();
 
-      // Rounded border around photo matching corner radius
+      // Draw custom border if configured (borderWidth > 0)
+      if (isCustomFrame && borderWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        drawRoundRect(ctx, slotX, slotY, slotW, slotH, radius);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = borderWidth;
+        ctx.stroke();
+        ctx.restore();
+      } else if (!isCustomFrame) {
+        ctx.beginPath();
+        drawRoundRect(ctx, slotX, slotY, slotW, slotH, radius);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    } else if (isCustomFrame && borderWidth > 0) {
+      ctx.save();
       ctx.beginPath();
-      drawRoundRect(ctx, slot.x, slot.y, slot.width, slot.height, radius);
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-      ctx.lineWidth = 2;
+      drawRoundRect(ctx, slotX, slotY, slotW, slotH, radius);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = borderWidth;
       ctx.stroke();
+      ctx.restore();
     }
   }
 
-  // 3. Draw Branding & Footer
-  ctx.fillStyle = textColor;
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.fillText(eventTitle, canvas.width / 2, config.footerY);
+  // 3. If overlay mode (PNG with transparent cutouts), draw frame on top of photos
+  if (isCustomFrame && frameImg && isOverlayMode) {
+    drawCustomFrameImage(frameImg);
+  } else if (!isCustomFrame) {
+    // 4. Draw Branding & Footer for standard presets
+    ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText(eventTitle, canvas.width / 2, config.footerY);
 
-  ctx.font = '22px sans-serif';
-  ctx.fillStyle = textColor === '#FFFFFF' ? '#e2e8f0' : '#64748b';
-  ctx.fillText(dateText, canvas.width / 2, config.footerY + 45);
+    ctx.font = '22px sans-serif';
+    ctx.fillStyle = textColor === '#FFFFFF' ? '#e2e8f0' : '#64748b';
+    ctx.fillText(dateText, canvas.width / 2, config.footerY + 45);
+  }
 
   const dataUrl = typeof canvas.toDataURL === 'function'
     ? canvas.toDataURL('image/jpeg', 0.95)

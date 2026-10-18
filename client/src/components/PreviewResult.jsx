@@ -47,7 +47,8 @@ export default function PreviewResult({
         const res = await composePhotosToFrame(photos, {
           layoutType: layoutConfig?.layoutType || 'STRIP_3',
           frameColor: layoutConfig?.palette?.hex || layoutConfig?.frameColor || '#FFFFFF',
-          textColor: layoutConfig?.palette?.text || layoutConfig?.textColor || '#1e293b'
+          textColor: layoutConfig?.palette?.text || layoutConfig?.textColor || '#1e293b',
+          customFrame: layoutConfig?.customFrame
         });
 
         if (isSubscribed && res?.dataUrl) {
@@ -66,6 +67,22 @@ export default function PreviewResult({
       isSubscribed = false;
     };
   }, [photos, layoutConfig]);
+
+  // Read autoPrint config from localStorage once composite is ready
+  useEffect(() => {
+    if (!compositeUrl) return;
+
+    let printerConfig = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        printerConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
+      } catch (e) {}
+    }
+
+    if (printerConfig.autoPrint) {
+      handlePrint();
+    }
+  }, [compositeUrl]);
 
   const handleDownloadQr = async () => {
     if (!compositeUrl) return;
@@ -113,6 +130,31 @@ export default function PreviewResult({
     const printMethod = printerConfig.printMethod || 'kiosk';
     const copies = Number(printerConfig.printCopies) || 1;
     const printerName = printerConfig.printerName || 'Default System Printer';
+
+    if (printMethod === 'bluetooth') {
+      setIsPrinting(true);
+      setPrintStatus('Menghubungkan ke Bluetooth Printer...');
+      try {
+        await bluetoothPrinter.printImage(compositeUrl);
+        setPrintStatus('Cetak Bluetooth Berhasil!');
+        if (printTimerRef.current) clearTimeout(printTimerRef.current);
+        printTimerRef.current = setTimeout(() => {
+          setPrintStatus(null);
+          printTimerRef.current = null;
+        }, 3000);
+      } catch (btErr) {
+        console.warn('Bluetooth print error:', btErr);
+        setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
+        if (printTimerRef.current) clearTimeout(printTimerRef.current);
+        printTimerRef.current = setTimeout(() => {
+          setPrintStatus(null);
+          printTimerRef.current = null;
+        }, 4000);
+      } finally {
+        setIsPrinting(false);
+      }
+      return;
+    }
 
     if (printMethod === 'browser') {
       if (typeof window !== 'undefined' && typeof window.print === 'function') {
@@ -182,21 +224,22 @@ export default function PreviewResult({
   };
 
   return (
-    <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-800 p-3 sm:p-5 md:p-8 select-none overflow-hidden">
-      <div className="text-center mb-1 shrink-0">
-        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
+    <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-800 p-2.5 sm:p-4 md:p-6 select-none overflow-hidden">
+      {/* Compact Header */}
+      <div className="text-center pt-0.5 pb-1 shrink-0">
+        <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
         <p className="text-slate-500 text-xs">
           Cetak langsung atau scan QR code untuk menyimpan di ponsel.
         </p>
       </div>
 
-      {/* Frame Preview (Open Flat Display without Outer Card Container) */}
-      <div className="max-h-[48vh] sm:max-h-[56vh] flex items-center justify-center my-auto shrink">
+      {/* Frame Preview: Mengambil 70-80% Layar Kiosk */}
+      <div className="h-[70vh] sm:h-[75vh] md:h-[78vh] w-full flex items-center justify-center my-auto shrink overflow-hidden">
         {compositeUrl ? (
           <img
             src={compositeUrl}
             alt="Composited Result"
-            className="max-h-[46vh] sm:max-h-[54vh] object-contain rounded-xl shadow-xs"
+            className="max-h-[68vh] sm:max-h-[73vh] md:max-h-[76vh] w-auto max-w-[94vw] object-contain rounded-2xl shadow-xl border border-slate-200/80"
           />
         ) : (
           <div className="text-slate-400 text-xs sm:text-sm">Merender komposit...</div>
@@ -210,7 +253,7 @@ export default function PreviewResult({
       )}
 
       {/* Action Buttons (Compact Flat Solid Design with single-line text) */}
-      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-2 sm:mt-4 w-full max-w-xl shrink-0">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-1 sm:mt-2 w-full max-w-xl shrink-0">
         <button
           onClick={handlePrint}
           disabled={isPrinting || !compositeUrl}

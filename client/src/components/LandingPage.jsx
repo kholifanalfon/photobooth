@@ -51,6 +51,7 @@ import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
 import SessionCodeModal from './SessionCodeModal.jsx';
 import { getFastVideoUrl, preloadAndCacheVideo, isDirectVideoUrl } from '../utils/videoCache.js';
+import { SLOT_PRESETS, MODERN_4R_FRAMES } from '../constants/framePresets.js';
 
 const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
 
@@ -73,7 +74,26 @@ const DEFAULT_CONFIG = {
   paperSize: '4R',
   printCopies: 1,
   printMethod: 'kiosk',
-  autoPrint: false
+  autoPrint: false,
+  customFrame: {
+    ...MODERN_4R_FRAMES[0],
+    slots: MODERN_4R_FRAMES[0].slots.map((s) => ({ ...s }))
+  },
+  customFrames: [
+    ...MODERN_4R_FRAMES.map((f) => ({ ...f, slots: f.slots.map((s) => ({ ...s })) })),
+    {
+      id: 'frame-wedding-modern-10slots',
+      name: 'Wedding Modern 10-Slot (Double 5-Strip 4R)',
+      enabled: true,
+      orientation: 'portrait',
+      width: 1200,
+      height: 1800,
+      imageUrl: '/frames/wedding_modern_10slots.png',
+      layerMode: 'background',
+      photoCount: 5,
+      slots: (SLOT_PRESETS[10]?.portrait || []).map((s) => ({ ...s }))
+    }
+  ]
 };
 
 export default function LandingPage({ onStartSession, isLiveMode = false }) {
@@ -102,6 +122,27 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
   });
 
   const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
+
+  // Sync fresh config from server if available
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      fetch('/api/config/landing')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.config) {
+            setConfig((prev) => ({
+              ...prev,
+              customFrames:
+                Array.isArray(data.config.customFrames) && data.config.customFrames.length > 0
+                  ? data.config.customFrames
+                  : prev.customFrames,
+              customFrame: data.config.customFrame || prev.customFrame
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   // Sync fullscreen state
   useEffect(() => {
@@ -176,7 +217,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
     setIsOpen(true);
     setTimeout(() => {
       if (typeof onStartSession === 'function') {
-        onStartSession();
+        onStartSession(config.customFrame, config.customFrames);
       }
     }, 800);
   };

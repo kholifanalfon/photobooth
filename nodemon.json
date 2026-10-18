@@ -1,0 +1,15 @@
+{
+  "watch": [
+    "src/"
+  ],
+  "ignore": [
+    "data/**",
+    "uploads/**",
+    "prisma/**",
+    "test/**",
+    "*.json",
+    "*.db",
+    "*.db-journal"
+  ],
+  "ext": "js,mjs,cjs"
+}

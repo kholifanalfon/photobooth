@@ -1,17 +1,21 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import photoRoutes from './routes/photoRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
+import printRoutes from './routes/printRoutes.js';
+import configRoutes from './routes/configRoutes.js';
 
-const sessionRoutes = require('./routes/sessionRoutes');
-const photoRoutes = require('./routes/photoRoutes');
-const printRoutes = require('./routes/printRoutes');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Static uploads serving with explicit headers for image downloads
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -28,6 +32,20 @@ app.use(
     }
   })
 );
+
+// Static frames serving
+const clientPublicFrames = path.join(__dirname, '../../client/public/frames');
+if (fs.existsSync(clientPublicFrames)) {
+  app.use(
+    '/frames',
+    express.static(clientPublicFrames, {
+      setHeaders: (res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+      }
+    })
+  );
+}
 
 // Dedicated direct download endpoint: /api/photos/download/:filename
 // Forces Content-Disposition: attachment for mobile browser downloads
@@ -46,35 +64,37 @@ app.get('/api/photos/download/:filename', (req, res) => {
   });
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Mount modular REST routes
-app.use('/api/sessions', sessionRoutes);
 app.use('/api/photos', photoRoutes);
+app.use('/api/sessions', sessionRoutes);
 app.use('/api/print', printRoutes);
+app.use('/api/config', configRoutes);
 
-// 404 handler for unknown API routes
-app.all('/api/*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// Client bundle integration (SPA static serving)
-const clientDistDir = path.resolve(__dirname, '../../client/dist');
+// Client production bundle integration (SPA static serving)
+const clientDistDir = path.join(__dirname, '../../client/dist');
 if (fs.existsSync(clientDistDir)) {
   app.use(express.static(clientDistDir));
+
+  // SPA fallback: only rewrite for GET requests that do NOT start with /api/ or /uploads/
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/health')) {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/frames/')) {
       return next();
     }
-    const indexHtml = path.join(clientDistDir, 'index.html');
-    if (fs.existsSync(indexHtml)) {
-      return res.sendFile(indexHtml);
-    }
-    next();
+    res.sendFile(path.join(clientDistDir, 'index.html'));
   });
 }
 
-module.exports = { app, uploadsDir, clientDistDir };
+// Global 404 Handler for unhandled API/resource routes - guarantees JSON response without leaking HTML
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Endpoint not found',
+    path: req.originalUrl,
+    status: 404
+  });
+});
+
+export { app, uploadsDir, clientDistDir };
+export default app;

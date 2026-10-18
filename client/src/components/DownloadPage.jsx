@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download, Share2, Sparkles, Check, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { Download, Share2, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
 
 export default function DownloadPage({ filename }) {
   const [downloading, setDownloading] = useState(false);
@@ -53,31 +53,25 @@ export default function DownloadPage({ filename }) {
   };
 
   return (
-    <div className="h-full h-[100dvh] max-h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-between p-2.5 sm:p-4 select-none relative overflow-hidden">
-      {/* Header */}
-      <header className="w-full max-w-sm flex items-center justify-between pt-1 pb-2 z-10 border-b border-slate-200 shrink-0">
-        <a
-          href="/"
-          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 transition-colors font-medium"
-        >
-          <ArrowLeft size={15} />
-          <span>Photobooth</span>
-        </a>
-        <div className="flex items-center gap-1 text-rose-600 font-bold text-xs tracking-wider uppercase">
-          <Sparkles size={13} />
+    <div className="w-full min-h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-between p-3 sm:p-4 pb-12 sm:pb-8 select-none relative overflow-y-auto">
+      {/* Header - Bersih tanpa tombol back to photobooth */}
+      <header className="w-full max-w-md flex items-center justify-center pt-2 pb-2 z-10 border-b border-slate-200/80 shrink-0">
+        <div className="flex items-center gap-1.5 text-rose-600 font-extrabold text-xs sm:text-sm tracking-wider uppercase">
+          <Sparkles size={14} className="text-amber-500 animate-pulse" />
           <span>Moment Captured</span>
+          <Sparkles size={14} className="text-amber-500 animate-pulse" />
         </div>
       </header>
 
-      {/* Center Open Flat Display without Outer Card */}
-      <main className="w-full max-w-sm flex flex-col items-center my-auto py-1 z-10 overflow-hidden shrink">
-        {/* Photo Frame Container (Clean Flat Display) */}
-        <div className="relative w-full max-w-[260px] sm:max-w-[280px] flex items-center justify-center shrink mb-2">
+      {/* Main: Preview Hasil Foto Mengambil Ruang Flex Responsif */}
+      <main className="w-full max-w-md flex-1 min-h-0 flex flex-col items-center justify-center py-2 z-10">
+        {/* Photo Container Flex-Shrinkable agar muat proporsional di semua layar hp */}
+        <div className="relative w-full flex-1 min-h-0 max-h-[55vh] sm:max-h-[64vh] flex items-center justify-center mb-3">
           {safeFilename ? (
             <img
               src={photoUrl}
               alt="Photobooth Result"
-              className="w-full h-auto object-contain max-h-[46vh] sm:max-h-[50vh] rounded-xl shadow-xs"
+              className="max-h-[54vh] sm:max-h-[62vh] max-w-[92vw] sm:max-w-md w-auto h-auto object-contain rounded-2xl shadow-md border border-slate-200/70"
               loading="eager"
             />
           ) : (
@@ -88,21 +82,12 @@ export default function DownloadPage({ filename }) {
           )}
         </div>
 
-        <div className="text-center mb-2.5">
-          <h1 className="text-sm sm:text-base font-bold text-slate-900">
-            Foto Anda Siap Diunduh!
-          </h1>
-          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-            Simpan kenangan spesial ini langsung ke smartphone Anda.
-          </p>
-        </div>
-
-        {/* Action Buttons (Compact Flat Solid Design) */}
-        <div className="w-full flex flex-col gap-1.5 shrink-0">
+        {/* Action Buttons (Tidak akan pernah terpotong) */}
+        <div className="w-full max-w-xs sm:max-w-sm flex flex-col gap-2 shrink-0">
           <button
             onClick={handleDownload}
             disabled={downloading || !safeFilename}
-            className={`w-full py-2 sm:py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
               downloading
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-xs'
@@ -114,7 +99,7 @@ export default function DownloadPage({ filename }) {
 
           <button
             onClick={handleShare}
-            className="w-full py-2 px-4 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
           >
             {copied ? (
               <>
@@ -132,7 +117,7 @@ export default function DownloadPage({ filename }) {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-sm text-center py-1.5 z-10 shrink-0">
+      <footer className="w-full max-w-sm text-center pt-2 pb-2 z-10 shrink-0">
         <p className="text-[10px] text-slate-400">
           Photobooth Experience &bull; Simpan foto sebelum sesi berakhir
         </p>

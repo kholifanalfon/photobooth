@@ -1,0 +1,88 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import esbuild from 'esbuild';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+const componentsDir = path.resolve(projectRoot, 'src/components');
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-admin-exit-test-'));
+
+test.after(() => {
+  if (fs.existsSync(tmpDir)) {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+const externalRewritePlugin = {
+  name: 'external-rewrite',
+  setup(build) {
+    build.onResolve({ filter: /^(react|react-dom|framer-motion|lucide-react|\.\.\/utils\/)/ }, (args) => {
+      const resolved = args.path.startsWith('.')
+        ? 'file://' + path.resolve(componentsDir, args.path)
+        : import.meta.resolve(args.path);
+      return { path: resolved, external: true };
+    });
+  }
+};
+
+async function buildAndImportComponent(entryName) {
+  const outFile = path.join(tmpDir, `${entryName}.mjs`);
+  await esbuild.build({
+    entryPoints: [path.join(componentsDir, `${entryName}.jsx`)],
+    bundle: true,
+    format: 'esm',
+    outfile: outFile,
+    plugins: [externalRewritePlugin]
+  });
+  return import(`file://${outFile}`);
+}
+
+const { default: AdminExitModal } = await buildAndImportComponent('AdminExitModal');
+const { default: SplashScreen } = await buildAndImportComponent('SplashScreen');
+
+test('AdminExitModal - Dialog Rendering & PIN Verification', async (t) => {
+  await t.test('returns empty markup when isOpen is false under AnimatePresence', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AdminExitModal, {
+        isOpen: false,
+        expectedCode: '9999',
+        onClose: () => {},
+        onSuccess: () => {}
+      })
+    );
+    assert.strictEqual(html, '');
+  });
+
+  await t.test('renders modal markup and keypad when isOpen is true', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AdminExitModal, {
+        isOpen: true,
+        expectedCode: '9999',
+        onClose: () => {},
+        onSuccess: () => {}
+      })
+    );
+    assert.ok(html.includes('Akses Operator Kiosk'), 'Must render Akses Operator Kiosk title');
+    assert.ok(html.includes('Keluar Live'), 'Must render Keluar Live button');
+    assert.ok(html.includes('Batal'), 'Must render Batal button');
+    for (let i = 0; i <= 9; i++) {
+      assert.ok(html.includes(`>${i}<`), `Must render keypad digit ${i}`);
+    }
+  });
+});
+
+test('SplashScreen - PWA Startup Animation Rendering', async (t) => {
+  await t.test('renders photobooth brand name and progress', () => {
+    const html = renderToStaticMarkup(React.createElement(SplashScreen));
+    assert.ok(html.includes('Photobooth'), 'Must render Photobooth brand text');
+    assert.ok(html.includes('offline-ready'), 'Must render offline-ready message');
+  });
+});

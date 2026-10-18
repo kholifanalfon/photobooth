@@ -23,22 +23,24 @@ const videoStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase() || '.mp4';
-    const safeName = `video_landing_${Date.now()}${ext}`;
+    const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(ext);
+    const prefix = isImage ? 'image_landing_' : 'video_landing_';
+    const safeName = `${prefix}${Date.now()}${ext}`;
     cb(null, safeName);
   }
 });
 
 const uploadVideoMiddleware = multer({
   storage: videoStorage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max
   fileFilter: (req, file, cb) => {
-    const isVideo =
-      (file.mimetype && file.mimetype.startsWith('video/')) ||
-      /\.(mp4|webm|mov|ogg|m4v)$/i.test(file.originalname);
-    if (isVideo) {
+    const isAllowed =
+      (file.mimetype && (file.mimetype.startsWith('video/') || file.mimetype.startsWith('image/'))) ||
+      /\.(mp4|webm|mov|ogg|m4v|mkv|jpg|jpeg|png|webp|gif)$/i.test(file.originalname);
+    if (isAllowed) {
       cb(null, true);
     } else {
-      cb(new Error('File harus berupa format video (MP4, WebM, MOV, OGG)'));
+      cb(new Error('File harus berupa format video (MP4, WebM, MOV) atau gambar (JPG, PNG, WebP)'));
     }
   }
 }).single('video');
@@ -62,13 +64,16 @@ const chunkStorage = multer.diskStorage({
 
 const uploadChunkMiddleware = multer({
   storage: chunkStorage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB max per single chunk
+  limits: { fileSize: 50 * 1024 * 1024 } // 50 MB max per single chunk
 }).single('chunk');
 
 // POST /api/photos/upload-chunk
 router.post('/upload-chunk', (req, res) => {
   uploadChunkMiddleware(req, res, (err) => {
     if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Ukuran chunk melebihi batas (maks 50MB per chunk)' });
+      }
       return res.status(400).json({ error: err.message || 'Gagal menyimpan chunk' });
     }
     const { uploadId, chunkIndex, totalChunks } = req.body;
@@ -105,7 +110,9 @@ router.post('/merge-chunks', async (req, res) => {
 
     const numChunks = parseInt(totalChunks, 10);
     const ext = path.extname(originalName || 'video.mp4').toLowerCase() || '.mp4';
-    const finalFilename = `video_landing_${Date.now()}${ext}`;
+    const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(ext);
+    const prefix = isImage ? 'image_landing_' : 'video_landing_';
+    const finalFilename = `${prefix}${Date.now()}${ext}`;
     const finalFilepath = path.join(uploadsDir, finalFilename);
 
     const writeStream = fs.createWriteStream(finalFilepath);
@@ -155,7 +162,10 @@ router.post('/merge-chunks', async (req, res) => {
 router.post('/upload-video', (req, res) => {
   uploadVideoMiddleware(req, res, (err) => {
     if (err) {
-      return res.status(400).json({ error: err.message || 'Gagal mengunggah file video' });
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Ukuran file melebihi batas maksimum 500MB' });
+      }
+      return res.status(400).json({ error: err.message || 'Gagal mengunggah file media' });
     }
     if (!req.file) {
       return res.status(400).json({ error: 'Tidak ada file video yang dikirim' });
@@ -169,6 +179,8 @@ router.post('/upload-video', (req, res) => {
     return res.json({
       success: true,
       filename,
+      url: relativeUrl,
+      mediaUrl: relativeUrl,
       videoUrl,
       relativeUrl,
       size: req.file.size

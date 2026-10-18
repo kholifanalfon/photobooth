@@ -2,7 +2,7 @@
   "name": "photobooth-server",
   "version": "1.0.0",
   "scripts": {
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon --watch src --ignore data/ --ignore uploads/ --ignore prisma/ src/index.js",
     "start": "node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",

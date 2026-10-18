@@ -66,3 +66,11 @@ model PrintJob {
   @@index([status, dispatchedAt])
   @@map("print_jobs")
 }
+
+model AppConfig {
+  key       String   @id @db.VarChar(64)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("app_configs")
+}
