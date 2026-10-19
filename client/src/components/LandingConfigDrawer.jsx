@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PrecisionFrameEditorModal from './PrecisionFrameEditorModal.jsx';
+import PrinterConfigModal from './PrinterConfigModal.jsx';
 import {
   X,
   Maximize2,
@@ -32,6 +33,7 @@ import {
   Layers,
   Image as ImageIcon,
   Plus,
+  FolderArchive,
   Move,
   Eye,
   EyeOff
@@ -78,8 +80,8 @@ export const PRINTER_PRESETS = [
   { id: 'Niimbot 4R Photo Printer', name: 'Niimbot 4R Photo Printer', desc: 'Printer foto portabel Niimbot 4R (USB/Bluetooth Kiosk)' }
 ];
 
-export { SAMPLE_PLACEHOLDER_PHOTOS, SLOT_PRESETS } from '../constants/framePresets.js';
-import { SAMPLE_PLACEHOLDER_PHOTOS, SLOT_PRESETS } from '../constants/framePresets.js';
+export { SAMPLE_PLACEHOLDER_PHOTOS, SLOT_PRESETS, PAPER_PRESETS } from '../constants/framePresets.js';
+import { SAMPLE_PLACEHOLDER_PHOTOS, SLOT_PRESETS, PAPER_PRESETS } from '../constants/framePresets.js';
 
 export default function LandingConfigDrawer({
   isOpen,
@@ -87,6 +89,7 @@ export default function LandingConfigDrawer({
   config,
   onUpdateConfig,
   onGoLive,
+  onOpenSessions,
   initialTab = 'media_theme'
 }) {
   // Hanya 2 Tab: 'media_theme' (Media & Tema) dan 'printer' (Konfigurasi Printer)
@@ -102,6 +105,7 @@ export default function LandingConfigDrawer({
   // Printer Test States
   const [isTestingPrint, setIsTestingPrint] = useState(false);
   const [isBtConnecting, setIsBtConnecting] = useState(false);
+  const [isTestingBtPrint, setIsTestingBtPrint] = useState(false);
   const [btStatus, setBtStatus] = useState(null);
   const [testPrintStatus, setTestPrintStatus] = useState(null);
 
@@ -115,6 +119,7 @@ export default function LandingConfigDrawer({
   const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
   const [isPrecisionModalOpen, setIsPrecisionModalOpen] = useState(false);
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
   const [isUploadingFrame, setIsUploadingFrame] = useState(false);
   const [frameUploadError, setFrameUploadError] = useState(null);
   const [previewFrameOpacity, setPreviewFrameOpacity] = useState(70);
@@ -140,7 +145,22 @@ export default function LandingConfigDrawer({
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.files)) {
-          setServerMediaFiles(data.files);
+          const normalized = data.files.map((item) => {
+            if (typeof item === 'string') {
+              const isVideo = /\.(mp4|webm|mov|ogg)$/i.test(item);
+              return {
+                filename: item,
+                size: 0,
+                isVideo,
+                url: `/uploads/${item}`
+              };
+            }
+            return {
+              ...item,
+              url: item.url || `/uploads/${item.filename}`
+            };
+          });
+          setServerMediaFiles(normalized);
         }
       }
     } catch (err) {
@@ -157,7 +177,8 @@ export default function LandingConfigDrawer({
   }, [isOpen]);
 
   const handleLoadServerMedia = (fileItem) => {
-    onUpdateConfig({ videoUrl: fileItem.url, enableVideo: true });
+    const targetUrl = fileItem.url || `/uploads/${fileItem.filename}`;
+    onUpdateConfig({ videoUrl: targetUrl, enableVideo: true });
     setUploadStatus(`✓ Menggunakan media server: ${fileItem.filename}`);
     setUploadError(null);
   };
@@ -257,6 +278,7 @@ export default function LandingConfigDrawer({
         setChunkDetail(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
         const directData = await uploadDirectMedia(file, {
           apiBase,
+          category: "media",
           onProgress: (percent) => {
             setUploadPercent(percent);
             setUploadStatus(`Mengunggah ke server (${percent}%)...`);
@@ -272,6 +294,7 @@ export default function LandingConfigDrawer({
         setUploadStatus('Mengunggah chunk paralel (3 koneksi)...');
         const mergeData = await uploadChunksWithProgress(uploadId, file, totalChunks, {
           apiBase,
+          category: "media",
           concurrency: 3,
           onProgress: (percent, currentChunk, total) => {
             setUploadPercent(percent);
@@ -295,11 +318,15 @@ export default function LandingConfigDrawer({
       setUploadPercent(100);
       setChunkDetail('Selesai 100%');
       setUploadStatus('✓ Media berhasil diunggah & tersimpan instan!');
+      await fetchServerMedia();
     } catch (err) {
       console.error('Failed media upload:', err);
       setUploadError(err.message || 'Gagal mengunggah media ke server');
     } finally {
       setIsUploading(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -319,12 +346,60 @@ export default function LandingConfigDrawer({
     setBtStatus(null);
     try {
       const res = await bluetoothPrinter.connect();
-      setBtStatus({ type: 'success', message: `Terhubung: ${res.name}` });
+      setBtStatus({ type: 'success', message: `Terhubung: ${res.name} (${res.type === 'niimbot' ? 'Niimbot' : 'ESC/POS'})` });
       onUpdateConfig({ printMethod: 'bluetooth', bluetoothDeviceName: res.name });
     } catch (err) {
       setBtStatus({ type: 'error', message: err.message || 'Gagal menghubungkan Bluetooth' });
     } finally {
       setIsBtConnecting(false);
+    }
+  };
+
+  const handleTestBluetoothPrint = async () => {
+    setIsTestingBtPrint(true);
+    setBtStatus(null);
+    try {
+      if (!bluetoothPrinter.isConnected) {
+        setBtStatus({ type: 'info', message: 'Menyambungkan printer Bluetooth...' });
+        await bluetoothPrinter.connect();
+      }
+      const testCanvas = document.createElement('canvas');
+      testCanvas.width = bluetoothPrinter.printheadPixels || 384;
+      testCanvas.height = 240;
+      const tCtx = testCanvas.getContext('2d');
+      tCtx.fillStyle = '#ffffff';
+      tCtx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+      tCtx.fillStyle = '#000000';
+      tCtx.font = 'bold 22px sans-serif';
+      tCtx.textAlign = 'center';
+      tCtx.fillText('PHOTOBOOTH TEST', testCanvas.width / 2, 55);
+      tCtx.font = '15px sans-serif';
+      tCtx.fillText(`Printer: ${bluetoothPrinter.printerName || 'Niimbot'}`, testCanvas.width / 2, 95);
+      tCtx.fillText(`Mode: ${bluetoothPrinter.isNiimbot ? 'Niimbot Protocol' : 'ESC/POS'}`, testCanvas.width / 2, 130);
+      tCtx.font = '13px monospace';
+      tCtx.fillText(new Date().toLocaleTimeString(), testCanvas.width / 2, 170);
+      tCtx.lineWidth = 2;
+      tCtx.strokeRect(8, 8, testCanvas.width - 16, testCanvas.height - 16);
+
+      await bluetoothPrinter.printImage(testCanvas, {
+        density: Number(config.bluetoothDensity ?? 2),
+        ditherMethod: config.bluetoothDither || 'atkinson',
+        brightness: Number(config.bluetoothBrightness ?? 22),
+        contrast: Number(config.bluetoothContrast ?? 1.15),
+        gamma: Number(config.bluetoothGamma ?? 1.75),
+        sharpen: config.bluetoothSharpen !== false,
+        labelWidthMm: Number(config.bluetoothLabelWidthMm ?? 50),
+        labelHeightMm: config.bluetoothLabelSize === 'continuous' ? 0 : Number(config.bluetoothLabelHeightMm ?? 30),
+        marginMm: Number(config.bluetoothMarginMm ?? 1.5),
+        fitMode: config.bluetoothFitMode || 'fit',
+        autoRotate: config.bluetoothAutoRotate !== false,
+        onProgress: (statusMsg) => setBtStatus({ type: 'info', message: statusMsg })
+      });
+      setBtStatus({ type: 'success', message: 'Test cetak berhasil dikirim ke printer!' });
+    } catch (err) {
+      setBtStatus({ type: 'error', message: `Gagal test print: ${err.message}` });
+    } finally {
+      setIsTestingBtPrint(false);
     }
   };
 
@@ -448,14 +523,27 @@ export default function LandingConfigDrawer({
                       <Play size={13} className="text-rose-500 fill-rose-500" />
                       <span>Siap mulai sesi photobooth?</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={onGoLive}
-                      className="flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
-                    >
-                      <span>Go Live</span>
-                      <ExternalLink size={11} />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {onOpenSessions && (
+                        <button
+                          type="button"
+                          onClick={onOpenSessions}
+                          title="Buka Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white border border-rose-200 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs transition-all cursor-pointer"
+                        >
+                          <FolderArchive size={12} className="text-rose-500" />
+                          <span>Kelola Sesi</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onGoLive}
+                        className="flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <span>Go Live</span>
+                        <Play size={11} className="fill-white" />
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -806,7 +894,7 @@ export default function LandingConfigDrawer({
                                     <div className="flex items-center justify-between gap-1.5">
                                       <div className="flex items-center gap-1.5 min-w-0">
                                         <div className={`p-1 rounded-md shrink-0 ${isActive ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
-                                          <Video size={12} />
+                                          {file.isVideo ? <Video size={12} /> : <ImageIcon size={12} />}
                                         </div>
                                         <div className="truncate">
                                           <div className="text-[11px] font-semibold text-slate-800 truncate" title={file.filename}>
@@ -1105,40 +1193,21 @@ export default function LandingConfigDrawer({
                       </div>
                     </div>
 
-                    {/* Ukuran Kertas Cetak: Kunci ke 4R */}
-                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <FileText size={13} className="text-rose-500" />
-                          <span>Ukuran Kertas Foto</span>
-                        </label>
-                        <span className="text-[10px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
-                          Kertas 4R Terkunci
-                        </span>
-                      </div>
-                      <div className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/40 flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-bold text-rose-950">4R (102 x 152 mm / 4x6 inci)</div>
-                          <div className="text-[10px] text-slate-500">Resolusi 300 DPI (1200 x 1800 px) standar cetak foto</div>
-                        </div>
-                        <CheckCircle2 size={16} className="text-rose-600 shrink-0" />
-                      </div>
-                    </div>
-
-                    {/* Desain Frame & Mapping Slot Foto (4R) */}
+                    {/* Desain Frame & Mapping Slot Foto */}
                     {(() => {
                       const rawFrames = Array.isArray(config.customFrames) && config.customFrames.length > 0
                         ? config.customFrames
                         : [
                             config.customFrame || {
                               id: "frame-1",
-                              name: "Frame 1 (4R)",
+                              name: "Frame 1",
                               enabled: true,
                               imageUrl: "",
                               orientation: "portrait",
+                              paperSize: "4R",
                               width: 1200,
                               height: 1800,
-                              slots: SLOT_PRESETS[4]?.portrait || []
+                              slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
                             }
                           ];
 
@@ -1147,6 +1216,7 @@ export default function LandingConfigDrawer({
                         Math.max(0, rawFrames.length - 1)
                       );
                       const currentCustomFrame = rawFrames[safeFrameIndex] || rawFrames[0];
+                      const currentPaperPreset = PAPER_PRESETS[currentCustomFrame?.paperSize || '4R'] || PAPER_PRESETS['4R'];
 
                       const updateFrame = (patch) => {
                         const updated = rawFrames.map((f, idx) => {
@@ -1171,6 +1241,7 @@ export default function LandingConfigDrawer({
                           enabled: true,
                           imageUrl: "",
                           orientation: "portrait",
+                          paperSize: "4R",
                           width: 1200,
                           height: 1800,
                           slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
@@ -1231,6 +1302,30 @@ export default function LandingConfigDrawer({
 
                       return (
                         <div className="space-y-3 pt-1 border-t border-slate-100">
+                          {/* Ukuran Kertas Cetak: Mengikat ke Frame */}
+                          <div className="space-y-1.5 pb-2 border-b border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <FileText size={13} className="text-rose-500" />
+                                <span>Ukuran Kertas Foto</span>
+                              </label>
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
+                                Mengikat di Frame ({currentPaperPreset.label})
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/40 flex items-center justify-between">
+                              <div>
+                                <div className="text-xs font-bold text-rose-950">
+                                  {currentPaperPreset.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  Dimensi frame aktif: {currentCustomFrame?.width || 1200} × {currentCustomFrame?.height || 1800} px (Disesuaikan di form mapping)
+                                </div>
+                              </div>
+                              <CheckCircle2 size={16} className="text-rose-600 shrink-0" />
+                            </div>
+                          </div>
+
                           {/* Header Seksi & Tambah Frame */}
                           <div className="flex items-center justify-between px-0.5">
                             <div className="flex items-center gap-1.5">
@@ -1275,7 +1370,7 @@ export default function LandingConfigDrawer({
                                         setIsPrecisionModalOpen(true);
                                       }}
                                       className={`w-14 sm:w-16 shrink-0 rounded-xl border overflow-hidden bg-slate-900 relative shadow-2xs flex items-center justify-center cursor-pointer transition-transform hover:scale-102 ${
-                                        isOrientLandscape ? "aspect-[3/2]" : "aspect-[2/3]"
+                                        (PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).hasOrientation === false ? "aspect-square" : isOrientLandscape ? "aspect-[3/2]" : "aspect-[2/3]"
                                       } ${isSelected ? "border-rose-400 ring-2 ring-rose-400/40" : "border-slate-300"}`}
                                       title="Klik untuk membuka form mapping frame"
                                     >
@@ -1327,7 +1422,7 @@ export default function LandingConfigDrawer({
 
                                       <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium flex-wrap">
                                         <span className="px-1.5 py-0.2 rounded bg-slate-100 font-mono text-[9px] text-slate-700 font-bold">
-                                          4R {isOrientLandscape ? "Landscape" : "Portrait"}
+                                          {(PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).label} {(PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).hasOrientation !== false ? (isOrientLandscape ? "Landscape" : "Portrait") : "Square"}
                                         </span>
                                         <span>•</span>
                                         {(() => {
@@ -1414,6 +1509,13 @@ export default function LandingConfigDrawer({
                             })}
                           </div>
 
+                          <PrinterConfigModal
+                            isOpen={isPrinterModalOpen}
+                            onClose={() => setIsPrinterModalOpen(false)}
+                            config={config}
+                            onUpdateConfig={onUpdateConfig}
+                          />
+
                           <PrecisionFrameEditorModal
                             isOpen={isPrecisionModalOpen}
                             onClose={() => setIsPrecisionModalOpen(false)}
@@ -1486,36 +1588,82 @@ export default function LandingConfigDrawer({
                         </button>
                       </div>
 
-                      {/* Bluetooth Pairing Controls if Bluetooth Mode Selected */}
+                      {/* Bluetooth Pairing & Printer Config Card */}
                       {config.printMethod === 'bluetooth' && (
-                        <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2 animate-fade-in">
+                        <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2.5 animate-fade-in">
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
                                 <Sparkles size={13} className="text-purple-600" />
-                                <span>Pairing Bluetooth Niimbot 4R</span>
+                                <span>Printer Bluetooth & Thermal</span>
                               </div>
-                              <div className="text-[10px] text-purple-700/80">
-                                {config.bluetoothDeviceName ? `Terhubung ke: ${config.bluetoothDeviceName}` : 'Pastikan Bluetooth perangkat menyala'}
+                              <div className="text-[10px] text-purple-700/80 mt-0.5">
+                                {config.bluetoothDeviceName ? `Terhubung ke: ${config.bluetoothDeviceName}` : 'Niimbot B21/B21S / Printer Thermal Bluetooth'}
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              disabled={isBtConnecting}
-                              onClick={handleConnectBluetooth}
-                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                            >
-                              {isBtConnecting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                              <span>{isBtConnecting ? 'Mencari...' : 'Hubungkan Bluetooth'}</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isBtConnecting || isTestingBtPrint}
+                                onClick={handleConnectBluetooth}
+                                className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {isBtConnecting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                <span>{isBtConnecting ? 'Mencari...' : (config.bluetoothDeviceName ? 'Hubungkan Ulang' : 'Hubungkan')}</span>
+                              </button>
+                              {config.bluetoothDeviceName && (
+                                <button
+                                  type="button"
+                                  disabled={isBtConnecting || isTestingBtPrint}
+                                  onClick={handleTestBluetoothPrint}
+                                  className="px-2.5 py-1.5 bg-white hover:bg-purple-50 text-purple-700 border border-purple-300 rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                  title="Kirim slip tes cetak ke printer Bluetooth"
+                                >
+                                  {isTestingBtPrint ? <Loader2 size={12} className="animate-spin text-purple-600" /> : <Printer size={12} className="text-purple-600" />}
+                                  <span>{isTestingBtPrint ? 'Mencetak...' : 'Test Cetak'}</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
+
                           {btStatus && (
                             <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
-                              btStatus.type === 'success' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
+                              btStatus.type === 'success'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : btStatus.type === 'info'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
                             }`}>
                               <span>{btStatus.message}</span>
                             </div>
                           )}
+
+                          {/* Quick Specs & Tombol Konfigurasi Form Modal Lengkap */}
+                          <div className="pt-2 border-t border-purple-200/80 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-[11px] text-purple-900 font-medium">
+                              <span className="px-2 py-0.5 rounded-full bg-purple-100 border border-purple-200 font-bold font-mono text-[10px]">
+                                {config.bluetoothLabelSize === 'continuous' ? 'Continuous Roll' : `${config.bluetoothLabelWidthMm || 50}×${config.bluetoothLabelHeightMm || 30} mm`}
+                              </span>
+                              <span>•</span>
+                              <span className="text-purple-800 font-semibold">
+                                Margin: {config.bluetoothMarginMm ?? 1.5} mm
+                              </span>
+                              <span>•</span>
+                              <span className="text-purple-800 font-semibold">
+                                Atkinson Halftone
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setIsPrinterModalOpen(true)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:shadow-md active:scale-98"
+                              title="Buka form modal konfigurasi printer dan label stiker lengkap"
+                            >
+                              <Maximize2 size={13} />
+                              <span>Konfigurasi Ukuran & Kualitas Printer</span>
+                            </button>
+                          </div>
                         </div>
                       )}
 

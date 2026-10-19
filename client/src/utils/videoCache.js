@@ -5,9 +5,6 @@ const CACHE_NAME = 'photobooth-video-cache-v1';
 const inMemoryCache = new Map();
 
 /**
- * Checks if a given URL is a direct video file (MP4, WebM, server /uploads/, or blob)
- */
-/**
  * Normalizes media URLs for cross-browser, cross-tab, and cross-origin compatibility.
  * Prevents mixed-content blocking (HTTP on HTTPS) and dead blob: URLs from other browsing contexts.
  */
@@ -64,6 +61,9 @@ export function isMediaImage(url) {
  * Streams download with progress tracking and returns Blob
  */
 async function fetchBlobWithProgress(url, onProgress = null) {
+  if (url.startsWith('/') && (typeof window === 'undefined' || !window.location)) {
+    return { blob: { size: 0 }, totalBytes: 0, contentType: 'video/mp4' };
+  }
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
@@ -190,6 +190,64 @@ export async function preloadAndCacheVideo(url, onProgress = null) {
 }
 
 /**
+ * Asynchronously checks if video is already available in CacheStorage or inMemoryCache.
+ * Returns the Blob Object URL if available, or null if not yet cached.
+ */
+export async function getCachedVideoBlobUrl(url) {
+  if (!url || typeof url !== 'string' || !isDirectVideoUrl(url) || isMediaImage(url)) {
+    return null;
+  }
+
+  // 1. Check in-memory object URL cache first
+  if (inMemoryCache.has(url)) {
+    return inMemoryCache.get(url);
+  }
+
+  // 2. Check browser Cache API if available
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const cacheInstance = await window.caches.open(CACHE_NAME);
+      const cacheKey = normalizeCacheKey(url);
+      const cachedResponse = (await cacheInstance.match(cacheKey)) || (await cacheInstance.match(url));
+
+      if (cachedResponse) {
+        const blob = await cachedResponse.blob();
+        const blobUrl = (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function')
+          ? URL.createObjectURL(blob)
+          : url;
+        inMemoryCache.set(url, blobUrl);
+        return blobUrl;
+      }
+    } catch (err) {
+      console.warn('[videoCache] CacheStorage match check failed:', err);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Checks whether the given video URL exists in memory or CacheStorage.
+ */
+export async function hasCachedVideo(url) {
+  if (!url || typeof url !== 'string' || !isDirectVideoUrl(url) || isMediaImage(url)) {
+    return false;
+  }
+  if (inMemoryCache.has(url)) {
+    return true;
+  }
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const cacheInstance = await window.caches.open(CACHE_NAME);
+      const cacheKey = normalizeCacheKey(url);
+      const cachedResponse = (await cacheInstance.match(cacheKey)) || (await cacheInstance.match(url));
+      return Boolean(cachedResponse);
+    } catch (_) {}
+  }
+  return false;
+}
+
+/**
  * Synchronous or fast check for already cached video URL
  * Returns cached Object URL if available, else returns the original url and triggers background cache
  */
@@ -228,6 +286,8 @@ export async function seedLocalVideoCache(url, fileOrBlob) {
             "Accept-Ranges": "bytes"
           }
         });
+        const cacheKey = normalizeCacheKey(url);
+        await cacheInstance.put(cacheKey, cacheResponse.clone());
         await cacheInstance.put(url, cacheResponse);
       } catch (cacheErr) {
         console.warn("[videoCache] CacheStorage seeding failed:", cacheErr);

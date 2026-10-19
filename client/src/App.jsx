@@ -28,6 +28,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING, FRAME_PICKER, CAMERA, PREVIEW, DOWNLOAD
   const [layoutConfig, setLayoutConfig] = useState(null);
   const [availableCustomFrames, setAvailableCustomFrames] = useState([]);
+  const [landingConfig, setLandingConfig] = useState(null);
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [downloadFilename, setDownloadFilename] = useState('');
   const [showSplash, setShowSplash] = useState(true);
@@ -69,10 +70,16 @@ export default function App() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.config) {
+          setLandingConfig(data.config);
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              window.localStorage.setItem('photobooth_landing_config', JSON.stringify(data.config));
+            } catch (_) {}
+          }
           if (data.config.adminExitCode) {
             setAdminExitCode(data.config.adminExitCode);
           }
-          if (data.config.isLive !== undefined) {
+          if (data.config.isLive !== undefined && (typeof window !== 'undefined' && window.location.pathname !== '/live')) {
             setIsLiveMode(Boolean(data.config.isLive));
           }
         }
@@ -194,9 +201,19 @@ export default function App() {
 
           {currentStep === 'LANDING' && (
             <LandingPage
+              initialConfig={landingConfig}
+              onConfigChange={(newCfg) => setLandingConfig(newCfg)}
               onStartSession={handleStartLanding}
               isLiveMode={isLiveMode}
-              onEnterLiveMode={() => setIsLiveMode(true)}
+              onEnterLiveMode={() => {
+                setIsBoothUnlocked(true);
+                setIsLiveMode(true);
+                if (typeof window !== 'undefined') {
+                  try {
+                    window.history.pushState(null, '', '/live');
+                  } catch (_) {}
+                }
+              }}
               onExitLiveMode={() => {
                 setIsLiveMode(false);
                 if (typeof window !== 'undefined') {

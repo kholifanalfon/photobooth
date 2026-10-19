@@ -200,6 +200,24 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
     assert.strictEqual(detectVideoAspectRatio("", "auto"), "landscape");
     assert.strictEqual(detectVideoAspectRatio(null, "auto"), "landscape");
   });
+
+  await t.test("renders cache progress bar and stats when cacheProgress state is set", () => {
+    const tree = renderComponentTree(LandingPage, { onStartSession: () => {} }, [
+      false, // isOpen
+      false, // isDrawerOpen
+      false, // isSessionCodeModalOpen
+      false, // isFullscreen
+      null,  // elementDetectedRatio
+      null,  // exactNumericRatio
+      false, // isVideoLoading
+      true,  // isVideoPlaying
+      { percent: 45, loadedMB: "8.5", totalMB: "19.0", isComplete: false }
+    ]);
+    const html = renderToStaticMarkup(tree);
+    assert.ok(html.includes("Memuat ke cache"), "Must include caching progress title");
+    assert.ok(html.includes("45%"), "Must include percentage");
+    assert.ok(html.includes("8.5/19.0 MB"), "Must include file size details");
+  });
 });
 
 function findNode(tree, predicate) {

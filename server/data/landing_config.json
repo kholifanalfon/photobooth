@@ -1,5 +1,203 @@
 {
   "title": "The Wedding Celebration ✨",
+  "subtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
+  "eventDate": "Saturday, 17 October 2026",
+  "coupleNames": "Kevin & Sheila",
+  "videoUrl": "",
+  "enableVideo": true,
+  "videoRatio": "auto",
+  "videoDisplayMode": "background",
   "theme": "wedding",
-  "videoUrl": ""
+  "isTitleCustom": false,
+  "isSubtitleCustom": false,
+  "requireSessionCode": false,
+  "sessionCode": "1234",
+  "printerName": "Niimbot 4R Photo Printer",
+  "paperSize": "4R",
+  "printCopies": 1,
+  "printMethod": "kiosk",
+  "autoPrint": false,
+  "customFrame": {
+    "id": "frame-4r-1photo",
+    "name": "Bingkai 1 Foto",
+    "slots": [
+      {
+        "x": 100,
+        "y": 240,
+        "id": 1,
+        "width": 1000,
+        "height": 1300,
+        "radius": 8,
+        "borderColor": "#1E293B",
+        "borderWidth": 3
+      }
+    ],
+    "width": 1200,
+    "height": 1800,
+    "enabled": true,
+    "imageUrl": "/frames/frame_4r_1photo.png",
+    "layerMode": "background",
+    "photoCount": 1,
+    "orientation": "portrait"
+  },
+  "customFrames": [
+    {
+      "id": "frame-4r-1photo",
+      "name": "Bingkai 1 Foto",
+      "slots": [
+        {
+          "x": 100,
+          "y": 240,
+          "id": 1,
+          "width": 1000,
+          "height": 1300,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        }
+      ],
+      "width": 1200,
+      "height": 1800,
+      "enabled": true,
+      "imageUrl": "/frames/frame_4r_1photo.png",
+      "layerMode": "background",
+      "photoCount": 1,
+      "orientation": "portrait"
+    },
+    {
+      "id": "frame-4r-2photos",
+      "name": "Bingkai 2 Foto",
+      "slots": [
+        {
+          "x": 100,
+          "y": 240,
+          "id": 1,
+          "width": 1000,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 100,
+          "y": 910,
+          "id": 2,
+          "width": 1000,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        }
+      ],
+      "width": 1200,
+      "height": 1800,
+      "enabled": true,
+      "imageUrl": "/frames/frame_4r_2photos.png",
+      "layerMode": "background",
+      "photoCount": 2,
+      "orientation": "portrait"
+    },
+    {
+      "id": "frame-4r-3photos",
+      "name": "Bingkai 3 Foto",
+      "slots": [
+        {
+          "x": 80,
+          "y": 240,
+          "id": 1,
+          "width": 500,
+          "height": 640,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 620,
+          "y": 240,
+          "id": 2,
+          "width": 500,
+          "height": 640,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 80,
+          "y": 920,
+          "id": 3,
+          "width": 1040,
+          "height": 620,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        }
+      ],
+      "width": 1200,
+      "height": 1800,
+      "enabled": true,
+      "imageUrl": "/frames/frame_4r_3photos.png",
+      "layerMode": "background",
+      "photoCount": 3,
+      "orientation": "portrait"
+    },
+    {
+      "id": "frame-4r-4photos",
+      "name": "Bingkai 4 Foto",
+      "slots": [
+        {
+          "x": 80,
+          "y": 240,
+          "id": 1,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 620,
+          "y": 240,
+          "id": 2,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 80,
+          "y": 910,
+          "id": 3,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        },
+        {
+          "x": 620,
+          "y": 910,
+          "id": 4,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderColor": "#1E293B",
+          "borderWidth": 3
+        }
+      ],
+      "width": 1200,
+      "height": 1800,
+      "enabled": true,
+      "imageUrl": "/frames/frame_4r_4photos.png",
+      "layerMode": "background",
+      "photoCount": 4,
+      "orientation": "portrait"
+    }
+  ],
+  "eventTitle": "The Wedding Celebration",
+  "eventSubtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
+  "footerText": "Scan QR di hasil cetak untuk mengunduh fotomu • Free high-res download",
+  "adminExitCode": "9999",
+  "isLive": false,
+  "countdownDuration": 3
 }

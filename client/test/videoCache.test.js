@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { isDirectVideoUrl, isMediaImage, getFastVideoUrl, preloadAndCacheVideo, resolveMediaUrl } from '../src/utils/videoCache.js';
+import {
+  isDirectVideoUrl,
+  isMediaImage,
+  getFastVideoUrl,
+  preloadAndCacheVideo,
+  getCachedVideoBlobUrl,
+  hasCachedVideo,
+  seedLocalVideoCache,
+  resolveMediaUrl
+} from '../src/utils/videoCache.js';
 
 test('videoCache - isDirectVideoUrl detection', () => {
   // Direct video formats
@@ -124,4 +133,35 @@ test("videoCache - resolveMediaUrl normalizes cross-browser and cross-origin pat
   );
   assert.strictEqual(resolveMediaUrl(""), "");
   assert.strictEqual(resolveMediaUrl(null), "");
+});
+
+test("videoCache - getCachedVideoBlobUrl and hasCachedVideo behavior", async () => {
+  const originalUrlCreate = global.URL?.createObjectURL;
+  if (!global.URL) global.URL = {};
+  global.URL.createObjectURL = () => "blob:mock-seeded-video";
+
+  try {
+    const fakeUrl = "/uploads/test_cache_check.mp4";
+    // Initially not cached
+    assert.strictEqual(await getCachedVideoBlobUrl(fakeUrl), null);
+    assert.strictEqual(await hasCachedVideo(fakeUrl), false);
+
+    // Seed local cache
+    const fakeBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" });
+    const seeded = await seedLocalVideoCache(fakeUrl, fakeBlob);
+    assert.strictEqual(seeded, "blob:mock-seeded-video");
+
+    // Now it should be found in memory cache
+    assert.strictEqual(await hasCachedVideo(fakeUrl), true);
+    assert.strictEqual(await getCachedVideoBlobUrl(fakeUrl), "blob:mock-seeded-video");
+
+    // Invalid or non-video URLs return null / false
+    assert.strictEqual(await getCachedVideoBlobUrl(""), null);
+    assert.strictEqual(await getCachedVideoBlobUrl("https://youtube.com/watch?v=1"), null);
+    assert.strictEqual(await hasCachedVideo(""), false);
+  } finally {
+    if (originalUrlCreate) {
+      global.URL.createObjectURL = originalUrlCreate;
+    }
+  }
 });

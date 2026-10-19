@@ -4,6 +4,8 @@
  * with aspect-ratio centering crop, frame colors, rounded photo corners, and branding text.
  */
 
+import { PAPER_PRESETS } from '../constants/framePresets.js';
+
 export const FRAME_CONFIGS = {
   STRIP_3: {
     name: 'Photo Strip 3 Pose',
@@ -130,8 +132,7 @@ export function drawRoundRect(ctx, x, y, width, height, radius = 0) {
  * Loads an image from a URL or data URI into an HTMLImageElement.
  *
  * @param {string} src
- * @returns {Promise<HTMLImageElement>}
- */
+ * @returns {Promise<HTMLImageElement>}\n */
 export function loadImage(src) {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') {
@@ -157,8 +158,7 @@ export function loadImage(src) {
  * @param {string} [options.eventTitle='PHOTOBOOTH MEMORY'] - Main branding header
  * @param {string} [options.dateText] - Date subtitle
  * @param {HTMLCanvasElement} [options.customCanvas] - Optional pre-existing canvas element
- * @returns {Promise<{ dataUrl: string, width: number, height: number }>}
- */
+ * @returns {Promise<{ dataUrl: string, width: number, height: number }>}\n */
 export async function composePhotosToFrame(photos = [], options = {}) {
   const {
     layoutType = 'STRIP_3',
@@ -177,19 +177,28 @@ export async function composePhotosToFrame(photos = [], options = {}) {
     customFrame.slots.length > 0
   );
 
-  const isLandscape = customFrame?.orientation === 'landscape';
-  let customWidth = isLandscape ? 1800 : 1200;
-  let customHeight = isLandscape ? 1200 : 1800;
+  const paperKey = customFrame?.paperSize || '4R';
+  const paperPreset = (PAPER_PRESETS && PAPER_PRESETS[paperKey]) || {
+    portrait: { width: 1200, height: 1800 },
+    landscape: { width: 1800, height: 1200 },
+    hasOrientation: true
+  };
+  const isLandscape = paperPreset.hasOrientation && customFrame?.orientation === 'landscape';
+  let customWidth = isLandscape ? paperPreset.landscape.width : paperPreset.portrait.width;
+  let customHeight = isLandscape ? paperPreset.landscape.height : paperPreset.portrait.height;
 
   if (Number(customFrame?.width) > 0 && Number(customFrame?.height) > 0) {
     const rawW = Number(customFrame.width);
     const rawH = Number(customFrame.height);
-    if (isLandscape) {
-      customWidth = rawW >= rawH ? rawW : rawH;
-      customHeight = rawW >= rawH ? rawH : rawW;
+    if (paperKey === 'image' || rawW === rawH) {
+      customWidth = rawW;
+      customHeight = rawH;
+    } else if (isLandscape) {
+      customWidth = Math.max(rawW, rawH);
+      customHeight = Math.min(rawW, rawH);
     } else {
-      customWidth = rawH >= rawW ? rawW : rawH;
-      customHeight = rawH >= rawW ? rawH : rawW;
+      customWidth = Math.min(rawW, rawH);
+      customHeight = Math.max(rawW, rawH);
     }
   }
 
@@ -360,15 +369,12 @@ export async function composePhotosToFrame(photos = [], options = {}) {
     ctx.font = 'bold 36px sans-serif';
     ctx.fillText(eventTitle, canvas.width / 2, config.footerY);
 
-    ctx.font = '22px sans-serif';
     ctx.fillStyle = textColor === '#FFFFFF' ? '#e2e8f0' : '#64748b';
+    ctx.font = '24px sans-serif';
     ctx.fillText(dateText, canvas.width / 2, config.footerY + 45);
   }
 
-  const dataUrl = typeof canvas.toDataURL === 'function'
-    ? canvas.toDataURL('image/jpeg', 0.95)
-    : '';
-
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
   return {
     dataUrl,
     width: canvas.width,
@@ -376,10 +382,94 @@ export async function composePhotosToFrame(photos = [], options = {}) {
   };
 }
 
-export default {
-  FRAME_CONFIGS,
-  calculateCenterCrop,
-  drawRoundRect,
-  loadImage,
-  composePhotosToFrame
-};
+/**
+ * Renders a single photo filling the active paper size (300 DPI) edge-to-edge
+ * using center-crop math without frame graphics or overlays.
+ *
+ * @param {string|HTMLImageElement} photoSource - Photo URL, base64 dataUri, or Image element
+ * @param {Object} [options]
+ * @param {string} [options.paperSize='4R'] - '4R' | '3x5cm' | '5x5cm'
+ * @param {string} [options.orientation='portrait'] - 'portrait' | 'landscape'
+ * @param {HTMLCanvasElement} [options.customCanvas] - Optional canvas
+ * @param {Object} [options.customFrame] - Optional custom frame definition for dimensions
+ * @returns {Promise<{ canvas: HTMLCanvasElement, dataUrl: string, width: number, height: number }>}
+ */
+export async function renderPhotoToPaper(photoSource, options = {}) {
+  const {
+    paperSize = '4R',
+    orientation = 'portrait',
+    customCanvas = null,
+    customFrame = null
+  } = options;
+
+  const paperKey = customFrame?.paperSize || paperSize || '4R';
+  const paperPreset = (PAPER_PRESETS && PAPER_PRESETS[paperKey]) || {
+    portrait: { width: 1200, height: 1800 },
+    landscape: { width: 1800, height: 1200 },
+    hasOrientation: true
+  };
+
+  const activeOrientation = customFrame?.orientation || orientation || 'portrait';
+  const isLandscape = paperPreset.hasOrientation && activeOrientation === 'landscape';
+  let canvasWidth = isLandscape ? paperPreset.landscape.width : paperPreset.portrait.width;
+  let canvasHeight = isLandscape ? paperPreset.landscape.height : paperPreset.portrait.height;
+
+  if (Number(customFrame?.width) > 0 && Number(customFrame?.height) > 0) {
+    const rawW = Number(customFrame.width);
+    const rawH = Number(customFrame.height);
+    if (paperKey === 'image' || rawW === rawH) {
+      canvasWidth = rawW;
+      canvasHeight = rawH;
+    } else if (isLandscape) {
+      canvasWidth = Math.max(rawW, rawH);
+      canvasHeight = Math.min(rawW, rawH);
+    } else {
+      canvasWidth = Math.min(rawW, rawH);
+      canvasHeight = Math.max(rawW, rawH);
+    }
+  }
+
+  let canvas = customCanvas;
+  if (!canvas) {
+    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      canvas = document.createElement('canvas');
+    } else {
+      throw new Error('Canvas is not available. Please pass customCanvas in non-browser environments.');
+    }
+  }
+
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get 2D context from canvas');
+  }
+
+  // Clear / fill white background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (photoSource) {
+    let img;
+    if (typeof photoSource === 'string') {
+      img = await loadImage(photoSource);
+    } else {
+      img = photoSource;
+    }
+
+    if (img && (img.width || img.naturalWidth) && (img.height || img.naturalHeight)) {
+      const srcW = img.naturalWidth || img.width;
+      const srcH = img.naturalHeight || img.height;
+      const crop = calculateCenterCrop(srcW, srcH, canvas.width, canvas.height);
+      ctx.drawImage(img, crop.sx, crop.sy, crop.sWidth, crop.sHeight, 0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  const dataUrl = canvas.toDataURL ? canvas.toDataURL('image/jpeg', 0.95) : '';
+  return {
+    canvas,
+    dataUrl,
+    width: canvas.width,
+    height: canvas.height
+  };
+}

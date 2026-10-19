@@ -115,4 +115,37 @@ test('LandingConfigDrawer - 2 Tab Architecture & Printer Configuration', async (
     assert.ok(PRINTER_PRESETS.some(p => p.id === 'Niimbot 4R Photo Printer'), 'Must include Niimbot 4R Photo Printer');
     assert.equal(PRINTER_PRESETS.length, 1, 'Only Niimbot 4R preset displayed');
   });
+
+  await t.test('renders dynamic paper size badge bound to active frame configuration', () => {
+    const configWith3x5 = {
+      ...baseConfig,
+      customFrames: [
+        {
+          id: 'frame-3x5',
+          name: 'Frame Mini Dompet',
+          enabled: true,
+          paperSize: '3x5cm',
+          orientation: 'portrait',
+          width: 354,
+          height: 591,
+          slots: [{ id: 1, x: 20, y: 20, width: 314, height: 400 }]
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(LandingConfigDrawer, {
+        isOpen: true,
+        initialTab: 'printer',
+        onClose: () => {},
+        config: configWith3x5,
+        onUpdateConfig: () => {},
+        onGoLive: () => {}
+      })
+    );
+
+    assert.ok(html.includes('Mengikat di Frame (3×5 cm)'), 'Must bind paper size to frame 3x5cm');
+    assert.ok(html.includes('3 × 5 cm (30 × 50 mm)'), 'Must display 3x5cm paper name');
+    assert.ok(html.includes('354 × 591 px'), 'Must display active 354 x 591 px dimensions');
+  });
 });

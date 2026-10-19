@@ -240,4 +240,82 @@ test('PrecisionFrameEditorModal - Precision Mapping Frame Suite', async (t) => {
     assert.ok(markup.includes("Slot #1"), "Must render clean Slot #1 button");
     assert.ok(markup.includes("|"), "Must render separator pipe");
   });
+
+  await t.test("renders paper size selectors (4R, 3x5cm, 5x5cm) and reflects dimensions dynamically", () => {
+    // 1. Test 4R default
+    const markup4R = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: mockFrame,
+        onUpdateFrame: () => {}
+      })
+    );
+    assert.ok(markup4R.includes("Ukuran Kertas Frame:"), "Must render paper size section label");
+    assert.ok(markup4R.includes("4R"), "Must render 4R button");
+    assert.ok(markup4R.includes("3×5 cm"), "Must render 3×5 cm button");
+    assert.ok(markup4R.includes("5×5 cm"), "Must render 5×5 cm button");
+    assert.ok(markup4R.includes("102×152 mm"), "Must show 4R mm dimensions");
+    assert.ok(markup4R.includes("30×50 mm"), "Must show 3x5cm mm dimensions");
+    assert.ok(markup4R.includes("50×50 mm"), "Must show 5x5cm mm dimensions");
+
+    // 2. Test 3x5cm portrait frame
+    const frame3x5 = {
+      ...mockFrame,
+      paperSize: "3x5cm",
+      orientation: "portrait",
+      width: 354,
+      height: 591
+    };
+    const markup3x5 = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: frame3x5,
+        onUpdateFrame: () => {}
+      })
+    );
+    assert.ok(markup3x5.includes("3×5 cm Portrait (354 × 591 px)"), "Header badge must show 3x5cm portrait resolution");
+
+    // 3. Test 5x5cm square frame
+    const frame5x5 = {
+      ...mockFrame,
+      paperSize: "5x5cm",
+      orientation: "portrait",
+      width: 591,
+      height: 591
+    };
+    const markup5x5 = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: frame5x5,
+        onUpdateFrame: () => {}
+      })
+    );
+    assert.ok(markup5x5.includes("5×5 cm Kotak (591 × 591 px)"), "Header badge must show 5x5cm square resolution");
+    assert.ok(markup5x5.includes("Format Persegi (1:1 Kotak)"), "Must render square format info box");
+
+    // 4. Test 'image' (Ikuti Gambar Frame) paper preset
+    const frameImage = {
+      ...mockFrame,
+      paperSize: "image",
+      imageUrl: "/uploads/custom_event_design.png",
+      frameNaturalWidth: 720,
+      frameNaturalHeight: 1280,
+      width: 720,
+      height: 1280
+    };
+    const markupImage = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: frameImage,
+        onUpdateFrame: () => {}
+      })
+    );
+    assert.ok(markupImage.includes("Ikuti Frame"), "Must render Ikuti Frame button");
+    assert.ok(markupImage.includes("720 × 1280 px"), "Canvas and badge must display uploaded frame dimensions");
+    assert.ok(markupImage.includes("Resolusi Mengikuti Gambar Frame"), "Must render automatic resolution notice");
+  });
 });

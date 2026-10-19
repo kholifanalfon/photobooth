@@ -44,13 +44,25 @@ import {
   AlertCircle,
   Calendar,
   Play,
+  Pause,
   Maximize2,
-  Minimize2
+  Minimize2,
+  DownloadCloud,
+  CheckCircle2,
+  FolderArchive
 } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
 import SessionCodeModal from './SessionCodeModal.jsx';
-import { getFastVideoUrl, preloadAndCacheVideo, isDirectVideoUrl } from '../utils/videoCache.js';
+import SessionManagerModal from './SessionManagerModal.jsx';
+import {
+  getFastVideoUrl,
+  preloadAndCacheVideo,
+  getCachedVideoBlobUrl,
+  isDirectVideoUrl,
+  isMediaImage,
+  resolveMediaUrl
+} from '../utils/videoCache.js';
 import { SLOT_PRESETS, MODERN_4R_FRAMES } from '../constants/framePresets.js';
 
 const LOCAL_STORAGE_KEY = 'photobooth_landing_config';
@@ -59,10 +71,11 @@ const DEFAULT_CONFIG = {
   title: 'Capture The Magic! ✨',
   subtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
   eventDate: 'Saturday, 17 October 2026',
-  coupleNames: 'The Wedding Celebration',
+  coupleNames: 'Kevin & Sheila',
   videoUrl: '',
   enableVideo: false,
   videoRatio: 'auto', // 'auto' | 'portrait' | 'portrait-photo' | 'landscape' | 'square'
+  videoDisplayMode: 'both', // 'both' | 'frame' | 'background'
   theme: 'general',
   isTitleCustom: false,
   isSubtitleCustom: false,
@@ -96,7 +109,7 @@ const DEFAULT_CONFIG = {
   ]
 };
 
-export default function LandingPage({ onStartSession, isLiveMode = false }) {
+export default function LandingPage({ onStartSession, isLiveMode = false, onEnterLiveMode, onExitLiveMode, initialConfig = null, onConfigChange = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSessionCodeModalOpen, setIsSessionCodeModalOpen] = useState(false);
@@ -105,9 +118,15 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
   const [exactNumericRatio, setExactNumericRatio] = useState(null);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
   const videoElemRef = useRef(null);
+  const bgVideoRef = useRef(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [cacheProgress, setCacheProgress] = useState(null);
 
-  // Initialize config safely from localStorage
+  // Initialize config safely from parent state or localStorage
   const [config, setConfig] = useState(() => {
+    if (initialConfig && typeof initialConfig === 'object') {
+      return { ...DEFAULT_CONFIG, ...initialConfig };
+    }
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const saved = window.localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -122,26 +141,53 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
   });
 
   const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
+  const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
+  const prevVideoUrlRef = useRef(null);
 
-  // Sync fresh config from server if available
+  // Sync fresh config directly from server on mount (no stale cache)
   useEffect(() => {
+    let isMounted = true;
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
-      fetch('/api/config/landing')
+      fetch(`/api/config/landing?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (data && data.config) {
-            setConfig((prev) => ({
-              ...prev,
-              customFrames:
-                Array.isArray(data.config.customFrames) && data.config.customFrames.length > 0
-                  ? data.config.customFrames
-                  : prev.customFrames,
-              customFrame: data.config.customFrame || prev.customFrame
-            }));
+          if (isMounted && data && data.config) {
+            setConfig((prev) => {
+              const next = {
+                ...prev,
+                ...data.config,
+                coupleNames: data.config.coupleNames || prev.coupleNames || 'Kevin & Sheila',
+                eventDate: data.config.eventDate || prev.eventDate || 'Saturday, 17 October 2026',
+                videoDisplayMode: data.config.videoDisplayMode || prev.videoDisplayMode || 'background',
+                customFrames:
+                  Array.isArray(data.config.customFrames) && data.config.customFrames.length > 0
+                    ? data.config.customFrames
+                    : prev.customFrames,
+                customFrame: data.config.customFrame || prev.customFrame
+              };
+              if (typeof window !== 'undefined' && window.localStorage) {
+                try {
+                  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+                } catch (_) {}
+              }
+              if (typeof onConfigChange === 'function') {
+                onConfigChange(next);
+              }
+              return next;
+            });
           }
         })
-        .catch(() => {});
+        .catch((err) => console.warn('Failed to load landing config from server:', err));
     }
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Sync fullscreen state
@@ -159,21 +205,58 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
           window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
-        } catch (e) {
-          console.warn('Failed to save landing config to localStorage', e);
-        }
+        } catch (_) {}
+      }
+      // Persist directly to server
+      if (typeof window !== 'undefined' && typeof fetch === 'function') {
+        fetch('/api/config/landing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(next)
+        }).catch((err) => console.warn('Failed to sync landing config to server:', err));
       }
       return next;
     });
   };
 
-  const handleGoLive = () => {
-    if (typeof window !== 'undefined') {
-      const liveUrl = `${window.location.origin}/live`;
-      const liveWin = window.open(liveUrl, '_blank');
-      if (liveWin) {
-        liveWin.focus();
+  const handleGoLive = (e) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (typeof onEnterLiveMode === 'function') {
+      if (typeof window !== 'undefined') {
+        try {
+          window.history.pushState(null, '', '/live');
+        } catch (_) {}
       }
+      onEnterLiveMode();
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.location.assign('/live');
+    }
+  };
+
+  const togglePlayPauseVideo = (e) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const bg = bgVideoRef.current;
+    const frame = videoElemRef.current;
+    const target = bg || frame;
+
+    if (!target) return;
+
+    if (!target.paused) {
+      if (bg) bg.pause();
+      if (frame) frame.pause();
+      setIsVideoPlaying(false);
+    } else {
+      if (bg) bg.play().catch(() => {});
+      if (frame) frame.play().catch(() => {});
+      setIsVideoPlaying(true);
     }
   };
 
@@ -223,49 +306,203 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
   };
 
   const hasActiveVideo = config.enableVideo && Boolean((config.videoUrl || '').trim());
+  const displayMode = config.videoDisplayMode || 'both';
+  const showBackgroundVideo = hasActiveVideo && (displayMode === 'both' || displayMode === 'background');
+  const showFrameVideo = hasActiveVideo && (displayMode === 'both' || displayMode === 'frame');
+  const isImageMedia = isMediaImage(config.videoUrl);
 
   const effectiveRatio = detectVideoAspectRatio(config.videoUrl, config.videoRatio, elementDetectedRatio);
   const isPortraitMode = effectiveRatio === 'portrait' || effectiveRatio === 'portrait-photo';
 
   useEffect(() => {
+    let isMounted = true;
+    const nextUrl = config.videoUrl || '';
+
+    if (!nextUrl) {
+      prevVideoUrlRef.current = '';
+      setCachedVideoSrc('');
+      setElementDetectedRatio(null);
+      setExactNumericRatio(null);
+      setIsVideoLoading(false);
+      setCacheProgress(null);
+      return;
+    }
+
+    const isCurrentUrlAlreadyBlob = Boolean(
+      cachedVideoSrc && (cachedVideoSrc.startsWith('blob:') || cachedVideoSrc.startsWith('data:'))
+    );
+
+    // If URL hasn't changed and we already have a resolved cached blob URL, avoid re-running
+    if (nextUrl === prevVideoUrlRef.current && isCurrentUrlAlreadyBlob) {
+      return;
+    }
+
+    prevVideoUrlRef.current = nextUrl;
     setElementDetectedRatio(null);
     setExactNumericRatio(null);
     setIsVideoLoading(true);
 
-    if (isDirectVideoUrl(config.videoUrl)) {
-      setCachedVideoSrc(getFastVideoUrl(config.videoUrl));
-      preloadAndCacheVideo(config.videoUrl)
-        .then((cached) => {
-          if (cached) setCachedVideoSrc(cached);
-        })
-        .catch(() => {});
-    } else {
-      setCachedVideoSrc(config.videoUrl);
+    if (isMediaImage(nextUrl)) {
+      setCachedVideoSrc(nextUrl);
+      setIsVideoLoading(false);
+      setCacheProgress(null);
+      return;
     }
+
+    if (!isDirectVideoUrl(nextUrl)) {
+      setCachedVideoSrc(nextUrl);
+      setCacheProgress(null);
+      return;
+    }
+
+    // 1. Fast path: check if already in CacheStorage or in-memory cache
+    getCachedVideoBlobUrl(nextUrl)
+      .then((cachedBlob) => {
+        if (!isMounted) return;
+        if (cachedBlob) {
+          setCachedVideoSrc(cachedBlob);
+          setCacheProgress(null);
+          return;
+        }
+
+        // 2. Direct streaming fallback while background caching takes place
+        const initialFast = getFastVideoUrl(nextUrl);
+        setCachedVideoSrc((prev) => (prev ? prev : initialFast));
+
+        preloadAndCacheVideo(nextUrl, (percent, stats) => {
+          if (!isMounted) return;
+          const received = stats?.receivedBytes || 0;
+          const total = stats?.totalBytes || 0;
+          const loadedMB = (received / (1024 * 1024)).toFixed(1);
+          const totalMB = total > 0 ? (total / (1024 * 1024)).toFixed(1) : null;
+
+          setCacheProgress({
+            percent: Math.round(percent),
+            loadedMB,
+            totalMB,
+            isComplete: percent >= 100
+          });
+        })
+          .then((freshCachedBlob) => {
+            if (!isMounted) return;
+            if (freshCachedBlob && freshCachedBlob !== initialFast) {
+              setCacheProgress((prev) => (prev ? { ...prev, percent: 100, isComplete: true } : null));
+              setTimeout(() => {
+                if (isMounted) setCacheProgress(null);
+              }, 1200);
+
+              // Preserve playback position if video element is already actively playing
+              const targetEl = bgVideoRef.current || videoElemRef.current;
+              if (targetEl && targetEl.currentTime > 0) {
+                const savedTime = targetEl.currentTime;
+                const wasPaused = targetEl.paused;
+                setCachedVideoSrc(freshCachedBlob);
+
+                const handleRestore = () => {
+                  [bgVideoRef.current, videoElemRef.current].forEach((el) => {
+                    if (el) {
+                      try {
+                        el.currentTime = savedTime;
+                        if (!wasPaused) {
+                          el.play().catch(() => {});
+                        }
+                      } catch (_) {}
+                    }
+                  });
+                  if (targetEl) {
+                    targetEl.removeEventListener('loadedmetadata', handleRestore);
+                  }
+                };
+                targetEl.addEventListener('loadedmetadata', handleRestore);
+              } else {
+                setCachedVideoSrc(freshCachedBlob);
+              }
+            } else {
+              setCacheProgress(null);
+            }
+          })
+          .catch(() => {
+            if (isMounted) setCacheProgress(null);
+          });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCachedVideoSrc(nextUrl);
+          setCacheProgress(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [config.videoUrl]);
 
-  // Autoplay video file immediately upon load + gesture fallback
+  // Keep isVideoPlaying in sync with actual media element state
   useEffect(() => {
-    if (!hasActiveVideo) return;
+    const bg = bgVideoRef.current;
+    const frame = videoElemRef.current;
 
-    if (videoElemRef.current) {
-      videoElemRef.current.muted = true;
-      const playPromise = videoElemRef.current.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {});
-      }
-    }
-
-    const handleInteraction = () => {
-      if (videoElemRef.current) {
-        videoElemRef.current.play().catch(() => {});
+    const onPlay = () => setIsVideoPlaying(true);
+    const onPause = () => {
+      if ((!bg || bg.paused) && (!frame || frame.paused)) {
+        setIsVideoPlaying(false);
       }
     };
 
+    if (bg) {
+      bg.addEventListener('play', onPlay);
+      bg.addEventListener('pause', onPause);
+    }
+    if (frame) {
+      frame.addEventListener('play', onPlay);
+      frame.addEventListener('pause', onPause);
+    }
+
+    return () => {
+      if (bg) {
+        bg.removeEventListener('play', onPlay);
+        bg.removeEventListener('pause', onPause);
+      }
+      if (frame) {
+        frame.removeEventListener('play', onPlay);
+        frame.removeEventListener('pause', onPause);
+      }
+    };
+  }, [hasActiveVideo, showBackgroundVideo, showFrameVideo, cachedVideoSrc]);
+
+  // Autoplay video file immediately upon load + gesture fallback for mobile/iOS Safari
+  useEffect(() => {
+    if (!hasActiveVideo) return;
+
+    const playBoth = () => {
+      const bg = bgVideoRef.current;
+      const frame = videoElemRef.current;
+
+      [bg, frame].forEach((el) => {
+        if (el) {
+          el.defaultMuted = true;
+          el.muted = true;
+          el.setAttribute('playsinline', '');
+          el.setAttribute('webkit-playsinline', 'true');
+          const playPromise = el.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {});
+          }
+        }
+      });
+    };
+
+    playBoth();
+
+    // Also retry on user interaction for mobile browsers requiring user activation
+    const handleInteraction = () => {
+      playBoth();
+    };
+
     if (typeof window !== 'undefined') {
-      window.addEventListener('pointerdown', handleInteraction, { once: true });
-      window.addEventListener('touchstart', handleInteraction, { once: true });
-      window.addEventListener('click', handleInteraction, { once: true });
+      window.addEventListener('pointerdown', handleInteraction, { passive: true });
+      window.addEventListener('touchstart', handleInteraction, { passive: true });
+      window.addEventListener('click', handleInteraction, { passive: true });
     }
 
     return () => {
@@ -275,7 +512,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
         window.removeEventListener('click', handleInteraction);
       }
     };
-  }, [config.videoUrl, config.enableVideo, hasActiveVideo]);
+  }, [config.videoUrl, config.enableVideo, hasActiveVideo, cachedVideoSrc, showBackgroundVideo, showFrameVideo]);
 
   const activeTheme = THEME_PRESETS[config.theme] || THEME_PRESETS.general;
   const isWedding = config.theme === 'wedding';
@@ -302,37 +539,104 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
     <div
       className="relative flex flex-col items-center justify-center h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 overflow-hidden select-none p-3 sm:p-6 transition-colors duration-300"
     >
-      {/* Top Left Navigation: HANYA TAMPIL DI HALAMAN KONFIGURASI (!isLiveMode) */}
+      {/* Ambient Fullscreen Background Video/Image Layer */}
+      {showBackgroundVideo && (
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+          {isImageMedia ? (
+            <img
+              src={resolveMediaUrl(config.videoUrl)}
+              alt="Ambient Background"
+              className="w-full h-full object-cover scale-105 filter blur-[2px] opacity-85 transition-opacity duration-700"
+            />
+          ) : (
+            <video
+              key={`bg-${cachedVideoSrc || config.videoUrl || 'video'}`}
+              ref={bgVideoRef}
+              src={cachedVideoSrc || resolveMediaUrl(config.videoUrl)}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="w-full h-full object-cover scale-105 filter blur-[2px] opacity-85 transition-opacity duration-700"
+              onTimeUpdate={(e) => {
+                // If background video starts playing, sync and wake up frame video if paused or desynced
+                if (showFrameVideo && videoElemRef.current && e.target.currentTime > 0) {
+                  setIsVideoLoading(false);
+                  const frameEl = videoElemRef.current;
+                  if (frameEl.paused) {
+                    frameEl.currentTime = e.target.currentTime;
+                    frameEl.play().catch(() => {});
+                  } else if (Math.abs(frameEl.currentTime - e.target.currentTime) > 0.4) {
+                    frameEl.currentTime = e.target.currentTime;
+                  }
+                }
+              }}
+              onError={() => {
+                const direct = resolveMediaUrl(config.videoUrl);
+                if (cachedVideoSrc && cachedVideoSrc !== direct) {
+                  setCachedVideoSrc(direct);
+                }
+              }}
+            />
+          )}
+          {/* Subtle ambient tint */}
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] border-none" />
+          {/* Prominent Center Radial Vignette: High contrast center glow for crystal-clear readability */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                'radial-gradient(ellipse 65% 60% at 50% 50%, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 30%, rgba(255, 255, 255, 0.45) 55%, rgba(255, 255, 255, 0.05) 80%, transparent 100%)'
+            }}
+          />
+        </div>
+      )}
+      {/* Top Left Navigation: Settings & Session Management Buttons */}
       {!isLiveMode && (
         <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 flex items-center gap-2">
-          {/* Settings Drawer Button */}
           <button
             onClick={() => setIsDrawerOpen(true)}
             aria-label="Buka Pengaturan Landing"
-            title="Konfigurasi Tampilan, Video, Sesi & Printer"
-            className="p-2 sm:p-2.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5"
+            title="Buka Pengaturan Landing"
+            className="p-2.5 sm:p-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center justify-center"
           >
-            <SlidersHorizontal size={17} className="text-rose-500 sm:w-5 sm:h-5" />
-            <span className="text-xs font-bold text-slate-700 hidden sm:inline">Konfigurasi</span>
+            <SlidersHorizontal size={18} className="text-rose-500 sm:w-5 sm:h-5" />
+          </button>
+          <button
+            onClick={() => setIsSessionsModalOpen(true)}
+            aria-label="Kelola Sesi Foto"
+            title="Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
+            className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
+          >
+            <FolderArchive size={17} className="text-rose-500" />
+            <span className="hidden sm:inline">Kelola Sesi</span>
           </button>
         </div>
       )}
 
-      {/* Top Right: Tombol Go Live di mode konfigurasi OR Fullscreen di mode live */}
-      {!isLiveMode ? (
-        <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2">
-          <button
-            onClick={handleGoLive}
-            aria-label="Luncurkan Halaman Live"
-            title="Buka Halaman Live Photobooth di Tab Baru (Tanpa Tombol Setting & Fullscreen)"
-            className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-200 hover:shadow-lg hover:shadow-rose-300 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-          >
-            <Play size={14} className="fill-white" />
-            <span>Go Live</span>
-          </button>
-        </div>
-      ) : (
+      {/* Floating Bottom-Right: Background Video Pause / Resume Control Button */}
+      {hasActiveVideo && !isImageMedia && (
         <button
+          type="button"
+          onClick={togglePlayPauseVideo}
+          aria-label={isVideoPlaying ? 'Jeda Video Background' : 'Putar Video Background'}
+          title={isVideoPlaying ? 'Jeda Video Background' : 'Putar Video Background'}
+          className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white shadow-lg shadow-rose-300/50 flex items-center justify-center cursor-pointer transition-transform active:scale-90"
+        >
+          {isVideoPlaying ? (
+            <Pause size={17} className="fill-white" />
+          ) : (
+            <Play size={17} className="fill-white ml-0.5" />
+          )}
+          <span className="sr-only">{isVideoPlaying ? 'Jeda Video' : 'Putar Video'}</span>
+        </button>
+      )}
+
+      {/* Top-Right Fullscreen Toggle in Live Mode */}
+      {isLiveMode && (
+        <button
+          type="button"
           onClick={toggleFullscreen}
           aria-label={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
           title={isFullscreen ? 'Keluar Layar Penuh' : 'Masuk Mode Layar Penuh (Kiosk)'}
@@ -381,14 +685,24 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
 
       {/* Main Container */}
       <div
-        className={`z-10 flex flex-col items-center w-full text-center px-2 sm:px-4 my-auto transition-all duration-300 ${
-          hasActiveVideo
+        className={`z-10 relative flex flex-col items-center w-full text-center px-2 sm:px-4 my-auto transition-all duration-300 ${
+          showFrameVideo
             ? isPortraitMode
               ? 'max-w-sm sm:max-w-md'
               : 'max-w-4xl sm:max-w-5xl'
             : 'max-w-lg sm:max-w-xl'
         }`}
       >
+        {/* Center Spotlight Aura specifically for background video mode */}
+        {showBackgroundVideo && (
+          <div
+            className="absolute -inset-x-12 -inset-y-10 sm:-inset-x-20 sm:-inset-y-16 pointer-events-none -z-10 rounded-full blur-2xl opacity-90"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.6) 45%, rgba(255, 255, 255, 0.15) 75%, transparent 100%)'
+            }}
+          />
+        )}
         {/* Title and Subtitle OUTSIDE the frame */}
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
@@ -396,25 +710,25 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
           transition={{ duration: 0.5 }}
           className={`font-black tracking-tight transition-all duration-300 ${activeTheme.headingClass} ${
             isWedding
-              ? 'font-romantic text-4xl sm:text-5xl md:text-6xl text-rose-950 mb-0 leading-tight drop-shadow-xs'
+              ? 'font-romantic text-4xl sm:text-5xl md:text-6xl text-rose-950 mb-0 leading-tight drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)]'
               : 'text-2xl sm:text-3xl md:text-4xl mb-1'
           }`}
         >
-          {config.title || activeTheme.defaultTitle}
+          {config.title || (isWedding ? 'The Wedding Celebration' : activeTheme.defaultTitle)}
         </motion.h1>
 
         <p
           className={`${activeTheme.subheadingClass} font-normal transition-all duration-300 ${
             isWedding
-              ? 'font-romantic-serif italic text-xs sm:text-sm text-rose-800/80 mb-3 sm:mb-4 max-w-sm line-clamp-2'
+              ? 'font-romantic-serif italic text-xs sm:text-sm text-rose-900/90 mb-3 sm:mb-4 max-w-md drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]'
               : 'text-xs sm:text-sm md:text-base text-slate-600 mb-3 sm:mb-4 max-w-sm'
           }`}
         >
-          {config.subtitle || activeTheme.defaultSubtitle}
+          {config.subtitle || (isWedding ? 'Abadikan momen bahagia dan penuh cinta di hari istimewa ini.' : activeTheme.defaultSubtitle)}
         </p>
 
         {/* Center Display: Thematic Framed Video Preview OR Animated Gift Box */}
-        {hasActiveVideo ? (
+        {showFrameVideo ? (
           <div
             className={`relative mb-2 sm:mb-3 mx-auto select-none transition-all duration-300 ${
               isPortraitMode
@@ -478,39 +792,75 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
                     : undefined
                 }
               >
-                <video
-                  ref={videoElemRef}
-                  src={cachedVideoSrc || config.videoUrl}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  controls={false}
-                  onLoadedMetadata={(e) => {
-                    const videoWidth = e.target.videoWidth;
-                    const videoHeight = e.target.videoHeight;
-                    if (videoWidth && videoHeight) {
-                      setElementDetectedRatio(videoHeight >= videoWidth ? 'portrait' : 'landscape');
-                      setExactNumericRatio(videoWidth / videoHeight);
-                    }
-                  }}
-                  onLoadedData={() => {
-                    setIsVideoLoading(false);
-                    if (videoElemRef.current) {
-                      videoElemRef.current.play().catch(() => {});
-                    }
-                  }}
-                  onCanPlay={() => {
-                    setIsVideoLoading(false);
-                  }}
-                  onWaiting={() => {
-                    setIsVideoLoading(true);
-                  }}
-                  onPlaying={() => {
-                    setIsVideoLoading(false);
-                  }}
-                  className="w-full h-full object-cover block mx-auto select-none pointer-events-none"
-                />
+                {isImageMedia ? (
+                  <img
+                    src={resolveMediaUrl(config.videoUrl)}
+                    alt="Landing Preview"
+                    onLoad={() => setIsVideoLoading(false)}
+                    className="w-full h-full object-cover block mx-auto select-none pointer-events-none"
+                  />
+                ) : (
+                  <video
+                    key={`frame-${cachedVideoSrc || config.videoUrl || 'video'}`}
+                    ref={videoElemRef}
+                    src={cachedVideoSrc || resolveMediaUrl(config.videoUrl)}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    controls={false}
+                    onLoadedMetadata={(e) => {
+                      const videoWidth = e.target.videoWidth;
+                      const videoHeight = e.target.videoHeight;
+                      if (videoWidth && videoHeight) {
+                        setElementDetectedRatio(videoHeight >= videoWidth ? 'portrait' : 'landscape');
+                        setExactNumericRatio(videoWidth / videoHeight);
+                      }
+                      e.target.defaultMuted = true;
+                      e.target.muted = true;
+                      e.target.play().catch(() => {});
+                    }}
+                    onLoadedData={() => {
+                      setIsVideoLoading(false);
+                      if (videoElemRef.current) {
+                        videoElemRef.current.play().catch(() => {});
+                      }
+                    }}
+                    onCanPlay={() => {
+                      setIsVideoLoading(false);
+                      if (videoElemRef.current) {
+                        videoElemRef.current.play().catch(() => {});
+                      }
+                    }}
+                    onPlaying={() => {
+                      setIsVideoLoading(false);
+                    }}
+                    onTimeUpdate={(e) => {
+                      if (e.target.currentTime > 0) {
+                        setIsVideoLoading(false);
+                      }
+                      // Keep background video in sync with frame video
+                      if (showBackgroundVideo && bgVideoRef.current && e.target.currentTime > 0) {
+                        const bgEl = bgVideoRef.current;
+                        if (bgEl.paused) {
+                          bgEl.currentTime = e.target.currentTime;
+                          bgEl.play().catch(() => {});
+                        } else if (Math.abs(bgEl.currentTime - e.target.currentTime) > 0.4) {
+                          bgEl.currentTime = e.target.currentTime;
+                        }
+                      }
+                    }}
+                    onError={() => {
+                      const direct = resolveMediaUrl(config.videoUrl);
+                      if (cachedVideoSrc && cachedVideoSrc !== direct) {
+                        setCachedVideoSrc(direct);
+                      }
+                      setIsVideoLoading(false);
+                    }}
+                    className="w-full h-full object-cover block mx-auto select-none pointer-events-none"
+                  />
+                )}
 
                 {/* THEMATIC VIDEO LOADING ANIMATION */}
                 <AnimatePresence>
@@ -620,6 +970,33 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
               )}
             </div>
           </div>
+        ) : showBackgroundVideo ? (
+          /* Clean Typography Hero for Background Video Mode (NO gift box, matching IMG_0556) */
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="my-4 sm:my-6 flex flex-col items-center"
+          >
+            <div
+              className={`tracking-wide text-center drop-shadow-xs ${
+                isWedding
+                  ? 'font-romantic text-4xl sm:text-5xl md:text-6xl text-rose-950 font-normal leading-tight drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)]'
+                  : 'font-bold text-2xl sm:text-3xl text-slate-800'
+              }`}
+            >
+              {config.coupleNames || (isWedding ? 'Kevin & Sheila' : 'Special Celebration')}
+            </div>
+            <div
+              className={`mt-1.5 sm:mt-2 text-center tracking-wide ${
+                isWedding
+                  ? 'font-romantic-serif italic text-sm sm:text-base text-rose-900/90 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]'
+                  : 'text-xs sm:text-sm text-slate-500 font-medium'
+              }`}
+            >
+              {config.eventDate || 'Saturday, 17 October 2026'}
+            </div>
+          </motion.div>
         ) : (
           /* Gift Box Graphic (Flat Solid) */
           <div
@@ -672,6 +1049,59 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
         </motion.button>
       </div>
 
+      {/* Floating Bottom Cache Progress Indicator - Centered Flex Container */}
+      <AnimatePresence>
+        {cacheProgress && (
+          <div className="fixed inset-x-0 bottom-5 sm:bottom-7 z-40 flex justify-center pointer-events-none px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.96 }}
+              transition={{ duration: 0.25 }}
+              className="w-full max-w-[320px] sm:max-w-sm pointer-events-auto"
+            >
+              <div className="flex items-center gap-2.5 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-slate-700/60 shadow-xl shadow-black/40 text-white">
+                {cacheProgress.isComplete ? (
+                  <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                ) : (
+                  <DownloadCloud size={17} className="text-rose-400 shrink-0 animate-bounce" />
+                )}
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1 text-[11px] sm:text-xs font-semibold">
+                    <span className="truncate">
+                      {cacheProgress.isComplete
+                        ? 'Tersimpan di cache'
+                        : 'Memuat ke cache'}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 font-mono">
+                      <span className="text-rose-300 font-bold">
+                        {cacheProgress.percent}%
+                      </span>
+                      {cacheProgress.loadedMB && (
+                        <span className="text-[10px] text-slate-400">
+                          ({cacheProgress.loadedMB}{cacheProgress.totalMB ? `/${cacheProgress.totalMB}` : ''} MB)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1.5">
+                    <div
+                      className={`h-full rounded-full transition-all duration-200 ${
+                        cacheProgress.isComplete
+                          ? 'bg-emerald-400'
+                          : 'bg-gradient-to-r from-rose-500 to-pink-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, cacheProgress.percent))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Slide-over Drawer for Configuration (Only mounted/opened from configuration page) */}
       <LandingConfigDrawer
         isOpen={isDrawerOpen}
@@ -679,6 +1109,17 @@ export default function LandingPage({ onStartSession, isLiveMode = false }) {
         config={config}
         onUpdateConfig={handleUpdateConfig}
         onGoLive={handleGoLive}
+        onOpenSessions={() => setIsSessionsModalOpen(true)}
+      />
+
+      {/* Session Manager Modal */}
+      <SessionManagerModal
+        isOpen={isSessionsModalOpen}
+        onClose={() => setIsSessionsModalOpen(false)}
+        printerConfig={{
+          printerName: config?.printerName,
+          printCopies: config?.printCopies
+        }}
       />
 
       {/* Session Access Code Modal (Opens if requireSessionCode is active) */}

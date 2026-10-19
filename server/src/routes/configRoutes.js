@@ -10,39 +10,52 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 const configFile = path.resolve(__dirname, "../../data/landing_config.json");
 const uploadsDir = path.resolve(__dirname, "../../uploads");
+const mediaDir = path.resolve(uploadsDir, "media");
 
 function getLatestLandingMedia() {
   try {
-    if (!fs.existsSync(uploadsDir)) return null;
-    const files = fs.readdirSync(uploadsDir);
-    const mediaFiles = files.filter((f) => {
-      const lower = f.toLowerCase();
-      return (
-        lower.startsWith("video_landing_") ||
-        lower.startsWith("video_") ||
-        lower.endsWith(".mp4") ||
-        lower.endsWith(".webm") ||
-        lower.endsWith(".mov") ||
-        lower.endsWith(".jpg") ||
-        lower.endsWith(".jpeg") ||
-        lower.endsWith(".png") ||
-        lower.endsWith(".webp")
-      );
-    });
+    const searchDirs = [
+      { dir: mediaDir, urlPrefix: "/uploads/media" },
+      { dir: uploadsDir, urlPrefix: "/uploads" }
+    ];
+
+    const mediaFiles = [];
+
+    for (const { dir, urlPrefix } of searchDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      for (const f of files) {
+        const lower = f.toLowerCase();
+        if (
+          lower.startsWith("media_landing_") ||
+          lower.startsWith("video_landing_") ||
+          lower.startsWith("video_") ||
+          lower.startsWith("image_landing_") ||
+          lower.endsWith(".mp4") ||
+          lower.endsWith(".webm") ||
+          lower.endsWith(".mov") ||
+          lower.endsWith(".jpg") ||
+          lower.endsWith(".jpeg") ||
+          lower.endsWith(".png") ||
+          lower.endsWith(".webp")
+        ) {
+          try {
+            const stat = fs.statSync(path.join(dir, f));
+            if (stat.isFile()) {
+              mediaFiles.push({
+                url: `${urlPrefix}/${f}`,
+                mtimeMs: stat.mtimeMs
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    }
 
     if (mediaFiles.length === 0) return null;
 
-    mediaFiles.sort((a, b) => {
-      try {
-        const statA = fs.statSync(path.join(uploadsDir, a));
-        const statB = fs.statSync(path.join(uploadsDir, b));
-        return statB.mtimeMs - statA.mtimeMs;
-      } catch (_) {
-        return 0;
-      }
-    });
-
-    return `/uploads/${mediaFiles[0]}`;
+    mediaFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return mediaFiles[0].url;
   } catch (err) {
     return null;
   }
@@ -50,6 +63,11 @@ function getLatestLandingMedia() {
 
 // GET /api/config/landing
 router.get("/landing", async (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
   try {
     let config = null;
 
@@ -137,11 +155,13 @@ router.get("/landing", async (req, res) => {
     ];
 
     const defaultBase = {
-      theme: "pastel",
-      title: "Captured Moments ✨",
-      subtitle: "Sentuh layar atau buka hadiah untuk memulai sesi fotomu hari ini!",
-      eventTitle: "OUR SPECIAL DAY",
-      eventSubtitle: "Wedding & Anniversary 2026",
+      theme: "wedding",
+      title: "The Wedding Celebration",
+      subtitle: "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
+      coupleNames: "Kevin & Sheila",
+      eventDate: "Saturday, 17 October 2026",
+      eventTitle: "The Wedding Celebration",
+      eventSubtitle: "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
       footerText: "Scan QR di hasil cetak untuk mengunduh fotomu • Free high-res download",
       requireSessionCode: false,
       sessionCode: "1234",
@@ -152,30 +172,33 @@ router.get("/landing", async (req, res) => {
       printCopies: 1,
       printMethod: "kiosk",
       autoPrint: false,
+      videoDisplayMode: "background",
       countdownDuration: 3,
       customFrame: defaultModern4RFrames[0],
       customFrames: defaultModern4RFrames
     };
 
     if (!config) {
-      const latestMedia = getLatestLandingMedia();
-      config = {
-        ...defaultBase,
-        videoUrl: latestMedia || "",
-        enableVideo: Boolean(latestMedia)
-      };
-
-      if (process.env.DATABASE_URL) {
-        prisma.appConfig.upsert({
-          where: { key: "landing_config" },
-          create: { key: "landing_config", value: config },
-          update: { value: config }
-        }).catch(() => {});
-      }
-      try {
-        fs.writeFileSync(configFile, JSON.stringify(config, null, 2), "utf8");
-      } catch (_) {}
+      config = {};
     }
+    if (!config.videoUrl) {
+      const latestMedia = getLatestLandingMedia();
+      if (latestMedia) {
+        config.videoUrl = latestMedia;
+        config.enableVideo = true;
+      }
+    }
+
+    if (process.env.DATABASE_URL) {
+      prisma.appConfig.upsert({
+        where: { key: "landing_config" },
+        create: { key: "landing_config", value: config },
+        update: { value: config }
+      }).catch(() => {});
+    }
+    try {
+      fs.writeFileSync(configFile, JSON.stringify(config, null, 2), "utf8");
+    } catch (_) {}
 
     const mergedConfig = { ...defaultBase, ...config };
     if (!Array.isArray(mergedConfig.customFrames) || mergedConfig.customFrames.length === 0) {
@@ -228,14 +251,49 @@ router.post("/landing", async (req, res) => {
   }
 });
 
-// GET /api/config/media
+// GET /api/config/media - Searches media subfolder and uploads root
 router.get("/media", (req, res) => {
   try {
-    if (!fs.existsSync(uploadsDir)) {
-      return res.json({ success: true, files: [] });
+    const searchDirs = [
+      { dir: mediaDir, urlPrefix: "/uploads/media" },
+      { dir: uploadsDir, urlPrefix: "/uploads" }
+    ];
+
+    const seen = new Set();
+    const mediaFiles = [];
+
+    for (const { dir, urlPrefix } of searchDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const rawFiles = fs.readdirSync(dir);
+
+      for (const file of rawFiles) {
+        if (seen.has(file)) continue;
+        try {
+          const filePath = path.join(dir, file);
+          const stat = fs.statSync(filePath);
+          if (stat.isDirectory()) continue;
+
+          const isVideo = /\.(mp4|webm|mov|ogg)$/i.test(file);
+          const isImage = /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file);
+          if (!isVideo && !isImage) continue;
+
+          seen.add(file);
+          mediaFiles.push({
+            filename: file,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+            createdAt: stat.mtime,
+            isVideo,
+            url: `${urlPrefix}/${file}`
+          });
+        } catch (_) {}
+      }
     }
-    const files = fs.readdirSync(uploadsDir);
-    return res.json({ success: true, files });
+
+    // Sort newest first
+    mediaFiles.sort((a, b) => b.mtime - a.mtime);
+
+    return res.json({ success: true, files: mediaFiles });
   } catch (err) {
     return res.status(500).json({ error: "Gagal membaca direktori media" });
   }
@@ -249,11 +307,16 @@ router.delete("/media", (req, res) => {
       return res.status(400).json({ error: "Filename wajib disertakan" });
     }
     const safeName = path.basename(filename);
-    const filePath = path.join(uploadsDir, safeName);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      return res.json({ success: true, deleted: true, filename: safeName });
+    const searchDirs = [mediaDir, uploadsDir];
+
+    for (const dir of searchDirs) {
+      const filePath = path.join(dir, safeName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return res.json({ success: true, deleted: true, filename: safeName });
+      }
     }
+
     return res.status(404).json({ error: "File tidak ditemukan" });
   } catch (err) {
     return res.status(500).json({ error: "Gagal menghapus file media" });

@@ -462,6 +462,74 @@ test('PreviewResult - Markup and Structure', async (t) => {
     assert.strictEqual(printBtn.props.disabled, false, 'Print button must be enabled when composite is ready');
     assert.strictEqual(downloadQrBtn.props.disabled, false, 'Download (QR) button must be enabled when composite is ready');
   });
+
+  await t.test('clicking Print Foto opens Print Choice dialog with Full Frame and Foto Saja options', () => {
+    const samplePhotos = ['data:image/jpeg;base64,pose1', 'data:image/jpeg;base64,pose2', 'data:image/jpeg;base64,pose3'];
+    const harness = createTestHarness(PreviewResult, {
+      photos: samplePhotos,
+      layoutConfig: { layoutType: 'STRIP_3' },
+      onResetSession: () => {},
+      initialCompositeUrl: 'data:image/jpeg;base64,fullFrame'
+    });
+
+    const actionGroup = harness.vdom.props.children[3];
+    const printBtn = actionGroup.props.children[0];
+    assert.strictEqual(typeof printBtn.props.onClick, 'function');
+
+    // Click Print Foto to open dialog
+    printBtn.props.onClick();
+
+    const updatedVdom = harness.render();
+    const modal = updatedVdom.props.children[6];
+    assert.ok(modal, 'Print Choice modal must be open');
+
+    const modalMarkup = renderToStaticMarkup(modal);
+    assert.ok(modalMarkup.includes('Pilihan Cetak Foto'), 'Must render dialog title');
+    assert.ok(modalMarkup.includes('Full Frame'), 'Must render Full Frame choice');
+    assert.ok(modalMarkup.includes('Foto Saja'), 'Must render Foto Saja choice');
+  });
+
+  await t.test('Foto Saja mode in Print Choice dialog defaults to selecting all poses with checkboxes', () => {
+    const samplePhotos = ['data:image/jpeg;base64,pose1', 'data:image/jpeg;base64,pose2', 'data:image/jpeg;base64,pose3'];
+    const harness = createTestHarness(PreviewResult, {
+      photos: samplePhotos,
+      layoutConfig: { layoutType: 'STRIP_3' },
+      onResetSession: () => {},
+      initialCompositeUrl: 'data:image/jpeg;base64,fullFrame'
+    });
+
+    // Click Print Foto to open dialog
+    const actionGroup = harness.vdom.props.children[3];
+    const printBtn = actionGroup.props.children[0];
+    printBtn.props.onClick();
+
+    let modalVdom = harness.render();
+    let choiceModal = modalVdom.props.children[6];
+    const card = choiceModal.props.children;
+    const modalBody = card.props.children[1];
+    const modeCards = modalBody.props.children[0];
+    const rawModeCard = modeCards.props.children[1];
+    assert.strictEqual(typeof rawModeCard.props.onClick, 'function');
+
+    // Switch to Foto Saja
+    rawModeCard.props.onClick();
+
+    modalVdom = harness.render();
+    choiceModal = modalVdom.props.children[6];
+    const updatedCard = choiceModal.props.children;
+    const footer = updatedCard.props.children[2];
+    const executeBtn = footer.props.children[1];
+    const executeBtnText = executeBtn.props.children[1].props.children;
+
+    // Must default to all 3 poses selected
+    assert.strictEqual(executeBtnText, 'Cetak Foto (3 Lembar)', 'Dialog print CTA must default to all 3 selected poses');
+
+    const updatedMarkup = renderToStaticMarkup(choiceModal);
+    assert.ok(updatedMarkup.includes('Foto #1'), 'Must render thumbnail for pose 1');
+    assert.ok(updatedMarkup.includes('Foto #2'), 'Must render thumbnail for pose 2');
+    assert.ok(updatedMarkup.includes('Foto #3'), 'Must render thumbnail for pose 3');
+  });
+
 });
 
 test('PreviewResult - Interactive Actions & Modals Lifecycle', async (t) => {

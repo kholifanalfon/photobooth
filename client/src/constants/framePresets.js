@@ -1,3 +1,55 @@
+export const PAPER_PRESETS = {
+  '4R': {
+    id: '4R',
+    name: '4R (102 × 152 mm / 4×6")',
+    label: '4R',
+    desc: 'Standar Foto Kiosk (102 × 152 mm)',
+    widthMm: 102,
+    heightMm: 152,
+    dpi: 300,
+    portrait: { width: 1200, height: 1800 },
+    landscape: { width: 1800, height: 1200 },
+    hasOrientation: true
+  },
+  '3x5cm': {
+    id: '3x5cm',
+    name: '3 × 5 cm (30 × 50 mm)',
+    label: '3×5 cm',
+    desc: 'Format Pasfoto / Mini (30 × 50 mm)',
+    widthMm: 30,
+    heightMm: 50,
+    dpi: 300,
+    portrait: { width: 354, height: 591 },
+    landscape: { width: 591, height: 354 },
+    hasOrientation: true
+  },
+  '5x5cm': {
+    id: '5x5cm',
+    name: '5 × 5 cm (50 × 50 mm)',
+    label: '5×5 cm',
+    desc: 'Format Square / Kotak (50 × 50 mm)',
+    widthMm: 50,
+    heightMm: 50,
+    dpi: 300,
+    portrait: { width: 591, height: 591 },
+    landscape: { width: 591, height: 591 },
+    hasOrientation: false
+  },
+  'image': {
+    id: 'image',
+    name: 'Sesuai Gambar Frame (Auto)',
+    label: 'Ikuti Frame',
+    desc: 'Ukuran kertas mengikuti gambar desain frame yang diupload',
+    widthMm: null,
+    heightMm: null,
+    dpi: 300,
+    portrait: { width: 1200, height: 1800 },
+    landscape: { width: 1800, height: 1200 },
+    hasOrientation: true,
+    isCustom: true
+  }
+};
+
 export const SAMPLE_PLACEHOLDER_PHOTOS = [
   "/samples/pose1.jpg",
   "/samples/pose2.jpg",
@@ -124,6 +176,7 @@ export const MODERN_4R_FRAMES = [
     name: 'Bingkai 1 Foto',
     enabled: true,
     orientation: 'portrait',
+    paperSize: '4R',
     width: 1200,
     height: 1800,
     imageUrl: '/frames/frame_4r_1photo.png',
@@ -138,6 +191,7 @@ export const MODERN_4R_FRAMES = [
     name: 'Bingkai 2 Foto',
     enabled: true,
     orientation: 'portrait',
+    paperSize: '4R',
     width: 1200,
     height: 1800,
     imageUrl: '/frames/frame_4r_2photos.png',
@@ -153,6 +207,7 @@ export const MODERN_4R_FRAMES = [
     name: 'Bingkai 3 Foto',
     enabled: true,
     orientation: 'portrait',
+    paperSize: '4R',
     width: 1200,
     height: 1800,
     imageUrl: '/frames/frame_4r_3photos.png',
@@ -169,6 +224,7 @@ export const MODERN_4R_FRAMES = [
     name: 'Bingkai 4 Foto',
     enabled: true,
     orientation: 'portrait',
+    paperSize: '4R',
     width: 1200,
     height: 1800,
     imageUrl: '/frames/frame_4r_4photos.png',
@@ -184,9 +240,7 @@ export const MODERN_4R_FRAMES = [
 ];
 
 /**
- * Resolves the 0-indexed photo pose index for every slot in a frame layout.
- * If a slot has `mirrorFromSlot` set to another valid slot index, it takes that slot's photo.
- * Independent slots receive consecutive photo pose indices (0, 1, 2, ...).
+ * Resolves each slot's photographed pose index based on mirror settings.
  *
  * @param {Array<Object>} slots
  * @returns {{ slotPhotoIndices: number[], uniquePhotoCount: number }}

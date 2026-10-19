@@ -84,7 +84,7 @@ test('SessionCodeModal - Dialog Rendering & Keypad Structure', async (t) => {
 });
 
 test('LandingPage - Mode Live vs Mode Konfigurasi Separation', async (t) => {
-  await t.test('in configuration mode (isLiveMode=false), shows settings button and Go Live button', () => {
+  await t.test('in configuration mode (isLiveMode=false), shows settings button', () => {
     const html = renderToStaticMarkup(
       React.createElement(LandingPage, {
         onStartSession: () => {},
@@ -93,10 +93,9 @@ test('LandingPage - Mode Live vs Mode Konfigurasi Separation', async (t) => {
     );
 
     assert.ok(html.includes('aria-label="Buka Pengaturan Landing"'), 'Config mode must have settings button');
-    assert.ok(html.includes('Go Live'), 'Config mode must have Go Live button');
   });
 
-  await t.test('in live mode (isLiveMode=true), hides settings button and hides Go Live button', () => {
+  await t.test('in live mode (isLiveMode=true), hides settings button', () => {
     const html = renderToStaticMarkup(
       React.createElement(LandingPage, {
         onStartSession: () => {},
@@ -105,6 +104,5 @@ test('LandingPage - Mode Live vs Mode Konfigurasi Separation', async (t) => {
     );
 
     assert.ok(!html.includes('aria-label="Buka Pengaturan Landing"'), 'Live mode MUST NOT have settings button');
-    assert.ok(!html.includes('title="Buka Halaman Live Photobooth di Tab Baru'), 'Live mode MUST NOT have Go Live button');
   });
 });

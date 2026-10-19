@@ -31,9 +31,12 @@ import {
   Columns,
   MoveHorizontal,
   ClipboardPaste,
-  LayoutGrid
+  LayoutGrid,
+  FileText
 } from 'lucide-react';
-import { SLOT_PRESETS, SAMPLE_PLACEHOLDER_PHOTOS, resolveSlotsPhotoMapping } from '../constants/framePresets.js';
+import { SLOT_PRESETS, SAMPLE_PLACEHOLDER_PHOTOS, resolveSlotsPhotoMapping,
+  PAPER_PRESETS
+} from '../constants/framePresets.js';
 import { uploadDirectMedia } from '../utils/chunkUploader.js';
 
 export default function PrecisionFrameEditorModal({
@@ -80,7 +83,7 @@ export default function PrecisionFrameEditorModal({
     try {
       setIsUploading(true);
       setUploadError(null);
-      const res = await uploadDirectMedia(file, { apiBase: getApiBase() });
+      const res = await uploadDirectMedia(file, { apiBase: getApiBase(), category: "frames" });
       const uploadedUrl = res?.relativeUrl || res?.url || res?.videoUrl || (res?.filename ? `/uploads/${res.filename}` : null);
       if (uploadedUrl) {
         // Probe image natural dimensions to avoid stretch and auto-detect 1-strip
@@ -102,20 +105,48 @@ export default function PrecisionFrameEditorModal({
         }
 
         const isNarrowRatio = naturalW > 0 && naturalH > 0 && (naturalW / naturalH) < 0.55;
-        const targetW = isNarrowRatio ? Math.round(canvasW / 2) : canvasW;
+        const shouldMatchImage = (customFrame?.paperSize === 'image');
+        const nextCanvasW = shouldMatchImage && naturalW > 0 ? naturalW : canvasW;
+        const nextCanvasH = shouldMatchImage && naturalH > 0 ? naturalH : canvasH;
+
+        let updatedSlots = activeSlots;
+        if (shouldMatchImage && naturalW > 0 && naturalH > 0 && (naturalW !== canvasW || naturalH !== canvasH)) {
+          const scaleX = naturalW / canvasW;
+          const scaleY = naturalH / canvasH;
+          updatedSlots = activeSlots.map((s) => ({
+            ...s,
+            x: Math.round(s.x * scaleX),
+            y: Math.round(s.y * scaleY),
+            width: Math.max(10, Math.round(s.width * scaleX)),
+            height: Math.max(10, Math.round(s.height * scaleY)),
+            radius: Math.max(0, Math.round((s.radius || 0) * Math.min(scaleX, scaleY))),
+            borderWidth: Math.max(0, Math.round((s.borderWidth || 0) * Math.min(scaleX, scaleY)))
+          }));
+          commitSlots(updatedSlots, true);
+        }
+
+        const targetW = isNarrowRatio ? Math.round(nextCanvasW / 2) : nextCanvasW;
 
         onUpdateFrame({
           imageUrl: uploadedUrl,
+          frameNaturalWidth: naturalW,
+          frameNaturalHeight: naturalH,
+          width: nextCanvasW,
+          height: nextCanvasH,
+          orientation: shouldMatchImage
+            ? (naturalW >= naturalH ? 'landscape' : 'portrait')
+            : (customFrame?.orientation || 'portrait'),
+          slots: updatedSlots,
           layerMode: file.type.includes("png") ? "overlay" : "background",
           imageX: 0,
           imageY: 0,
           imageWidth: targetW,
-          imageHeight: canvasH,
+          imageHeight: nextCanvasH,
           imageMirror: isNarrowRatio,
-          mirrorImageX: isNarrowRatio ? (canvasW - targetW) : 0,
+          mirrorImageX: isNarrowRatio ? (nextCanvasW - targetW) : 0,
           mirrorImageY: 0,
           mirrorImageWidth: targetW,
-          mirrorImageHeight: canvasH,
+          mirrorImageHeight: nextCanvasH,
           mirrorImageFlip: false
         });
       } else {
@@ -132,24 +163,6 @@ export default function PrecisionFrameEditorModal({
     }
   };
 
-  const handleOrientationChange = (newOrientation) => {
-    if (newOrientation === (isLandscape ? 'landscape' : 'portrait')) return;
-    const isNowLandscape = newOrientation === 'landscape';
-    const preset = SLOT_PRESETS[activeSlots.length] || SLOT_PRESETS[4];
-    const newTemplate = isNowLandscape ? preset.landscape : preset.portrait;
-    onUpdateFrame({
-      orientation: newOrientation,
-      width: isNowLandscape ? 1800 : 1200,
-      height: isNowLandscape ? 1200 : 1800,
-      slots: newTemplate.map((s, idx) => ({
-        ...s,
-        radius: activeSlots[idx]?.radius ?? 16,
-        borderWidth: activeSlots[idx]?.borderWidth ?? 0,
-        borderColor: activeSlots[idx]?.borderColor ?? '#FFFFFF'
-      }))
-    });
-    setSelectedSlotIndex(0);
-  };
 
   const canvasViewportRef = useRef(null);
   const canvasBoxRef = useRef(null);
@@ -227,9 +240,177 @@ export default function PrecisionFrameEditorModal({
   }, [onUpdateFrame, pushHistory]);
 
   const activeSlots = localSlots;
-  const isLandscape = customFrame?.orientation === 'landscape';
-  const canvasW = isLandscape ? 1800 : 1200;
-  const canvasH = isLandscape ? 1200 : 1800;
+  const currentPaperKey = customFrame?.paperSize || '4R';
+  const paperPreset = PAPER_PRESETS[currentPaperKey] || PAPER_PRESETS['4R'];
+  const isLandscape = paperPreset.id === 'image'
+    ? (Number(customFrame?.width || 0) >= Number(customFrame?.height || 0) && Number(customFrame?.width || 0) > 0)
+    : (paperPreset.hasOrientation && customFrame?.orientation === 'landscape');
+  const defaultW = isLandscape ? paperPreset.landscape.width : paperPreset.portrait.width;
+  const defaultH = isLandscape ? paperPreset.landscape.height : paperPreset.portrait.height;
+
+  const canvasW = Number(customFrame?.width) > 0 ? Number(customFrame.width) : defaultW;
+  const canvasH = Number(customFrame?.height) > 0 ? Number(customFrame.height) : defaultH;
+
+  const handleOrientationChange = (newOrientation) => {
+    if (newOrientation === (isLandscape ? 'landscape' : 'portrait')) return;
+    if (!paperPreset.hasOrientation || paperPreset.id === 'image') return;
+
+    const isNowLandscape = newOrientation === 'landscape';
+    const newW = isNowLandscape ? paperPreset.landscape.width : paperPreset.portrait.width;
+    const newH = isNowLandscape ? paperPreset.landscape.height : paperPreset.portrait.height;
+
+    const oldW = canvasW;
+    const oldH = canvasH;
+    const scaleX = newW / oldW;
+    const scaleY = newH / oldH;
+
+    let updatedSlots;
+    if (activeSlots.length > 0) {
+      updatedSlots = activeSlots.map((s) => ({
+        ...s,
+        x: Math.round(s.x * scaleX),
+        y: Math.round(s.y * scaleY),
+        width: Math.max(10, Math.round(s.width * scaleX)),
+        height: Math.max(10, Math.round(s.height * scaleY)),
+        radius: Math.max(0, Math.round((s.radius || 0) * Math.min(scaleX, scaleY))),
+        borderWidth: Math.max(0, Math.round((s.borderWidth || 0) * Math.min(scaleX, scaleY)))
+      }));
+    } else {
+      const preset = SLOT_PRESETS[4];
+      const newTemplate = isNowLandscape ? preset.landscape : preset.portrait;
+      updatedSlots = newTemplate.map((s) => ({
+        ...s,
+        radius: 16,
+        borderWidth: 0,
+        borderColor: '#FFFFFF'
+      }));
+    }
+
+    commitSlots(updatedSlots, true);
+
+    onUpdateFrame({
+      orientation: newOrientation,
+      width: newW,
+      height: newH,
+      slots: updatedSlots,
+      imageX: customFrame?.imageX !== undefined ? Math.round(Number(customFrame.imageX) * scaleX) : 0,
+      imageY: customFrame?.imageY !== undefined ? Math.round(Number(customFrame.imageY) * scaleY) : 0,
+      imageWidth: customFrame?.imageWidth !== undefined ? Math.round(Number(customFrame.imageWidth) * scaleX) : newW,
+      imageHeight: customFrame?.imageHeight !== undefined ? Math.round(Number(customFrame.imageHeight) * scaleY) : newH
+    });
+    setSelectedSlotIndex(0);
+  };
+
+  const handlePaperSizeChange = async (newPaperSize) => {
+    const currentPaper = customFrame?.paperSize || '4R';
+    if (newPaperSize === currentPaper) return;
+
+    if (newPaperSize === 'image') {
+      let targetW = Number(customFrame?.frameNaturalWidth || 0);
+      let targetH = Number(customFrame?.frameNaturalHeight || 0);
+
+      if ((!targetW || !targetH) && customFrame?.imageUrl) {
+        if (typeof window !== 'undefined' && typeof window.Image !== 'undefined') {
+          try {
+            const probe = new window.Image();
+            await new Promise((resolve) => {
+              probe.onload = () => {
+                targetW = probe.naturalWidth;
+                targetH = probe.naturalHeight;
+                resolve();
+              };
+              probe.onerror = () => resolve();
+              probe.src = customFrame.imageUrl;
+            });
+          } catch (_) {}
+        }
+      }
+
+      if (targetW > 0 && targetH > 0) {
+        const oldW = canvasW;
+        const oldH = canvasH;
+        const scaleX = targetW / oldW;
+        const scaleY = targetH / oldH;
+
+        const updatedSlots = activeSlots.map((s) => ({
+          ...s,
+          x: Math.round(s.x * scaleX),
+          y: Math.round(s.y * scaleY),
+          width: Math.max(10, Math.round(s.width * scaleX)),
+          height: Math.max(10, Math.round(s.height * scaleY)),
+          radius: Math.max(0, Math.round((s.radius || 0) * Math.min(scaleX, scaleY))),
+          borderWidth: Math.max(0, Math.round((s.borderWidth || 0) * Math.min(scaleX, scaleY)))
+        }));
+
+        const targetOrient = targetW >= targetH ? 'landscape' : 'portrait';
+        commitSlots(updatedSlots, true);
+
+        onUpdateFrame({
+          paperSize: 'image',
+          frameNaturalWidth: targetW,
+          frameNaturalHeight: targetH,
+          orientation: targetOrient,
+          width: targetW,
+          height: targetH,
+          slots: updatedSlots,
+          imageX: 0,
+          imageY: 0,
+          imageWidth: targetW,
+          imageHeight: targetH,
+          imageMirror: false
+        });
+        setSelectedSlotIndex(0);
+        setToastMessage(`Ukuran kertas diubah mengikuti gambar frame (${targetW} × ${targetH} px)`);
+        setTimeout(() => setToastMessage(''), 2500);
+        return;
+      } else {
+        onUpdateFrame({ paperSize: 'image' });
+        setToastMessage('Silakan pilih file gambar desain frame untuk menyesuaikan ukuran kertas');
+        setTimeout(() => setToastMessage(''), 3000);
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
+        }
+        return;
+      }
+    }
+
+    const newPreset = PAPER_PRESETS[newPaperSize] || PAPER_PRESETS['4R'];
+    const targetOrientation = newPreset.hasOrientation && customFrame?.orientation === 'landscape' ? 'landscape' : 'portrait';
+    const newW = targetOrientation === 'landscape' ? newPreset.landscape.width : newPreset.portrait.width;
+    const newH = targetOrientation === 'landscape' ? newPreset.landscape.height : newPreset.portrait.height;
+
+    const oldW = canvasW;
+    const oldH = canvasH;
+    const scaleX = newW / oldW;
+    const scaleY = newH / oldH;
+
+    const updatedSlots = activeSlots.map((s) => ({
+      ...s,
+      x: Math.round(s.x * scaleX),
+      y: Math.round(s.y * scaleY),
+      width: Math.max(10, Math.round(s.width * scaleX)),
+      height: Math.max(10, Math.round(s.height * scaleY)),
+      radius: Math.max(0, Math.round((s.radius || 0) * Math.min(scaleX, scaleY))),
+      borderWidth: Math.max(0, Math.round((s.borderWidth || 0) * Math.min(scaleX, scaleY)))
+    }));
+
+    commitSlots(updatedSlots, true);
+
+    onUpdateFrame({
+      paperSize: newPaperSize,
+      orientation: targetOrientation,
+      width: newW,
+      height: newH,
+      slots: updatedSlots,
+      imageX: customFrame?.imageX !== undefined ? Math.round(Number(customFrame.imageX) * scaleX) : 0,
+      imageY: customFrame?.imageY !== undefined ? Math.round(Number(customFrame.imageY) * scaleY) : 0,
+      imageWidth: customFrame?.imageWidth !== undefined ? Math.round(Number(customFrame.imageWidth) * scaleX) : newW,
+      imageHeight: customFrame?.imageHeight !== undefined ? Math.round(Number(customFrame.imageHeight) * scaleY) : newH
+    });
+    setSelectedSlotIndex(0);
+    setToastMessage('Ukuran kertas diubah ke ' + newPreset.name);
+    setTimeout(() => setToastMessage(''), 2500);
+  };
 
   // Frame Image Layout & Mirror Properties (Anti-Stretch & Draggable)
   const defaultStripWidth = Math.round(canvasW / 2);
@@ -1067,7 +1248,7 @@ export default function PrecisionFrameEditorModal({
 
   // Calculate dynamic canvas size based on zoom
   // Base display: ~440px wide for portrait, ~660px wide for landscape at 100%
-  const baseWidthPx = isLandscape ? 660 : 440;
+  const baseWidthPx = isLandscape ? 660 : (paperPreset.hasOrientation ? 440 : 520);
   const displayWidthPx = Math.round((baseWidthPx * zoomLevel) / 100);
   const displayHeightPx = Math.round((displayWidthPx * canvasH) / canvasW);
 
@@ -1091,7 +1272,7 @@ export default function PrecisionFrameEditorModal({
                   </span>
                 )}
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0 whitespace-nowrap">
-                  4R {isLandscape ? 'Landscape' : 'Portrait'} ({canvasW} × {canvasH} px)
+                  {paperPreset.label} {paperPreset.hasOrientation ? (isLandscape ? 'Landscape' : 'Portrait') : 'Kotak'} ({canvasW} × {canvasH} px)
                 </span>
                 {isMirrorModeActive && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
@@ -1729,7 +1910,7 @@ export default function PrecisionFrameEditorModal({
               <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400 px-1 font-mono">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>Kanvas 4R: {canvasW} × {canvasH} px</span>
+                  <span>Kanvas: {canvasW} × {canvasH} px</span>
                 </div>
                 <div>
                   {activeEditorMode === 'image' ? (
@@ -1751,38 +1932,99 @@ export default function PrecisionFrameEditorModal({
 
           {/* Right Sidebar: Precision Controls Panel */}
           <div className="w-full lg:w-[440px] xl:w-[480px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800/80 p-3.5 sm:p-4 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-3 text-white">
-            {/* Orientasi Kertas 4R */}
-            <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800/80 flex flex-col gap-2">
-              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <Maximize2 size={13} className="text-rose-400" />
-                <span>Orientasi Kertas 4R:</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleOrientationChange('portrait')}
-                  className={`p-2.5 rounded-xl border text-center text-xs transition-all cursor-pointer ${
-                    !isLandscape
-                      ? 'border-rose-500 bg-rose-500/20 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
-                      : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="font-extrabold text-xs">Portrait (Tegak)</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">1200 × 1800 px (2:3)</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOrientationChange('landscape')}
-                  className={`p-2.5 rounded-xl border text-center text-xs transition-all cursor-pointer ${
-                    isLandscape
-                      ? 'border-rose-500 bg-rose-500/20 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
-                      : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="font-extrabold text-xs">Landscape (Mendatar)</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">1800 × 1200 px (3:2)</div>
-                </button>
+            {/* Ukuran Kertas & Orientasi Frame */}
+            <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800/80 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <FileText size={13} className="text-rose-400" />
+                  <span>Ukuran Kertas Frame:</span>
+                </label>
+                <span className="text-[10px] text-rose-300 font-mono bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/30">
+                  {canvasW} × {canvasH} px
+                </span>
               </div>
+
+              {/* Pilihan Ukuran Kertas Frame: 4R, 3x5cm, 5x5cm, dan Sesuai Gambar Frame */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {Object.values(PAPER_PRESETS).map((preset) => {
+                  const isSelected = (customFrame?.paperSize || '4R') === preset.id;
+                  const isImagePreset = preset.id === 'image';
+                  let dimLabel = `${preset.widthMm}×${preset.heightMm} mm`;
+                  if (isImagePreset) {
+                    dimLabel = customFrame?.imageUrl ? `${canvasW}×${canvasH} px` : 'Auto Desain';
+                  }
+
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handlePaperSizeChange(preset.id)}
+                      className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-rose-500 bg-rose-500/25 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
+                          : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      }`}
+                      title={preset.desc}
+                    >
+                      <div className="font-extrabold text-xs flex items-center justify-center gap-1">
+                        {isImagePreset && <Sparkles size={11} className="text-amber-400 shrink-0" />}
+                        <span>{preset.label}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                        {dimLabel}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Orientasi (Portrait / Landscape) or Info Kanvas Mengikuti Gambar */}
+              {paperPreset.id === 'image' ? (
+                <div className="p-2 rounded-xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-between text-[11px] text-slate-300">
+                  <span className="flex items-center gap-1.5 font-semibold text-rose-300">
+                    <Sparkles size={12} className="text-rose-400 shrink-0" />
+                    <span>Resolusi Mengikuti Gambar Frame</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-300 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700">
+                    {canvasW} × {canvasH} px ({isLandscape ? 'Landscape' : 'Portrait'})
+                  </span>
+                </div>
+              ) : paperPreset.hasOrientation ? (
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+                  <button
+                    type="button"
+                    onClick={() => handleOrientationChange('portrait')}
+                    className={`p-2 rounded-xl border text-center text-xs transition-all cursor-pointer ${
+                      !isLandscape
+                        ? 'border-rose-500 bg-rose-500/20 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
+                        : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[11px]">Portrait (Tegak)</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">
+                      {paperPreset.portrait.width} × {paperPreset.portrait.height} px
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOrientationChange('landscape')}
+                    className={`p-2 rounded-xl border text-center text-xs transition-all cursor-pointer ${
+                      isLandscape
+                        ? 'border-rose-500 bg-rose-500/20 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
+                        : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[11px]">Landscape (Mendatar)</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">
+                      {paperPreset.landscape.width} × {paperPreset.landscape.height} px
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                <div className="p-2 rounded-xl bg-slate-800/70 border border-slate-700/60 text-center text-[11px] text-slate-300">
+                  Format Persegi (1:1 Kotak) — Orientasi Simetris ({paperPreset.portrait.width} × {paperPreset.portrait.height} px)
+                </div>
+              )}
             </div>
 
             {/* Upload File Desain Frame (PNG / JPG) */}
@@ -1812,25 +2054,44 @@ export default function PrecisionFrameEditorModal({
               />
 
               {customFrame?.imageUrl ? (
-                <div className="flex items-center gap-2.5 p-2 bg-slate-800/80 rounded-xl border border-slate-700">
-                  <img
-                    src={customFrame.imageUrl}
-                    alt="Frame Preview"
-                    className={`w-12 object-contain rounded-lg border border-slate-700 bg-slate-950 shrink-0 ${
-                      isLandscape ? 'aspect-[3/2]' : 'aspect-[2/3]'
-                    }`}
-                  />
-                  <div className="text-xs text-slate-200 font-medium truncate flex-1">
-                    {customFrame.imageUrl.split('/').pop()}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2.5 p-2 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <img
+                      src={customFrame.imageUrl}
+                      alt="Frame Preview"
+                      className={`w-12 object-contain rounded-lg border border-slate-700 bg-slate-950 shrink-0 ${
+                        isLandscape ? 'aspect-[3/2]' : (paperPreset.hasOrientation ? 'aspect-[2/3]' : 'aspect-square')
+                      }`}
+                    />
+                    <div className="text-xs text-slate-200 font-medium truncate flex-1">
+                      <div className="truncate">{customFrame.imageUrl.split('/').pop()}</div>
+                      {(customFrame?.frameNaturalWidth || 0) > 0 && (
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          Resolusi asli: {customFrame.frameNaturalWidth} × {customFrame.frameNaturalHeight} px
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="px-2.5 py-1 text-xs font-bold bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 cursor-pointer"
+                    >
+                      Ganti File
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="px-2.5 py-1 text-xs font-bold bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 cursor-pointer"
-                  >
-                    Ganti File
-                  </button>
+
+                  {customFrame?.paperSize !== 'image' && (
+                    <button
+                      type="button"
+                      onClick={() => handlePaperSizeChange('image')}
+                      className="w-full py-1.5 px-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg text-[11px] text-amber-300 font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      title="Ubah ukuran kertas kanvas agar persis sama dengan resolusi gambar frame ini"
+                    >
+                      <Sparkles size={12} className="text-amber-400" />
+                      <span>Ubah Kertas Mengikuti Gambar Ini ({customFrame.frameNaturalWidth ? `${customFrame.frameNaturalWidth}×${customFrame.frameNaturalHeight} px` : 'Resolusi Gambar'})</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button
@@ -1847,7 +2108,7 @@ export default function PrecisionFrameEditorModal({
                   ) : (
                     <>
                       <Upload size={14} className="text-rose-400" />
-                      <span>Unggah Desain Frame 4R</span>
+                      <span>Unggah Desain Frame ({paperPreset.label})</span>
                     </>
                   )}
                 </button>
@@ -1901,7 +2162,7 @@ export default function PrecisionFrameEditorModal({
                     >
                       <div className="font-bold flex items-center gap-1 text-[11px]">
                         <Columns size={12} className="text-cyan-400" />
-                        <span>2 Strip (600 × 1800)</span>
+                        <span>{paperPreset.id === '4R' ? '2 Strip (600 × 1800)' : `2 Strip (${Math.round(canvasW / 2)} × ${canvasH})`}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">Anti-stretch + Mirror Kanan</div>
                     </button>
@@ -1921,7 +2182,7 @@ export default function PrecisionFrameEditorModal({
                     >
                       <div className="font-bold flex items-center gap-1 text-[11px]">
                         <Maximize2 size={12} className="text-rose-400" />
-                        <span>Penuh 4R (1200 × 1800)</span>
+                        <span>{paperPreset.id === '4R' ? 'Penuh 4R (1200 × 1800)' : `Penuh Frame (${canvasW} × ${canvasH})`}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">1 Lembar Penuh</div>
                     </button>

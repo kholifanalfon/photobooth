@@ -83,21 +83,12 @@ export async function cleanupIndexedDB(uploadId, totalChunks) {
 }
 
 /**
- * Step 2: Upload chunks sequentially from IndexedDB to server with fine-grained progress
- * @param {string} uploadId
- * @param {File} file
- * @param {number} totalChunks
- * @param {Object} options
- * @param {Function} [options.onProgress] - (percent: number, currentChunk: number, totalChunks: number) => void
- * @param {string} [options.apiBase] - API base URL
- * @returns {Promise<{ videoUrl: string, relativeUrl: string, filename: string }>}
- */
-/**
  * Direct single-request upload for small media files (images or small videos <= 4MB)
  * Ultra-fast with zero chunking and zero IndexedDB overhead.
+ * Supports category parameter for functional folder grouping ('frames' | 'media' | 'photos')
  */
 export async function uploadDirectMedia(file, options = {}) {
-  const { onProgress, apiBase = '' } = options;
+  const { onProgress, apiBase = '', category = '' } = options;
   const resolveUrl = (path) => {
     if (!apiBase) return path;
     const cleanBase = apiBase.replace(/\/+$/, '');
@@ -105,9 +96,15 @@ export async function uploadDirectMedia(file, options = {}) {
     return `${cleanBase}${cleanPath}`;
   };
 
-  const uploadEndpoint = resolveUrl('/api/photos/upload-video');
+  const endpointUrl = category
+    ? `/api/photos/upload-video?category=${encodeURIComponent(category)}`
+    : '/api/photos/upload-video';
+  const uploadEndpoint = resolveUrl(endpointUrl);
   const formData = new FormData();
   formData.append('video', file);
+  if (category) {
+    formData.append('category', category);
+  }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -152,8 +149,19 @@ export async function uploadDirectMedia(file, options = {}) {
   });
 }
 
+/**
+ * Step 2: Upload chunks sequentially/in-parallel from IndexedDB to server with fine-grained progress
+ * @param {string} uploadId
+ * @param {File} file
+ * @param {number} totalChunks
+ * @param {Object} options
+ * @param {Function} [options.onProgress] - (percent: number, currentChunk: number, totalChunks: number) => void
+ * @param {string} [options.apiBase] - API base URL
+ * @param {string} [options.category] - functional category ('media' | 'frames' | 'photos')
+ * @returns {Promise<{ videoUrl: string, relativeUrl: string, filename: string }>}
+ */
 export async function uploadChunksWithProgress(uploadId, file, totalChunks, options = {}) {
-  const { onProgress, apiBase = '', concurrency = 3 } = options;
+  const { onProgress, apiBase = '', concurrency = 3, category = 'media' } = options;
   const db = await getChunkDatabase();
 
   const resolveUrl = (path) => {
@@ -247,14 +255,15 @@ export async function uploadChunksWithProgress(uploadId, file, totalChunks, opti
     const workers = Array.from({ length: poolSize }, () => uploadWorker());
     await Promise.all(workers);
 
-    // Step 3: Trigger server-side merge of all chunks
+    // Step 3: Trigger server-side merge of all chunks with category
     const mergeRes = await fetch(mergeEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         uploadId,
         totalChunks,
-        originalName: file.name
+        originalName: file.name,
+        category
       })
     });
 

@@ -17,11 +17,35 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// Static uploads serving with explicit headers for image downloads
+// Static uploads serving with grouped subdirectories (photos, frames, media)
 const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+const framesDir = path.join(uploadsDir, 'frames');
+const mediaDir = path.join(uploadsDir, 'media');
+const photosDir = path.join(uploadsDir, 'photos');
+
+[uploadsDir, framesDir, mediaDir, photosDir].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Fallback resolver for root /uploads/:filename to check subdirectories (photos, frames, media)
+app.get('/uploads/:filename', (req, res, next) => {
+  const filename = path.basename(req.params.filename);
+  const directPath = path.join(uploadsDir, filename);
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+    return next();
+  }
+  const subdirs = ['photos', 'frames', 'media'];
+  for (const sub of subdirs) {
+    const candidate = path.join(uploadsDir, sub, filename);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return res.sendFile(candidate);
+    }
+  }
+  next();
+});
+
 app.use(
   '/uploads',
   express.static(uploadsDir, {
@@ -48,12 +72,19 @@ if (fs.existsSync(clientPublicFrames)) {
 }
 
 // Dedicated direct download endpoint: /api/photos/download/:filename
-// Forces Content-Disposition: attachment for mobile browser downloads
+// Searches across uploads/photos, uploads, uploads/frames, and uploads/media
 app.get('/api/photos/download/:filename', (req, res) => {
   const filename = path.basename(req.params.filename);
-  const filepath = path.join(uploadsDir, filename);
+  const candidates = [
+    path.join(photosDir, filename),
+    path.join(uploadsDir, filename),
+    path.join(framesDir, filename),
+    path.join(mediaDir, filename)
+  ];
 
-  if (!fs.existsSync(filepath)) {
+  const filepath = candidates.find((p) => fs.existsSync(p));
+
+  if (!filepath) {
     return res.status(404).json({ error: 'File foto tidak ditemukan' });
   }
 
@@ -96,5 +127,5 @@ app.use((req, res) => {
   });
 });
 
-export { app, uploadsDir, clientDistDir };
+export { app, uploadsDir, framesDir, mediaDir, photosDir, clientDistDir };
 export default app;

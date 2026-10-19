@@ -5,7 +5,8 @@ import {
   calculateCenterCrop,
   drawRoundRect,
   loadImage,
-  composePhotosToFrame
+  composePhotosToFrame,
+  renderPhotoToPaper
 } from '../src/utils/canvasCompositor.js';
 
 function createMockCanvas(hasRoundRect = true) {
@@ -531,5 +532,46 @@ test('composePhotosToFrame - Compositing Pipeline & Mock Canvas', async (t) => {
     } finally {
       if (originalDocument) global.document = originalDocument;
     }
+  });
+});
+
+test('renderPhotoToPaper - Clean Raw Photo Paper Rendering Suite', async (t) => {
+  await t.test('renders photo to 4R portrait (1200 x 1800) and landscape (1800 x 1200)', async () => {
+    const { canvas: canvasP } = createMockCanvas(true);
+    const resP = await renderPhotoToPaper(null, {
+      paperSize: '4R',
+      orientation: 'portrait',
+      customCanvas: canvasP
+    });
+    assert.strictEqual(resP.width, 1200);
+    assert.strictEqual(resP.height, 1800);
+
+    const { canvas: canvasL } = createMockCanvas(true);
+    const resL = await renderPhotoToPaper(null, {
+      paperSize: '4R',
+      orientation: 'landscape',
+      customCanvas: canvasL
+    });
+    assert.strictEqual(resL.width, 1800);
+    assert.strictEqual(resL.height, 1200);
+  });
+
+  await t.test('renders photo to 3x5cm (354 x 591) and 5x5cm square (591 x 591)', async () => {
+    const { canvas: canvas3x5 } = createMockCanvas(true);
+    const res3x5 = await renderPhotoToPaper(null, {
+      paperSize: '3x5cm',
+      orientation: 'portrait',
+      customCanvas: canvas3x5
+    });
+    assert.strictEqual(res3x5.width, 354);
+    assert.strictEqual(res3x5.height, 591);
+
+    const { canvas: canvas5x5 } = createMockCanvas(true);
+    const res5x5 = await renderPhotoToPaper(null, {
+      paperSize: '5x5cm',
+      customCanvas: canvas5x5
+    });
+    assert.strictEqual(res5x5.width, 591);
+    assert.strictEqual(res5x5.height, 591);
   });
 });

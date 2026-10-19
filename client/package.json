@@ -9,6 +9,7 @@
     "test": "node --test test/**/*.test.js"
   },
   "dependencies": {
+    "@mmote/niimbluelib": "^0.47.1",
     "clsx": "^2.1.1",
     "framer-motion": "^11.2.10",
     "idb": "^8.0.4",
