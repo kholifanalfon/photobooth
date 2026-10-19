@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCanvasForThermalLabel, ditherCanvasThermal } from '../src/utils/bluetoothPrinter.js';
+import { formatCanvasForThermalLabel, ditherCanvasThermal, PRINTER_MODEL_OPTIONS, getPrinterProfile } from '../src/utils/bluetoothPrinter.js';
 
 function createMockCanvas(width, height) {
   const operations = [];
@@ -113,4 +113,101 @@ test('formatCanvasForThermalLabel - Continuous roll auto-height calculation', ()
   } finally {
     delete globalThis.document;
   }
+});
+
+test('formatCanvasForThermalLabel - Explicit Landscape and Portrait orientations', () => {
+  globalThis.document = {
+    createElement(tag) {
+      return createMockCanvas(0, 0);
+    }
+  };
+
+  try {
+    const portraitSrc = createMockCanvas(800, 1200); // portrait
+    const landscapeRes = formatCanvasForThermalLabel(portraitSrc, {
+      labelWidthMm: 50,
+      labelHeightMm: 30,
+      orientation: 'landscape'
+    });
+    // Formatted label dimensions
+    assert.equal(landscapeRes.width, 384);
+    assert.equal(landscapeRes.height, 240);
+
+    const landscapeSrc = createMockCanvas(1200, 800); // landscape
+    const portraitRes = formatCanvasForThermalLabel(landscapeSrc, {
+      labelWidthMm: 50,
+      labelHeightMm: 30,
+      orientation: 'portrait'
+    });
+    assert.equal(portraitRes.width, 384);
+    assert.equal(portraitRes.height, 240);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test("formatCanvasForThermalLabel - Niimbot B1 Pro 300 DPI (567px printhead)", () => {
+  globalThis.document = {
+    createElement(tag) {
+      return createMockCanvas(0, 0);
+    }
+  };
+
+  try {
+    const src = createMockCanvas(1200, 1800); // 2:3 portrait photo
+    const dotsPerMm = 300 / 25.4; // ~11.81 dots/mm
+    const formatted = formatCanvasForThermalLabel(src, {
+      labelWidthMm: 50,
+      labelHeightMm: 30,
+      marginMm: 1.5,
+      fitMode: "fit",
+      autoRotate: true,
+      maxPrintheadPixels: 567,
+      dotsPerMm
+    });
+
+    // 50mm * 11.81 dots/mm = 590 clamped to 567 px printhead width
+    assert.equal(formatted.width, 567);
+    // 30mm * 11.81 dots/mm = 354 px height
+    assert.equal(formatted.height, 354);
+
+    const calls = formatted.getContext().calls;
+    const fill = calls.find(c => c.type === "fillRect");
+    assert.ok(fill);
+    assert.equal(fill.w, 567);
+    assert.equal(fill.h, 354);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('PRINTER_MODEL_OPTIONS & getPrinterProfile resolution', () => {
+  assert.ok(Array.isArray(PRINTER_MODEL_OPTIONS));
+  assert.ok(PRINTER_MODEL_OPTIONS.length >= 6);
+
+  // Explicit preset selection
+  const b1Pro = getPrinterProfile('b1_pro');
+  assert.equal(b1Pro.dpi, 300);
+  assert.equal(b1Pro.printheadPixels, 567);
+  assert.equal(b1Pro.taskType, 'D110M_V4');
+
+  const b1 = getPrinterProfile('b1');
+  assert.equal(b1.dpi, 203);
+  assert.equal(b1.printheadPixels, 384);
+  assert.equal(b1.taskType, 'B1');
+
+  const b21 = getPrinterProfile('b21');
+  assert.equal(b21.dpi, 203);
+  assert.equal(b21.printheadPixels, 384);
+  assert.equal(b21.taskType, 'D110');
+
+  // Fallback auto-detection from device name
+  const detectedPro = getPrinterProfile(null, 'B1 Pro-I708030351');
+  assert.equal(detectedPro.id, 'b1_pro');
+  assert.equal(detectedPro.dpi, 300);
+  assert.equal(detectedPro.printheadPixels, 567);
+
+  const detectedB21 = getPrinterProfile(null, 'Niimbot B21S');
+  assert.equal(detectedB21.id, 'b21');
+  assert.equal(detectedB21.dpi, 203);
 });

@@ -15,7 +15,8 @@ export default function PreviewResult({
   onResetSession,
   sessionId,
   apiBaseUrl,
-  initialCompositeUrl = null
+  initialCompositeUrl = null,
+  printerConfig: propPrinterConfig = null
 }) {
   // Existing 8 useState hooks preserved in exact order for test harness index stability
   const [compositeUrl, setCompositeUrl] = useState(initialCompositeUrl);
@@ -37,6 +38,8 @@ export default function PreviewResult({
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
 
   const printTimerRef = useRef(null);
+  const isPrintingRef = useRef(false);
+  const hasAutoPrintedRef = useRef(false);
 
   // Clear print timer on unmount
   useEffect(() => {
@@ -106,9 +109,9 @@ export default function PreviewResult({
     };
   }, [photos, layoutConfig]);
 
-  // Read autoPrint config from localStorage once composite is ready
+  // Read autoPrint config from localStorage once composite is ready (guarded against re-execution)
   useEffect(() => {
-    if (!compositeUrl) return;
+    if (!compositeUrl || hasAutoPrintedRef.current) return;
 
     let printerConfig = {};
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -118,6 +121,7 @@ export default function PreviewResult({
     }
 
     if (printerConfig.autoPrint) {
+      hasAutoPrintedRef.current = true;
       handlePrint('frame');
     }
   }, [compositeUrl]);
@@ -216,6 +220,14 @@ export default function PreviewResult({
   };
 
   const handlePrint = async (overrideMode, overrideIndices) => {
+    // Concurrency guard: ignore duplicate triggers while active print job is running
+    if (isPrintingRef.current) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('Proses cetak sedang berlangsung, mengabaikan panggilan ganda.');
+      }
+      return;
+    }
+
     const activeMode = overrideMode || printMode;
     const activeIndices = overrideIndices !== undefined ? overrideIndices : selectedPoseIndices;
 
@@ -225,176 +237,243 @@ export default function PreviewResult({
       if (activeIndices.length === 0) return;
     }
 
-    let printerConfig = {};
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        printerConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
-      } catch (e) {}
-    }
-
-    const printMethod = printerConfig.printMethod || 'kiosk';
-    const copies = Number(printerConfig.printCopies) || 1;
-    const printerName = printerConfig.printerName || 'Default System Printer';
-
+    isPrintingRef.current = true;
     setIsPrinting(true);
-    const imagesToPrint = [];
 
-    if (activeMode === 'frame') {
-      imagesToPrint.push(compositeUrl);
-    } else {
-      setPrintStatus('Menyiapkan lembar foto...');
-      const targetIndices = activeIndices.length > 0 ? activeIndices : [0];
-      for (const idx of targetIndices) {
-        if (rawPhotoUrls[idx]) {
-          imagesToPrint.push(rawPhotoUrls[idx]);
-        } else if (photos[idx]) {
-          try {
-            const res = await renderPhotoToPaper(photos[idx], {
-              paperSize: layoutConfig?.customFrame?.paperSize || '4R',
-              orientation: layoutConfig?.customFrame?.orientation || 'portrait',
-              customFrame: layoutConfig?.customFrame
-            });
-            if (res?.dataUrl) {
-              setRawPhotoUrls((prev) => ({ ...prev, [idx]: res.dataUrl }));
-              imagesToPrint.push(res.dataUrl);
-            } else {
+    try {
+      // 1. Live server fetch to ensure latest printer configuration is always applied
+      let freshServerConfig = null;
+      if (typeof window !== 'undefined' && window.location && window.location.host) {
+        try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch(`/api/config/landing?t=${Date.now()}`, {
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          freshServerConfig = data?.config || data;
+          if (freshServerConfig && typeof window !== 'undefined' && window.localStorage) {
+            try {
+              window.localStorage.setItem('photobooth_landing_config', JSON.stringify(freshServerConfig));
+            } catch (_) {}
+          }
+        }
+        } catch (_) {}
+      }
+
+      // 2. Read local storage cache
+      let storedConfig = {};
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          storedConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
+        } catch (e) {}
+      }
+
+      // Priority: freshServerConfig > storedConfig > propPrinterConfig
+      const printerConfig = {
+        ...(propPrinterConfig || {}),
+        ...storedConfig,
+        ...(freshServerConfig || {})
+      };
+
+      const printMethod = printerConfig.printMethod || 'kiosk';
+      // Safety clamp: copies can only be between 1 and 3 to prevent runaway print loops
+      const copies = Math.min(Math.max(1, Number(printerConfig.printCopies) || 1), 3);
+      const printerName = printerConfig.printerName || 'Default System Printer';
+
+      const imagesToPrint = [];
+
+      if (activeMode === 'frame') {
+        imagesToPrint.push(compositeUrl);
+      } else {
+        setPrintStatus('Menyiapkan lembar foto...');
+        const targetIndices = activeIndices.length > 0 ? activeIndices : [0];
+        for (const idx of targetIndices) {
+          if (rawPhotoUrls[idx]) {
+            imagesToPrint.push(rawPhotoUrls[idx]);
+          } else if (photos[idx]) {
+            try {
+              const res = await renderPhotoToPaper(photos[idx], {
+                paperSize: layoutConfig?.customFrame?.paperSize || '4R',
+                orientation: layoutConfig?.customFrame?.orientation || 'portrait',
+                customFrame: layoutConfig?.customFrame
+              });
+              if (res?.dataUrl) {
+                setRawPhotoUrls((prev) => ({ ...prev, [idx]: res.dataUrl }));
+                imagesToPrint.push(res.dataUrl);
+              } else {
+                imagesToPrint.push(photos[idx]);
+              }
+            } catch (err) {
               imagesToPrint.push(photos[idx]);
             }
-          } catch (err) {
-            imagesToPrint.push(photos[idx]);
           }
         }
       }
-    }
 
-    if (imagesToPrint.length === 0) {
-      setIsPrinting(false);
-      return;
-    }
+      if (imagesToPrint.length === 0) {
+        isPrintingRef.current = false;
+        setIsPrinting(false);
+        return;
+      }
 
-    if (printMethod === 'bluetooth') {
-      setPrintStatus(`Menghubungkan Bluetooth (${imagesToPrint.length} lembar)...`);
-      try {
-        if (typeof bluetoothPrinter !== 'undefined' && bluetoothPrinter.printImage) {
-          if (!bluetoothPrinter.isConnected && typeof navigator !== 'undefined' && navigator.bluetooth) {
-            setPrintStatus('Menyambungkan printer Bluetooth...');
-            await bluetoothPrinter.connect();
-          }
+      if (printMethod === 'bluetooth') {
+        const totalSheetsToPrint = imagesToPrint.length * copies;
+        setPrintStatus(`Menghubungkan Bluetooth (${totalSheetsToPrint} lembar)...`);
+        try {
+          if (typeof bluetoothPrinter !== 'undefined' && bluetoothPrinter.printImage) {
+            if (!bluetoothPrinter.isConnected && typeof navigator !== 'undefined' && navigator.bluetooth) {
+              setPrintStatus('Menyambungkan printer Bluetooth...');
+              await bluetoothPrinter.connect();
+            }
 
-          const btDensity = Number(printerConfig.bluetoothDensity ?? 2);
-          const btBrightness = Number(printerConfig.bluetoothBrightness ?? 22);
-          const btContrast = Number(printerConfig.bluetoothContrast ?? 1.15);
-          const btGamma = Number(printerConfig.bluetoothGamma ?? 1.75);
-          const btDither = printerConfig.bluetoothDither || 'atkinson';
-          const btSharpen = printerConfig.bluetoothSharpen !== false;
-          const btLabelSize = printerConfig.bluetoothLabelSize || '50x30';
-          const btLabelWidthMm = Number(printerConfig.bluetoothLabelWidthMm ?? 50);
-          const btLabelHeightMm = btLabelSize === 'continuous' ? 0 : Number(printerConfig.bluetoothLabelHeightMm ?? 30);
-          const btMarginMm = Number(printerConfig.bluetoothMarginMm ?? 1.5);
-          const btFitMode = printerConfig.bluetoothFitMode || 'fit';
-          const btAutoRotate = printerConfig.bluetoothAutoRotate !== false;
+            const btDensity = Number(printerConfig.bluetoothDensity ?? 1);
+            const btBrightness = Number(printerConfig.bluetoothBrightness ?? 0);
+            const btContrast = Number(printerConfig.bluetoothContrast ?? 1.10);
+            const btGamma = Number(printerConfig.bluetoothGamma ?? 1.15);
+            const btDither = printerConfig.bluetoothDither || 'atkinson';
+            const btSharpen = printerConfig.bluetoothSharpen !== false;
+            const btLabelSize = printerConfig.bluetoothLabelSize || '50x50';
+            const btLabelWidthMm = Number(printerConfig.bluetoothLabelWidthMm ?? 50);
+            const btLabelHeightMm = btLabelSize === 'continuous' ? 0 : Number(printerConfig.bluetoothLabelHeightMm ?? 50);
+            const btMarginMm = Number(printerConfig.bluetoothMarginMm ?? 0);
+            const btFitMode = printerConfig.bluetoothFitMode || 'fit';
+            const btAutoRotate = printerConfig.bluetoothAutoRotate !== false;
+            const btOrientation = printerConfig.printOrientation || 'portrait';
 
-          for (let i = 0; i < imagesToPrint.length; i++) {
-            setPrintStatus(`Mencetak lembar ${i + 1} dari ${imagesToPrint.length}...`);
-            await bluetoothPrinter.printImage(imagesToPrint[i], {
+            console.log('🖨️ [Print Execution: PreviewResult] Output Params:', {
+              source: freshServerConfig ? 'Server Live Fetch' : (storedConfig.bluetoothBrightness !== undefined ? 'LocalStorage' : 'Prop/Default'),
+              preset: printerConfig.bluetoothBrightnessPreset,
               density: btDensity,
               brightness: btBrightness,
               contrast: btContrast,
               gamma: btGamma,
-              ditherMethod: btDither,
+              dither: btDither,
               sharpen: btSharpen,
-              labelWidthMm: btLabelWidthMm,
-              labelHeightMm: btLabelHeightMm,
-              marginMm: btMarginMm,
-              fitMode: btFitMode,
-              autoRotate: btAutoRotate,
-              onProgress: (statusMsg) => {
-                setPrintStatus(`Lembar ${i + 1}/${imagesToPrint.length}: ${statusMsg}`);
-              }
+              labelSize: `${btLabelWidthMm}x${btLabelHeightMm}mm`,
+              orientation: btOrientation
             });
-            if (i < imagesToPrint.length - 1) {
-              await new Promise((r) => setTimeout(r, 600));
+
+            let sheetCounter = 0;
+            for (let c = 0; c < copies; c++) {
+              for (let i = 0; i < imagesToPrint.length; i++) {
+                sheetCounter++;
+                setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
+                await bluetoothPrinter.printImage(imagesToPrint[i], {
+                  printerModelPreset: printerConfig.printerModelPreset || 'b1_pro',
+                  density: btDensity,
+                  brightness: btBrightness,
+                  contrast: btContrast,
+                  gamma: btGamma,
+                  ditherMethod: btDither,
+                  sharpen: btSharpen,
+                  labelWidthMm: btLabelWidthMm,
+                  labelHeightMm: btLabelHeightMm,
+                  marginMm: btMarginMm,
+                  fitMode: btFitMode,
+                  autoRotate: btAutoRotate,
+                  orientation: btOrientation,
+                  onProgress: (statusMsg) => {
+                    setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+                  }
+                });
+                if (sheetCounter < totalSheetsToPrint) {
+                  await new Promise((r) => setTimeout(r, 600));
+                }
+              }
             }
           }
+          setPrintStatus('Cetak Bluetooth Berhasil!');
+          if (printTimerRef.current) clearTimeout(printTimerRef.current);
+          printTimerRef.current = setTimeout(() => {
+            setPrintStatus(null);
+            printTimerRef.current = null;
+          }, 3000);
+        } catch (btErr) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('Bluetooth print error:', btErr);
+          }
+          setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
+          if (printTimerRef.current) clearTimeout(printTimerRef.current);
+          printTimerRef.current = setTimeout(() => {
+            setPrintStatus(null);
+            printTimerRef.current = null;
+          }, 4000);
+        } finally {
+          isPrintingRef.current = false;
+          setIsPrinting(false);
         }
-        setPrintStatus('Cetak Bluetooth Berhasil!');
-        if (printTimerRef.current) clearTimeout(printTimerRef.current);
+        return;
+      }
+
+      if (printMethod === 'browser') {
+        if (typeof window !== 'undefined' && typeof window.print === 'function') {
+          window.print();
+        }
+        isPrintingRef.current = false;
+        setIsPrinting(false);
+        return;
+      }
+
+      // Kiosk Server API Print
+      setPrintStatus(
+        imagesToPrint.length > 1
+          ? `Mengirim ${imagesToPrint.length} lembar ke printer...`
+          : 'Mengirim ke printer...'
+      );
+
+      try {
+        const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
+        for (let i = 0; i < imagesToPrint.length; i++) {
+          const res = await fetch(printEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              copies,
+              printerName,
+              sessionId: sessionId || undefined,
+              sheetIndex: i,
+              totalSheets: imagesToPrint.length,
+              imageBase64: imagesToPrint[i]
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error(`Print server returned status ${res.status}`);
+          }
+        }
+
+        setPrintStatus(
+          imagesToPrint.length > 1
+            ? `${imagesToPrint.length} lembar terkirim ke antrean cetak!`
+            : 'Terkirim ke antrean cetak!'
+        );
+
+        if (printTimerRef.current) {
+          clearTimeout(printTimerRef.current);
+        }
         printTimerRef.current = setTimeout(() => {
           setPrintStatus(null);
           printTimerRef.current = null;
         }, 3000);
-      } catch (btErr) {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('Bluetooth print error:', btErr);
+      } catch (err) {
+        // Fallback: trigger native browser window print dialog
+        setPrintStatus(null);
+        if (typeof window !== 'undefined' && typeof window.print === 'function') {
+          window.print();
         }
-        setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
-        if (printTimerRef.current) clearTimeout(printTimerRef.current);
-        printTimerRef.current = setTimeout(() => {
-          setPrintStatus(null);
-          printTimerRef.current = null;
-        }, 4000);
       } finally {
+        isPrintingRef.current = false;
         setIsPrinting(false);
       }
-      return;
-    }
-
-    if (printMethod === 'browser') {
-      if (typeof window !== 'undefined' && typeof window.print === 'function') {
-        window.print();
+    } catch (unexpectedErr) {
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('Unexpected print error:', unexpectedErr);
       }
-      setIsPrinting(false);
-      return;
-    }
-
-    // Kiosk Server API Print
-    setPrintStatus(
-      imagesToPrint.length > 1
-        ? `Mengirim ${imagesToPrint.length} lembar ke printer...`
-        : 'Mengirim ke printer...'
-    );
-
-    try {
-      const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
-      for (let i = 0; i < imagesToPrint.length; i++) {
-        const res = await fetch(printEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            copies,
-            printerName,
-            sessionId: sessionId || undefined,
-            sheetIndex: i,
-            totalSheets: imagesToPrint.length,
-            imageBase64: imagesToPrint[i]
-          })
-        });
-
-        if (!res.ok) {
-          throw new Error(`Print server returned status ${res.status}`);
-        }
-      }
-
-      setPrintStatus(
-        imagesToPrint.length > 1
-          ? `${imagesToPrint.length} lembar terkirim ke antrean cetak!`
-          : 'Terkirim ke antrean cetak!'
-      );
-
-      if (printTimerRef.current) {
-        clearTimeout(printTimerRef.current);
-      }
-      printTimerRef.current = setTimeout(() => {
-        setPrintStatus(null);
-        printTimerRef.current = null;
-      }, 3000);
-    } catch (err) {
-      // Fallback: trigger native browser window print dialog
-      setPrintStatus(null);
-      if (typeof window !== 'undefined' && typeof window.print === 'function') {
-        window.print();
-      }
-    } finally {
+      isPrintingRef.current = false;
       setIsPrinting(false);
     }
   };
@@ -715,16 +794,18 @@ export default function PreviewResult({
 
               <button
                 type="button"
-                disabled={printMode === 'raw' && selectedPoseIndices.length === 0}
+                disabled={isPrinting || (printMode === 'raw' && selectedPoseIndices.length === 0)}
                 onClick={() => {
                   setIsPrintChoiceOpen(false);
                   handlePrint(printMode, selectedPoseIndices);
                 }}
                 className="flex-1 py-2.5 px-4 bg-slate-900 hover:bg-black disabled:opacity-40 text-white font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm transition-all cursor-pointer active:scale-98"
               >
-                <Printer size={15} />
+                {isPrinting ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
                 <span>
-                  {printMode === 'frame'
+                  {isPrinting
+                    ? 'Sedang Mencetak...'
+                    : printMode === 'frame'
                     ? 'Cetak Full Frame (1 Lembar)'
                     : selectedPoseIndices.length > 0
                     ? `Cetak Foto (${selectedPoseIndices.length} Lembar)`

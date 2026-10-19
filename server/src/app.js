@@ -7,6 +7,7 @@ import photoRoutes from './routes/photoRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import printRoutes from './routes/printRoutes.js';
 import configRoutes from './routes/configRoutes.js';
+import { prisma } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,6 +111,44 @@ app.get('/api/photos/download/:filename', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Admin settings route alias for backward compatibility and fast config bootstrapping
+app.get('/api/admin/settings', async (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  try {
+    let config = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const dbRecord = await prisma.appConfig.findUnique({
+          where: { key: 'landing_config' }
+        });
+        if (dbRecord && dbRecord.value) {
+          config = typeof dbRecord.value === 'string' ? JSON.parse(dbRecord.value) : dbRecord.value;
+        }
+      } catch (_) {}
+    }
+    if (!config) {
+      const configFile = path.resolve(__dirname, '../data/landing_config.json');
+      if (fs.existsSync(configFile)) {
+        try {
+          config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        } catch (_) {}
+      }
+    }
+    const adminCode = config?.adminExitCode || config?.adminCode || '9999';
+    return res.json({
+      success: true,
+      adminExitCode: adminCode,
+      landingConfig: config || {}
+    });
+  } catch (err) {
+    return res.json({ success: true, adminExitCode: '9999', landingConfig: {} });
+  }
 });
 
 app.use('/api/photos', photoRoutes);

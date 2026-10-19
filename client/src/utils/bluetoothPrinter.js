@@ -3,26 +3,18 @@
  * Web Bluetooth API Manager for Photobooth Direct Kiosk Printing
  *
  * Supports:
- * - Native NIIMBOT Bluetooth Printers (B21S, B21, B21 Pro, B1, D11, D110, B3S, etc.) via @mmote/niimbluelib
+ * - Native NIIMBOT Bluetooth Printers (B1 Pro, B1, B21 Pro, B21, B21S, D11, D110, B3S, etc.) via @mmote/niimbluelib
  * - Generic ESC/POS / BLE Serial Thermal Printers as fallback
- * - High-detail Floyd-Steinberg error diffusion dithering for photographic thermal printing
+ * - High-detail Floyd-Steinberg and Atkinson error diffusion dithering for photographic thermal printing
  */
 
 import { NiimbotBluetoothClient, ImageEncoder, PageColorType, PacketGenerator } from '@mmote/niimbluelib';
 
 /**
- * Floyd-Steinberg error diffusion dithering
- * Converts any canvas into a clean, photographic 1-bit monochrome canvas (pure 0x000000 black & 0xFFFFFF white).
- */
-/**
- * Advanced Thermal Halftoning Pipeline with Dot-Gain Compensation,
- * Gamma Correction, Dynamic Range Optimization, Edge Sharpening,
- * and Atkinson / Floyd-Steinberg Error Diffusion.
- * Specially designed for 203 DPI thermal printers (Niimbot B21/B21S, D110, ESC/POS).
- */
-/**
  * Formats, scales, crops, rotates and adds safe margins to any source canvas
  * to match the exact physical die-cut label sticker or continuous roll of a thermal printer.
+ *
+ * Supports orientation: 'auto' | 'portrait' | 'landscape'
  */
 export function formatCanvasForThermalLabel(sourceCanvas, options = {}) {
   if (typeof document === 'undefined') return sourceCanvas;
@@ -33,23 +25,41 @@ export function formatCanvasForThermalLabel(sourceCanvas, options = {}) {
     marginMm = 1.5,
     fitMode = 'fit',
     autoRotate = true,
+    orientation = 'auto',
     maxPrintheadPixels = 384,
     dotsPerMm = 8
   } = options;
 
-  const targetWidth = Math.min(maxPrintheadPixels, Math.round((Number(labelWidthMm) || 50) * dotsPerMm) || 384);
+  const targetWidth = Math.min(maxPrintheadPixels, Math.round((Number(labelWidthMm) || 50) * dotsPerMm) || maxPrintheadPixels);
   const isContinuous = !labelHeightMm || Number(labelHeightMm) <= 0;
 
   let srcW = sourceCanvas.width;
   let srcH = sourceCanvas.height;
 
-  // Determine if rotation will significantly better fill the target sticker orientation
+  // Determine rotation based on requested orientation preference:
   let shouldRotate = false;
-  if (autoRotate && !isContinuous) {
-    const isSrcPortrait = srcH > srcW;
-    const isDstLandscape = targetWidth > (Number(labelHeightMm) * dotsPerMm);
-    if ((isSrcPortrait && isDstLandscape) || (!isSrcPortrait && !isDstLandscape)) {
-      shouldRotate = true;
+  if (!isContinuous) {
+    if (orientation === 'landscape') {
+      // User explicitly requested Landscape:
+      // If source image is vertical/portrait (srcH > srcW), rotate 90° so it lays across the wide label
+      if (srcH > srcW) {
+        shouldRotate = true;
+      }
+    } else if (orientation === 'portrait') {
+      // User explicitly requested Portrait:
+      // If source image is horizontal/landscape (srcW > srcH), rotate 90° so it stands vertical
+      if (srcW > srcH) {
+        shouldRotate = true;
+      }
+    } else {
+      // 'auto': Automatically rotate if aspect ratio orientation is mismatched with label orientation
+      if (autoRotate !== false) {
+        const isSrcPortrait = srcH > srcW;
+        const isDstLandscape = targetWidth > (Number(labelHeightMm) * dotsPerMm);
+        if ((isSrcPortrait && isDstLandscape) || (!isSrcPortrait && !isDstLandscape)) {
+          shouldRotate = true;
+        }
+      }
     }
   }
 
@@ -74,7 +84,7 @@ export function formatCanvasForThermalLabel(sourceCanvas, options = {}) {
     targetHeight = Math.max(1, Math.round(Number(labelHeightMm) * dotsPerMm));
   }
 
-  // Margin calculation
+  // Margin calculation - minimum 1.5mm recommended for die-cut label gap clearance
   const marginPx = Math.max(0, Math.round((Number(marginMm) || 0) * dotsPerMm));
   const printableW = Math.max(1, targetWidth - marginPx * 2);
   const printableH = Math.max(1, targetHeight - marginPx * 2);
@@ -193,7 +203,7 @@ export function ditherCanvasThermal(sourceCanvas, targetWidth = 384, options = {
     gray[i] = Math.pow(val / 255, 1 / gamma) * 255;
   }
 
-  // 3. 4-Neighbor Laplacian Unsharp Masking for crisp contours on 203 DPI
+  // 3. 4-Neighbor Laplacian Unsharp Masking for crisp contours
   if (sharpen) {
     const sharpBuf = new Float32Array(gray.length);
     for (let y = 0; y < h; y++) {
@@ -280,6 +290,107 @@ export function ditherCanvasFloydSteinberg(sourceCanvas, targetWidth = 384, opti
   return ditherCanvasThermal(sourceCanvas, targetWidth, options);
 }
 
+
+export const PRINTER_MODEL_PROFILES = {
+  b1_pro: {
+    id: 'b1_pro',
+    label: 'Niimbot B1 Pro ✨',
+    desc: '300 DPI • 567 px • Protocol V4',
+    modelId: 4097,
+    dpi: 300,
+    printheadPixels: 567,
+    taskType: 'D110M_V4',
+    printDirection: 'top',
+    defaultLabelWidthMm: 50,
+    defaultLabelHeightMm: 30
+  },
+  b1: {
+    id: 'b1',
+    label: 'Niimbot B1',
+    desc: '203 DPI • 384 px • Standar',
+    modelId: 4096,
+    dpi: 203,
+    printheadPixels: 384,
+    taskType: 'B1',
+    printDirection: 'top',
+    defaultLabelWidthMm: 50,
+    defaultLabelHeightMm: 30
+  },
+  b21_pro: {
+    id: 'b21_pro',
+    label: 'Niimbot B21 Pro',
+    desc: '300 DPI • 591 px • Protocol V4',
+    modelId: 785,
+    dpi: 300,
+    printheadPixels: 591,
+    taskType: 'D110M_V4',
+    printDirection: 'top',
+    defaultLabelWidthMm: 50,
+    defaultLabelHeightMm: 30
+  },
+  b21: {
+    id: 'b21',
+    label: 'Niimbot B21 / B21S',
+    desc: '203 DPI • 384 px • Vintage',
+    modelId: 777,
+    dpi: 203,
+    printheadPixels: 384,
+    taskType: 'D110',
+    printDirection: 'top',
+    defaultLabelWidthMm: 50,
+    defaultLabelHeightMm: 30
+  },
+  d110: {
+    id: 'd110',
+    label: 'Niimbot D110 / D11',
+    desc: '203 DPI • 384 px • Pocket',
+    modelId: 4,
+    dpi: 203,
+    printheadPixels: 384,
+    taskType: 'D110',
+    printDirection: 'left',
+    defaultLabelWidthMm: 15,
+    defaultLabelHeightMm: 30
+  },
+  escpos: {
+    id: 'escpos',
+    label: 'Generic ESC/POS',
+    desc: '203 DPI • 384 px • POS 58mm',
+    modelId: 0,
+    dpi: 203,
+    printheadPixels: 384,
+    taskType: 'escpos',
+    printDirection: 'top',
+    defaultLabelWidthMm: 58,
+    defaultLabelHeightMm: 0
+  }
+};
+
+export const PRINTER_MODEL_OPTIONS = Object.values(PRINTER_MODEL_PROFILES);
+
+export function getPrinterProfile(presetKey, fallbackDeviceName = '') {
+  if (presetKey && PRINTER_MODEL_PROFILES[presetKey]) {
+    return PRINTER_MODEL_PROFILES[presetKey];
+  }
+  const upper = (fallbackDeviceName || '').toUpperCase();
+  if (upper.includes('B1 PRO') || upper.includes('B1PRO') || upper.includes('B1_PRO')) {
+    return PRINTER_MODEL_PROFILES.b1_pro;
+  }
+  if (upper.includes('B21 PRO') || upper.includes('B21PRO') || upper.includes('B21_PRO')) {
+    return PRINTER_MODEL_PROFILES.b21_pro;
+  }
+  if (upper.includes('B21S') || upper.includes('B21')) {
+    return PRINTER_MODEL_PROFILES.b21;
+  }
+  if (upper.includes('B1')) {
+    return PRINTER_MODEL_PROFILES.b1;
+  }
+  if (upper.includes('D110') || upper.includes('D11')) {
+    return PRINTER_MODEL_PROFILES.d110;
+  }
+  return PRINTER_MODEL_PROFILES.b1_pro;
+}
+
 export class WebBluetoothPrinter {
   constructor() {
     this.device = null;
@@ -288,10 +399,24 @@ export class WebBluetoothPrinter {
     this.isConnected = false;
     this.printerName = null;
     this.printerModel = null;
+    this.printerModelPreset = 'b1_pro';
+    this.printerDpi = 300;
     this.isNiimbot = false;
     this.niimbotClient = null;
-    this.printheadPixels = 384;
-    this.printTaskType = 'D110';
+    this.printheadPixels = 567;
+    this.printTaskType = 'D110M_V4';
+  }
+
+  setPrinterModel(presetKey) {
+    this.printerModelPreset = presetKey;
+    const profile = getPrinterProfile(presetKey, this.printerName);
+    this.printerDpi = profile.dpi;
+    this.printheadPixels = profile.printheadPixels;
+    this.printTaskType = profile.taskType;
+    if (this.niimbotClient?.printerInfo && profile.modelId) {
+      this.niimbotClient.printerInfo.modelId = profile.modelId;
+    }
+    return profile;
   }
 
   isSupported() {
@@ -301,7 +426,7 @@ export class WebBluetoothPrinter {
   /**
    * Request Bluetooth Device and establish GATT / Niimbot connection
    */
-  async connect() {
+  async connect(preferredPreset = null) {
     if (!this.isSupported()) {
       const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
       if (isIOS) {
@@ -312,6 +437,9 @@ export class WebBluetoothPrinter {
 
     try {
       this.disconnect();
+      if (preferredPreset) {
+        this.printerModelPreset = preferredPreset;
+      }
 
       // Request device with all required service UUIDs in optionalServices
       const device = await navigator.bluetooth.requestDevice({
@@ -353,23 +481,16 @@ export class WebBluetoothPrinter {
         this.isConnected = true;
         niimbotConnected = true;
 
-        // Auto-assign model ID fallback if omitted by printer response
-        if (!nbClient.printerInfo?.modelId) {
-          const upperName = (this.printerName || '').toUpperCase();
-          if (upperName.includes('B21S')) {
-            nbClient.printerInfo.modelId = 777; // B21S
-          } else if (upperName.includes('B21')) {
-            nbClient.printerInfo.modelId = 768; // B21
-          } else if (upperName.includes('B1')) {
-            nbClient.printerInfo.modelId = 4096; // B1
-          }
+        const activeProfile = getPrinterProfile(this.printerModelPreset, this.printerName);
+        if (activeProfile.modelId) {
+          nbClient.printerInfo.modelId = activeProfile.modelId;
         }
-
-        const taskType = nbClient.getPrintTaskType();
-        this.printTaskType = taskType || 'D110';
+        const taskType = activeProfile.taskType || nbClient.getPrintTaskType();
+        this.printTaskType = taskType || 'D110M_V4';
         const meta = nbClient.getModelMetadata();
-        this.printerModel = meta?.model || device.name;
-        this.printheadPixels = meta?.printheadPixels || 384;
+        this.printerModel = activeProfile.label || meta?.model || device.name;
+        this.printheadPixels = activeProfile.printheadPixels || meta?.printheadPixels || 567;
+        this.printerDpi = activeProfile.dpi || meta?.dpi || 300;
       } catch (nbErr) {
         if (typeof console !== 'undefined' && console.log) {
           console.log('Niimbot handshake skipped/failed, checking generic GATT:', nbErr?.message || nbErr);
@@ -405,6 +526,7 @@ export class WebBluetoothPrinter {
         this.isNiimbot = false;
         this.isConnected = true;
         this.printheadPixels = 384;
+        this.printerDpi = 203;
       }
 
       return {
@@ -412,7 +534,9 @@ export class WebBluetoothPrinter {
         name: this.printerName,
         model: this.printerModel,
         type: this.isNiimbot ? 'niimbot' : 'escpos',
-        id: device.id
+        id: device.id,
+        dpi: this.printerDpi,
+        printheadPixels: this.printheadPixels
       };
     } catch (err) {
       this.disconnect();
@@ -432,6 +556,8 @@ export class WebBluetoothPrinter {
     this.server = null;
     this.writeCharacteristic = null;
     this.isNiimbot = false;
+    this.printheadPixels = 384;
+    this.printerDpi = 203;
   }
 
   /**
@@ -443,57 +569,56 @@ export class WebBluetoothPrinter {
     }
 
     const uint8 = new Uint8Array(dataBuffer);
-    for (let offset = 0; offset < uint8.length; offset += chunkSize) {
-      const chunk = uint8.slice(offset, offset + chunkSize);
+    for (let offset = 0; offset < uint8.byteLength; offset += chunkSize) {
+      const slice = uint8.slice(offset, offset + chunkSize);
       if (this.writeCharacteristic.writeValueWithoutResponse) {
-        await this.writeCharacteristic.writeValueWithoutResponse(chunk);
+        await this.writeCharacteristic.writeValueWithoutResponse(slice);
       } else {
-        await this.writeCharacteristic.writeValue(chunk);
+        await this.writeCharacteristic.writeValue(slice);
       }
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((r) => setTimeout(r, 25));
     }
   }
 
   /**
-   * Converts a canvas or image URL to binary bitmap format and prints
+   * Print an image directly to the connected Bluetooth thermal printer
+   * Supports Niimbot native protocol and generic ESC/POS raster bit image
    */
-  async printImage(imageUrlOrCanvas, options = {}) {
+  async printImage(imageSource, options = {}, onProgress = null) {
+    if (!this.isConnected) {
+      throw new Error('Printer Bluetooth belum terhubung. Silakan hubungkan terlebih dahulu di pengaturan printer.');
+    }
+
     const {
-      onProgress = null,
-      density = 2,
-      labelType = 1,
-      ditherMethod = 'atkinson',
-      brightness = 22,
-      contrast = 1.15,
-      gamma = 1.75,
-      sharpen = true,
       labelWidthMm = 50,
       labelHeightMm = 30,
       marginMm = 1.5,
       fitMode = 'fit',
-      autoRotate = true
+      autoRotate = true,
+      orientation = 'auto',
+      density = 2,
+      ditherMethod = 'atkinson',
+      brightness = 22,
+      contrast = 1.15,
+      gamma = 1.75,
+      sharpen = true
     } = options;
 
-    if (!this.isConnected) {
-      if (onProgress) onProgress('Menyambungkan printer Bluetooth...');
-      await this.connect();
-    }
-
-    let canvas;
-    if (typeof HTMLCanvasElement !== 'undefined' && imageUrlOrCanvas instanceof HTMLCanvasElement) {
-      canvas = imageUrlOrCanvas;
-    } else {
-      if (typeof document === 'undefined') {
-        throw new Error('Canvas not available in current environment');
-      }
-      canvas = document.createElement('canvas');
+    // Convert source to HTMLCanvasElement if passed as Image/URL
+    let canvas = imageSource;
+    if (typeof HTMLCanvasElement !== 'undefined' && !(imageSource instanceof HTMLCanvasElement)) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
+      if (typeof imageSource === 'string') {
+        img.src = imageSource;
+      } else if (imageSource.src) {
+        img.src = imageSource.src;
+      }
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = reject;
-        img.src = imageUrlOrCanvas;
+        img.onerror = () => reject(new Error('Gagal memuat gambar untuk dicetak.'));
       });
+      canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
@@ -512,25 +637,27 @@ export class WebBluetoothPrinter {
           this.niimbotClient.protocol.setPacketTimeout(5000);
         }
 
-        // 3. Ensure fallback modelId
-        if (!this.niimbotClient.printerInfo?.modelId) {
-          const upperName = (this.printerName || '').toUpperCase();
-          if (upperName.includes('B21S')) {
-            this.niimbotClient.printerInfo.modelId = 777;
-          } else if (upperName.includes('B21')) {
-            this.niimbotClient.printerInfo.modelId = 768;
-          }
+        // 3. Resolve active printer profile and apply exact modelId
+        const activeProfile = getPrinterProfile(options.printerModelPreset || this.printerModelPreset, this.printerName);
+        if (activeProfile.modelId) {
+          this.niimbotClient.printerInfo.modelId = activeProfile.modelId;
         }
 
+        const meta = this.niimbotClient.getModelMetadata();
+        const targetPixels = activeProfile.printheadPixels || meta?.printheadPixels || this.printheadPixels || 567;
+        const printerDpi = activeProfile.dpi || meta?.dpi || this.printerDpi || 300;
+        const dotsPerMm = printerDpi / 25.4;
+
         // 4. Format canvas to exact label dimensions, orientation & safe margin
-        const targetPixels = this.niimbotClient.getModelMetadata()?.printheadPixels || this.printheadPixels || 384;
         const formattedCanvas = formatCanvasForThermalLabel(canvas, {
           labelWidthMm,
           labelHeightMm,
           marginMm,
           fitMode,
           autoRotate,
-          maxPrintheadPixels: targetPixels
+          orientation,
+          maxPrintheadPixels: targetPixels,
+          dotsPerMm
         });
 
         // 5. Process thermal halftoning
@@ -544,7 +671,7 @@ export class WebBluetoothPrinter {
         });
 
         // 6. Initialize Niimbot print task
-        const taskType = this.niimbotClient.getPrintTaskType() || this.printTaskType || 'D110';
+        const taskType = activeProfile.taskType || this.niimbotClient.getPrintTaskType() || this.printTaskType || 'D110M_V4';
         const detectedLabelType = (Number(labelHeightMm) <= 0) ? 3 : 1;
         const effectiveLabelType = this.niimbotClient.printerInfo?.labelType ?? detectedLabelType;
 
@@ -558,48 +685,32 @@ export class WebBluetoothPrinter {
 
         if (onProgress) onProgress('Menginisialisasi printer Niimbot...');
 
-        // Safe density setting: some firmware revisions do not reply to 0x21 (setDensity) with 0x31.
-        // We catch this error safely so it does not abort the print job.
+        // Clean task initialization via task.printInit()
         try {
-          await this.niimbotClient.protocol.send(PacketGenerator.setDensity(density), 2500);
-        } catch (densErr) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('Niimbot: setDensity skipped or not acknowledged by firmware:', densErr?.message);
-          }
-        }
-
-        // Safe label type setting
-        try {
-          await this.niimbotClient.protocol.send(PacketGenerator.setLabelType(effectiveLabelType), 2500);
-        } catch (ltErr) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('Niimbot: setLabelType skipped or not acknowledged:', ltErr?.message);
-          }
-        }
-
-        // Print start command
-        try {
-          if (taskType === 'B1') {
-            await this.niimbotClient.protocol.send(PacketGenerator.printStart7b(1, PageColorType.SingleColor), 5000);
-          } else {
-            await this.niimbotClient.protocol.send(PacketGenerator.printStart1b(), 5000);
-          }
-        } catch (startErr) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('Niimbot: printStart direct packet note, attempting task.printInit fallback:', startErr?.message);
-          }
+          await task.printInit();
+        } catch (initErr) {
+          // Fallback if individual firmware requires direct packets
           try {
-            await task.printInit();
-          } catch (initErr) {
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn('task.printInit fallback note:', initErr?.message);
+            await this.niimbotClient.protocol.send(PacketGenerator.setDensity(density), 2500);
+          } catch (_) {}
+          try {
+            await this.niimbotClient.protocol.send(PacketGenerator.setLabelType(effectiveLabelType), 2500);
+          } catch (_) {}
+          try {
+            if (taskType === 'B1') {
+              await this.niimbotClient.protocol.send(PacketGenerator.printStart7b(1, PageColorType.SingleColor), 5000);
+            } else if (taskType === 'D110M_V4') {
+              await this.niimbotClient.protocol.send(PacketGenerator.printStart9b(1, PageColorType.SingleColor, 1), 5000);
+            } else {
+              await this.niimbotClient.protocol.send(PacketGenerator.printStart1b(), 5000);
             }
-          }
+          } catch (_) {}
         }
 
-        // 6. Encode image and send page packets
+        // 7. Encode image and send page packets
         if (onProgress) onProgress('Mengirim data cetak ke printer...');
-        const encoded = ImageEncoder.encodeCanvas(dithered, PageColorType.SingleColor, 'top');
+        const printDirection = activeProfile.printDirection || meta?.printDirection || (taskType === 'D110' || taskType === 'D11_V1' ? 'left' : 'top');
+        const encoded = ImageEncoder.encodeCanvas(dithered, PageColorType.SingleColor, printDirection);
 
         // Dynamic page timeout based on row count (at least 35s, allowing ~60ms per row for BLE transfer + thermal burning + paper feed)
         const totalRows = encoded?.rows || 500;
@@ -626,21 +737,43 @@ export class WebBluetoothPrinter {
 
         if (onProgress) onProgress('Menyelesaikan halaman cetak...');
         try {
-          if (typeof task.waitForFinished === 'function') {
+          // For D110 / B21S (model 777), the printer hardware automatically advances and stops cleanly at the die-cut label gap after pageEnd.
+          // Polling status (0xA3) repeatedly during motor feeding can interrupt the gap sensor and trigger re-printing/buffer replay loops.
+          // Therefore, a simple 1200ms stabilization delay is used instead of active BLE status query polling.
+          if (taskType === 'D110' || taskType === 'B21L2_B') {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+          } else if (typeof task.waitForFinished === 'function') {
             await Promise.race([
               task.waitForFinished(),
-              new Promise((resolve) => setTimeout(resolve, 8000))
+              new Promise((resolve) => setTimeout(resolve, 3000))
             ]);
           }
         } catch (waitErr) {
           if (typeof console !== 'undefined' && console.warn) {
             console.warn('Niimbot: status poll notice (paper printing/printed):', waitErr?.message);
           }
+        } finally {
+          // Critical: Always cancel status poll timer so no background setInterval remains active
+          try {
+            if (typeof this.niimbotClient?.protocol?.cancelStatusPoll === 'function') {
+              this.niimbotClient.protocol.cancelStatusPoll();
+            }
+          } catch (_) {}
         }
 
-        try {
-          await this.niimbotClient.protocol.printEnd();
-        } catch (_) {}
+        // Clean task termination
+        // B1 Pro (D110M_V4) sends printEnd followed by a heartbeat packet via task.printEnd()
+        // B1 and B21_V1 send protocol.printEnd()
+        // D110/B21S skip printEnd to prevent double label feed
+        if (taskType === 'B1' || taskType === 'B21_V1') {
+          try {
+            await this.niimbotClient.protocol.printEnd();
+          } catch (_) {}
+        } else if (taskType === 'D110M_V4' && typeof task.printEnd === 'function') {
+          try {
+            await task.printEnd();
+          } catch (_) {}
+        }
 
         return { success: true };
       } finally {
@@ -660,6 +793,7 @@ export class WebBluetoothPrinter {
       marginMm,
       fitMode,
       autoRotate,
+      orientation,
       maxPrintheadPixels: 384
     });
     if (onProgress) onProgress('Memproses cetak ESC/POS...');

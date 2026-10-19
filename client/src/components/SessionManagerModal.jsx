@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -86,6 +86,8 @@ export default function SessionManagerModal({
   const [selectedPoseIndices, setSelectedPoseIndices] = useState([]);
   const [printStatus, setPrintStatus] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
+
+  const isPrintingRef = useRef(false);
 
   const handleOpenPreview = (session, initialIndex = 0) => {
     setPreviewPhoto(session);
@@ -217,6 +219,14 @@ export default function SessionManagerModal({
 
   // Core Print Execution Handler (Full Frame vs Foto Saja)
   const handleExecutePrint = async (session, mode = 'frame', overrideIndices = null, forcedPhotoUrl = null) => {
+    // Concurrency guard: ignore duplicate calls while active print job is running
+    if (isPrintingRef.current) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('Proses cetak sedang berlangsung, panggilan ganda diabaikan.');
+      }
+      return;
+    }
+
     const targetSession = session || previewPhoto || printChoiceSession;
     if (!targetSession) return;
     const sessId = targetSession.id;
@@ -247,16 +257,115 @@ export default function SessionManagerModal({
       return;
     }
 
+    isPrintingRef.current = true;
     setIsPrinting(true);
     setPrintStatus('Menyiapkan lembar cetak...');
     setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'printing' }));
 
+    // 1. Live server fetch to ensure latest printer configuration is always applied
+    let freshServerConfig = null;
     try {
-      // 1. Bluetooth printer if connected
-      if (bluetoothPrinter.isConnected) {
-        setPrintStatus(`Mencetak via Bluetooth (${imagesToPrint.length} lembar)...`);
-        for (const imgUrl of imagesToPrint) {
-          await bluetoothPrinter.printImage(imgUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`/api/config/landing?t=${Date.now()}`, {
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        freshServerConfig = data?.config || data;
+        if (freshServerConfig && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem('photobooth_landing_config', JSON.stringify(freshServerConfig));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // 2. Read local storage cache
+    let storedConfig = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        storedConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
+      } catch (e) {}
+    }
+
+    // Priority: freshServerConfig > storedConfig > printerConfig (props)
+    const effectiveConfig = {
+      ...(printerConfig || {}),
+      ...storedConfig,
+      ...(freshServerConfig || {})
+    };
+    const printMethod = effectiveConfig.printMethod || (bluetoothPrinter.isConnected ? 'bluetooth' : 'kiosk');
+    // Safety clamp: copies can only be between 1 and 3 to prevent runaway printing
+    const copies = Math.min(Math.max(1, Number(effectiveConfig.printCopies) || 1), 3);
+    const printerName = effectiveConfig.printerName || 'Niimbot 4R Photo Printer';
+
+    try {
+      // 1. Bluetooth printer
+      if (printMethod === 'bluetooth') {
+        if (!bluetoothPrinter.isConnected && typeof navigator !== 'undefined' && navigator.bluetooth) {
+          setPrintStatus('Menyambungkan printer Bluetooth...');
+          await bluetoothPrinter.connect();
+        }
+
+        const btDensity = Number(effectiveConfig.bluetoothDensity ?? 1);
+        const btBrightness = Number(effectiveConfig.bluetoothBrightness ?? 0);
+        const btContrast = Number(effectiveConfig.bluetoothContrast ?? 1.10);
+        const btGamma = Number(effectiveConfig.bluetoothGamma ?? 1.15);
+        const btDither = effectiveConfig.bluetoothDither || 'atkinson';
+        const btSharpen = effectiveConfig.bluetoothSharpen !== false;
+        const btLabelSize = effectiveConfig.bluetoothLabelSize || '50x50';
+        const btLabelWidthMm = Number(effectiveConfig.bluetoothLabelWidthMm ?? 50);
+        const btLabelHeightMm = btLabelSize === 'continuous' ? 0 : Number(effectiveConfig.bluetoothLabelHeightMm ?? 50);
+        const btMarginMm = Number(effectiveConfig.bluetoothMarginMm ?? 0);
+        const btFitMode = effectiveConfig.bluetoothFitMode || 'fit';
+        const btAutoRotate = effectiveConfig.bluetoothAutoRotate !== false;
+        const btOrientation = effectiveConfig.printOrientation || 'portrait';
+
+        console.log('🖨️ [Print Execution: SessionManager] Output Params:', {
+          source: freshServerConfig ? 'Server Live Fetch' : (storedConfig.bluetoothBrightness !== undefined ? 'LocalStorage' : 'Prop/Default'),
+          preset: effectiveConfig.bluetoothBrightnessPreset,
+          density: btDensity,
+          brightness: btBrightness,
+          contrast: btContrast,
+          gamma: btGamma,
+          dither: btDither,
+          sharpen: btSharpen,
+          labelSize: `${btLabelWidthMm}x${btLabelHeightMm}mm`,
+          orientation: btOrientation
+        });
+
+        const totalSheetsToPrint = imagesToPrint.length * copies;
+        setPrintStatus(`Mencetak via Bluetooth (${totalSheetsToPrint} lembar)...`);
+        let sheetCounter = 0;
+        for (let c = 0; c < copies; c++) {
+          for (let i = 0; i < imagesToPrint.length; i++) {
+            sheetCounter++;
+            setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
+            await bluetoothPrinter.printImage(imagesToPrint[i], {
+              printerModelPreset: effectiveConfig.printerModelPreset || 'b1_pro',
+              density: btDensity,
+              brightness: btBrightness,
+              contrast: btContrast,
+              gamma: btGamma,
+              ditherMethod: btDither,
+              sharpen: btSharpen,
+              labelWidthMm: btLabelWidthMm,
+              labelHeightMm: btLabelHeightMm,
+              marginMm: btMarginMm,
+              fitMode: btFitMode,
+              autoRotate: btAutoRotate,
+              orientation: btOrientation,
+              onProgress: (statusMsg) => {
+                setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+              }
+            });
+            if (sheetCounter < totalSheetsToPrint) {
+              await new Promise((r) => setTimeout(r, 600));
+            }
+          }
         }
         setPrintStatus('Berhasil dicetak via Bluetooth! ✅');
         setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'success' }));
@@ -268,7 +377,21 @@ export default function SessionManagerModal({
         return;
       }
 
-      // 2. Server Kiosk /api/print endpoint
+      // 2. Browser print method
+      if (printMethod === 'browser') {
+        if (typeof window !== 'undefined' && typeof window.print === 'function') {
+          window.print();
+        }
+        setPrintStatus('Jendela cetak peramban dibuka ✅');
+        setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'success' }));
+        setTimeout(() => {
+          setPrintStatus(null);
+          setPrintStatusMap((prev) => ({ ...prev, [sessId]: null }));
+        }, 3000);
+        return;
+      }
+
+      // 3. Server Kiosk /api/print endpoint
       setPrintStatus(`Mengirim perintah cetak (${imagesToPrint.length} lembar)...`);
       const printEndpoint = resolveApiUrl('/api/print');
       for (const imgUrl of imagesToPrint) {
@@ -277,9 +400,9 @@ export default function SessionManagerModal({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sessionId: targetSession.id,
-            copies: printerConfig.printCopies || 1,
+            copies,
             imageUrl: imgUrl,
-            printerName: printerConfig.printerName || 'Niimbot 4R Photo Printer'
+            printerName
           })
         });
 
@@ -305,6 +428,7 @@ export default function SessionManagerModal({
         setPrintStatusMap((prev) => ({ ...prev, [sessId]: null }));
       }, 4000);
     } finally {
+      isPrintingRef.current = false;
       setIsPrinting(false);
     }
   };
@@ -879,19 +1003,19 @@ export default function SessionManagerModal({
       </AnimatePresence>
 
       {/* ============================================================== */}
-      {/* PRINT CHOICE DIALOG (FULL FRAME VS FOTO SAJA 1:1)             */}
+      {/* PRINT CHOICE MODAL (FULL FRAME VS FOTO SAJA)                   */}
       {/* ============================================================== */}
       {isPrintChoiceOpen && (previewPhoto || printChoiceSession) && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Pilihan Cetak Foto"
-          className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 animate-fade-in"
+          className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 animate-fade-in select-none"
           onClick={() => setIsPrintChoiceOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
+            className="w-full max-w-lg bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-scale-up text-slate-800"
           >
             {/* Header */}
             <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -996,9 +1120,10 @@ export default function SessionManagerModal({
               {/* Sub-section: Daftar Foto untuk Foto Saja */}
               {printMode === 'raw' && (
                 (() => {
-                  const targetSession = previewPhoto || printChoiceSession;
-                  const poses = Array.isArray(targetSession?.photos) ? targetSession.photos : [];
+                  const currentSess = previewPhoto || printChoiceSession;
+                  const poses = Array.isArray(currentSess?.photos) ? currentSess.photos : [];
                   if (poses.length === 0) return null;
+
                   return (
                     <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 animate-fade-in">
                       <div className="flex items-center justify-between text-xs">
@@ -1022,9 +1147,9 @@ export default function SessionManagerModal({
 
                       {/* Thumbnail grid */}
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[32vh] overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200/80 custom-scrollbar">
-                        {poses.map((p, idx) => {
+                        {poses.map((photo, idx) => {
                           const isChecked = selectedPoseIndices.includes(idx);
-                          const pUrl = resolveApiUrl(p?.url || p);
+                          const photoUrl = photo?.url || photo;
                           return (
                             <div
                               key={idx}
@@ -1043,10 +1168,11 @@ export default function SessionManagerModal({
                             >
                               <div className="w-full aspect-[3/4] relative overflow-hidden bg-slate-100">
                                 <img
-                                  src={pUrl}
+                                  src={resolveApiUrl(photoUrl)}
                                   alt={`Pose ${idx + 1}`}
                                   className="w-full h-full object-cover"
                                 />
+                                {/* Checkbox badge */}
                                 <div className={`absolute top-1 right-1 w-5 h-5 rounded-md flex items-center justify-center transition-colors shadow-xs ${
                                   isChecked ? 'bg-rose-500 text-white' : 'bg-slate-900/50 text-white/40 border border-white/60'
                                 }`}>
@@ -1086,7 +1212,7 @@ export default function SessionManagerModal({
 
               <button
                 type="button"
-                disabled={printMode === 'raw' && selectedPoseIndices.length === 0}
+                disabled={isPrinting || (printMode === 'raw' && selectedPoseIndices.length === 0)}
                 onClick={() => {
                   const targetSession = previewPhoto || printChoiceSession;
                   setIsPrintChoiceOpen(false);
@@ -1094,9 +1220,11 @@ export default function SessionManagerModal({
                 }}
                 className="flex-1 py-2.5 px-4 bg-slate-900 hover:bg-black disabled:opacity-40 text-white font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm transition-all cursor-pointer active:scale-98"
               >
-                <Printer size={15} />
+                {isPrinting ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
                 <span>
-                  {printMode === 'frame'
+                  {isPrinting
+                    ? 'Sedang Mencetak...'
+                    : printMode === 'frame'
                     ? 'Cetak Full Frame (1 Lembar)'
                     : selectedPoseIndices.length > 0
                     ? `Cetak Foto (${selectedPoseIndices.length} Lembar)`

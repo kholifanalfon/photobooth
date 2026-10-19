@@ -57,6 +57,7 @@ import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
 import SessionCodeModal from './SessionCodeModal.jsx';
 import SessionManagerModal from './SessionManagerModal.jsx';
 import FrameManagerModal from './FrameManagerModal.jsx';
+import PrinterConfigModal from './PrinterConfigModal.jsx';
 import {
   getFastVideoUrl,
   preloadAndCacheVideo,
@@ -145,6 +146,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
   const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
   const [isFrameManagerOpen, setIsFrameManagerOpen] = useState(false);
+  const [isPrinterConfigOpen, setIsPrinterConfigOpen] = useState(false);
   const prevVideoUrlRef = useRef(null);
   const isLaunchingRef = useRef(false);
 
@@ -1131,6 +1133,15 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         onGoLive={handleGoLive}
         onOpenSessions={() => setIsSessionsModalOpen(true)}
         onOpenFrameManager={() => setIsFrameManagerOpen(true)}
+        onOpenPrinterConfig={() => setIsPrinterConfigOpen(true)}
+      />
+
+      {/* Printer Configuration Modal (Root Level) */}
+      <PrinterConfigModal
+        isOpen={isPrinterConfigOpen}
+        onClose={() => setIsPrinterConfigOpen(false)}
+        config={config}
+        onUpdateConfig={handleUpdateConfig}
       />
 
       {/* Frame Manager Modal */}
@@ -1145,10 +1156,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
       <SessionManagerModal
         isOpen={isSessionsModalOpen}
         onClose={() => setIsSessionsModalOpen(false)}
-        printerConfig={{
-          printerName: config?.printerName,
-          printCopies: config?.printCopies
-        }}
+        printerConfig={config}
       />
 
       {/* Session Access Code Modal (Opens if requireSessionCode is active) */}

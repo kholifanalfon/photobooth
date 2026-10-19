@@ -57,6 +57,7 @@ test('PrinterConfigModal - Thermal Label & Printer Suite', async (t) => {
     bluetoothMarginMm: 1.5,
     bluetoothFitMode: 'fit',
     bluetoothAutoRotate: true,
+    printOrientation: 'auto',
     bluetoothDensity: 2,
     bluetoothBrightnessPreset: 'terang',
     bluetoothBrightness: 22,
@@ -98,6 +99,11 @@ test('PrinterConfigModal - Thermal Label & Printer Suite', async (t) => {
     assert.ok(markup.includes('1.5 mm ✨'));
     assert.ok(markup.includes('Batas Aman 1.5 mm'));
 
+    // Orientation Controls
+    assert.ok(markup.includes('Orientasi Cetak Stiker:'));
+    assert.ok(markup.includes('Portrait (Tegak)') || markup.includes('Portrait'));
+    assert.ok(markup.includes('Landscape (Mendatar)') || markup.includes('Landscape'));
+
     // Fit & Auto-Rotate Controls
     assert.ok(markup.includes('Penyesuaian Stiker:'));
     assert.ok(markup.includes('Muat Utuh ✨'));
@@ -108,5 +114,29 @@ test('PrinterConfigModal - Thermal Label & Printer Suite', async (t) => {
     assert.ok(markup.includes('Atkinson Tone Mapping'));
     assert.ok(markup.includes('Cerah / Kiosk ✨ (+22)'));
     assert.ok(markup.includes('2 - Sedang ✨ (Rekomendasi)'));
+
+    // Printer Model Selection Controls
+    assert.ok(markup.includes('Model &amp; Tipe Printer:') || markup.includes('Model & Tipe Printer:'));
+    assert.ok(markup.includes('Niimbot B1 Pro'));
+    assert.ok(markup.includes('Niimbot B1'));
+    assert.ok(markup.includes('Niimbot B21 Pro'));
+    assert.ok(markup.includes('Niimbot B21 / B21S'));
+    assert.ok(markup.includes('Niimbot D110'));
+    assert.ok(markup.includes('Generic ESC/POS'));
+  });
+
+  await t.test('renders 300 DPI header badge when printerModelPreset is b1_pro', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PrinterConfigModal, {
+        isOpen: true,
+        onClose: () => {},
+        config: {
+          ...mockConfig,
+          printerModelPreset: 'b1_pro'
+        },
+        onUpdateConfig: () => {}
+      })
+    );
+    assert.ok(markup.includes('300 DPI'));
   });
 });

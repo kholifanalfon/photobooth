@@ -321,25 +321,85 @@
       "mirrorImageFlip": false,
       "mirrorImageWidth": 600,
       "mirrorImageHeight": 1800
+    },
+    {
+      "id": "frame-1792418702935",
+      "name": "Frame 6",
+      "slots": [
+        {
+          "x": 0,
+          "y": 0,
+          "id": 1,
+          "width": 591,
+          "height": 354,
+          "radius": 1,
+          "photoIndex": 0,
+          "borderColor": "#1E293B",
+          "borderWidth": 1
+        }
+      ],
+      "width": 591,
+      "height": 354,
+      "imageX": 0,
+      "imageY": 0,
+      "enabled": true,
+      "imageUrl": "",
+      "paperSize": "3x5cm",
+      "imageWidth": 591,
+      "photoCount": 1,
+      "imageHeight": 354,
+      "orientation": "landscape"
+    },
+    {
+      "id": "frame-1792421077989",
+      "name": "Frame 6 (Salinan)",
+      "slots": [
+        {
+          "x": 0,
+          "y": 0,
+          "id": 1,
+          "width": 354,
+          "height": 591,
+          "radius": 1,
+          "photoIndex": 0,
+          "borderColor": "#1E293B",
+          "borderWidth": 1
+        }
+      ],
+      "width": 354,
+      "height": 591,
+      "imageX": 0,
+      "imageY": 0,
+      "enabled": true,
+      "imageUrl": "",
+      "paperSize": "3x5cm",
+      "imageWidth": 354,
+      "photoCount": 1,
+      "imageHeight": 591,
+      "orientation": "portrait"
     }
   ],
   "adminExitCode": "9999",
   "eventSubtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
   "isTitleCustom": false,
-  "bluetoothGamma": 1.75,
+  "bluetoothGamma": 1.5,
   "bluetoothDither": "atkinson",
-  "bluetoothDensity": 2,
-  "bluetoothFitMode": "cover",
-  "bluetoothSharpen": false,
+  "bluetoothDensity": 1,
+  "bluetoothFitMode": "fit",
+  "bluetoothSharpen": true,
   "isSubtitleCustom": false,
+  "printOrientation": "landscape",
   "videoDisplayMode": "background",
-  "bluetoothMarginMm": 1,
+  "bluetoothContrast": 1.1,
+  "bluetoothMarginMm": 0,
   "countdownDuration": 3,
   "bluetoothLabelSize": "50x30",
+  "printerModelPreset": "b1_pro",
   "requireSessionCode": false,
-  "bluetoothBrightness": 22,
-  "bluetoothDeviceName": "B21S-G627070216",
+  "bluetoothAutoRotate": true,
+  "bluetoothBrightness": 15,
+  "bluetoothDeviceName": "B1 Pro-I708030351",
   "bluetoothLabelWidthMm": 50,
   "bluetoothLabelHeightMm": 30,
-  "bluetoothBrightnessPreset": "terang"
+  "bluetoothBrightnessPreset": "seimbang"
 }

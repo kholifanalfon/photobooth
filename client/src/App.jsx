@@ -57,14 +57,36 @@ export default function App() {
     }
   }, []);
 
-  // Fetch admin settings & landing config to sync adminExitCode
+  // Fetch landing config & admin settings directly on app bootstrap
   useEffect(() => {
     let isMounted = true;
-    const fetchAdminSettings = async () => {
+    const fetchFreshConfig = async () => {
       try {
-        const res = await fetch('/api/admin/settings');
+        // 1. Try /api/config/landing directly
+        const res = await fetch(`/api/config/landing?t=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         if (res.ok) {
           const data = await res.json();
+          const config = data?.config || data;
+          if (isMounted && config) {
+            setLandingConfig(config);
+            if (config.adminExitCode || config.adminCode) {
+              setAdminExitCode(String(config.adminExitCode || config.adminCode));
+            }
+            if (typeof window !== 'undefined' && window.localStorage) {
+              try {
+                window.localStorage.setItem('photobooth_landing_config', JSON.stringify(config));
+              } catch (_) {}
+            }
+            return;
+          }
+        }
+
+        // 2. Fallback to /api/admin/settings
+        const adminRes = await fetch(`/api/admin/settings?t=${Date.now()}`);
+        if (adminRes.ok) {
+          const data = await adminRes.json();
           if (isMounted && data) {
             if (data.adminExitCode) {
               setAdminExitCode(String(data.adminExitCode));
@@ -74,13 +96,18 @@ export default function App() {
               if (data.landingConfig.adminCode) {
                 setAdminExitCode(String(data.landingConfig.adminCode));
               }
+              if (typeof window !== 'undefined' && window.localStorage) {
+                try {
+                  window.localStorage.setItem('photobooth_landing_config', JSON.stringify(data.landingConfig));
+                } catch (_) {}
+              }
             }
           }
         }
       } catch (_) {}
     };
 
-    fetchAdminSettings();
+    fetchFreshConfig();
     return () => {
       isMounted = false;
     };
@@ -252,6 +279,7 @@ export default function App() {
               layoutConfig={layoutConfig}
               sessionId={currentSessionId}
               onResetSession={handleResetSession}
+              printerConfig={landingConfig}
             />
           )}
         </motion.div>

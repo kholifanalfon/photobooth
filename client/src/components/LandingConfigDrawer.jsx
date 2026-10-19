@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import PrinterConfigModal from './PrinterConfigModal.jsx';
 import {
   X,
   Maximize2,
@@ -40,7 +39,7 @@ import {
 import { preloadAndCacheVideo, seedLocalVideoCache, clearVideoCache } from '../utils/videoCache.js';
 import { sliceAndStoreInIndexedDB, uploadChunksWithProgress, uploadDirectMedia } from '../utils/chunkUploader.js';
 import { resolveApiUrl } from '../utils/apiConfig.js';
-import { bluetoothPrinter } from '../utils/bluetoothPrinter.js';
+import { bluetoothPrinter, PRINTER_MODEL_OPTIONS, getPrinterProfile } from '../utils/bluetoothPrinter.js';
 
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return "0 B";
@@ -90,6 +89,7 @@ export default function LandingConfigDrawer({
   onGoLive,
   onOpenSessions,
   onOpenFrameManager,
+  onOpenPrinterConfig,
   initialTab = 'media_theme'
 }) {
   // Hanya 2 Tab: 'media_theme' (Media & Tema) dan 'printer' (Konfigurasi Printer)
@@ -119,7 +119,6 @@ export default function LandingConfigDrawer({
   const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
   const [isPrecisionModalOpen, setIsPrecisionModalOpen] = useState(false);
-  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
   const [isUploadingFrame, setIsUploadingFrame] = useState(false);
   const [frameUploadError, setFrameUploadError] = useState(null);
   const [previewFrameOpacity, setPreviewFrameOpacity] = useState(70);
@@ -373,36 +372,51 @@ export default function LandingConfigDrawer({
         setBtStatus({ type: 'info', message: 'Menyambungkan printer Bluetooth...' });
         await bluetoothPrinter.connect();
       }
+      const printOrientation = config.printOrientation || 'auto';
+      const labelHeightMm = config.bluetoothLabelSize === 'continuous' ? 0 : Number(config.bluetoothLabelHeightMm ?? 30);
+      const labelWidthMm = Number(config.bluetoothLabelWidthMm ?? 50);
+
       const testCanvas = document.createElement('canvas');
-      testCanvas.width = bluetoothPrinter.printheadPixels || 384;
-      testCanvas.height = 240;
+      const isPortrait = printOrientation === 'portrait' || (printOrientation === 'auto' && labelHeightMm > labelWidthMm);
+
+      if (isPortrait) {
+        testCanvas.width = 240;
+        testCanvas.height = 360;
+      } else {
+        testCanvas.width = bluetoothPrinter.printheadPixels || 384;
+        testCanvas.height = 220;
+      }
+
       const tCtx = testCanvas.getContext('2d');
       tCtx.fillStyle = '#ffffff';
       tCtx.fillRect(0, 0, testCanvas.width, testCanvas.height);
       tCtx.fillStyle = '#000000';
-      tCtx.font = 'bold 22px sans-serif';
+      tCtx.font = 'bold 20px sans-serif';
       tCtx.textAlign = 'center';
-      tCtx.fillText('PHOTOBOOTH TEST', testCanvas.width / 2, 55);
-      tCtx.font = '15px sans-serif';
-      tCtx.fillText(`Printer: ${bluetoothPrinter.printerName || 'Niimbot'}`, testCanvas.width / 2, 95);
-      tCtx.fillText(`Mode: ${bluetoothPrinter.isNiimbot ? 'Niimbot Protocol' : 'ESC/POS'}`, testCanvas.width / 2, 130);
-      tCtx.font = '13px monospace';
-      tCtx.fillText(new Date().toLocaleTimeString(), testCanvas.width / 2, 170);
+      tCtx.fillText('PHOTOBOOTH TEST', testCanvas.width / 2, 45);
+      tCtx.font = '14px sans-serif';
+      tCtx.fillText(`Printer: ${bluetoothPrinter.printerName || 'Niimbot'}`, testCanvas.width / 2, 80);
+      tCtx.fillText(`Mode: ${bluetoothPrinter.isNiimbot ? 'Niimbot Protocol' : 'ESC/POS'}`, testCanvas.width / 2, 110);
+      tCtx.fillText(`Orientasi: ${printOrientation.toUpperCase()}`, testCanvas.width / 2, 140);
+      tCtx.font = '12px monospace';
+      tCtx.fillText(new Date().toLocaleTimeString(), testCanvas.width / 2, 175);
       tCtx.lineWidth = 2;
-      tCtx.strokeRect(8, 8, testCanvas.width - 16, testCanvas.height - 16);
+      tCtx.strokeRect(12, 12, testCanvas.width - 24, testCanvas.height - 24);
 
       await bluetoothPrinter.printImage(testCanvas, {
+        printerModelPreset: config.printerModelPreset || 'b1_pro',
         density: Number(config.bluetoothDensity ?? 2),
         ditherMethod: config.bluetoothDither || 'atkinson',
         brightness: Number(config.bluetoothBrightness ?? 22),
         contrast: Number(config.bluetoothContrast ?? 1.15),
         gamma: Number(config.bluetoothGamma ?? 1.75),
         sharpen: config.bluetoothSharpen !== false,
-        labelWidthMm: Number(config.bluetoothLabelWidthMm ?? 50),
-        labelHeightMm: config.bluetoothLabelSize === 'continuous' ? 0 : Number(config.bluetoothLabelHeightMm ?? 30),
+        labelWidthMm,
+        labelHeightMm,
         marginMm: Number(config.bluetoothMarginMm ?? 1.5),
         fitMode: config.bluetoothFitMode || 'fit',
         autoRotate: config.bluetoothAutoRotate !== false,
+        orientation: printOrientation,
         onProgress: (statusMsg) => setBtStatus({ type: 'info', message: statusMsg })
       });
       setBtStatus({ type: 'success', message: 'Test cetak berhasil dikirim ke printer!' });
@@ -1249,6 +1263,33 @@ export default function LandingConfigDrawer({
                             </div>
                           )}
 
+                          {/* Quick Model Selector */}
+                          <div className="pt-2 border-t border-purple-200/80">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                                <Printer size={12} className="text-purple-600" />
+                                <span>Model Printer:</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-mono border border-purple-200">
+                                {getPrinterProfile(config.printerModelPreset || 'b1_pro', config.bluetoothDeviceName).label} ({getPrinterProfile(config.printerModelPreset || 'b1_pro', config.bluetoothDeviceName).dpi} DPI)
+                              </span>
+                            </div>
+                            <select
+                              value={config.printerModelPreset || 'b1_pro'}
+                              onChange={(e) => {
+                                onUpdateConfig({ printerModelPreset: e.target.value });
+                                bluetoothPrinter.setPrinterModel(e.target.value);
+                              }}
+                              className="w-full text-xs font-semibold bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-purple-950 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+                            >
+                              {PRINTER_MODEL_OPTIONS.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label} ({m.desc})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
                           {/* Quick Specs & Tombol Konfigurasi Form Modal Lengkap */}
                           <div className="pt-2 border-t border-purple-200/80 flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-1.5 text-[11px] text-purple-900 font-medium">
@@ -1267,7 +1308,11 @@ export default function LandingConfigDrawer({
 
                             <button
                               type="button"
-                              onClick={() => setIsPrinterModalOpen(true)}
+                              onClick={() => {
+                                if (typeof onOpenPrinterConfig === 'function') {
+                                  onOpenPrinterConfig();
+                                }
+                              }}
                               className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:shadow-md active:scale-98"
                               title="Buka form modal konfigurasi printer dan label stiker lengkap"
                             >
@@ -1401,12 +1446,7 @@ export default function LandingConfigDrawer({
                             </button>
                           </div>
 
-                          <PrinterConfigModal
-                            isOpen={isPrinterModalOpen}
-                            onClose={() => setIsPrinterModalOpen(false)}
-                            config={config}
-                            onUpdateConfig={onUpdateConfig}
-                          />
+
                         </div>
                       );
                     })()}
