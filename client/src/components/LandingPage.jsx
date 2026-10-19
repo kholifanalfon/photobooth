@@ -146,6 +146,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
   const [isFrameManagerOpen, setIsFrameManagerOpen] = useState(false);
   const prevVideoUrlRef = useRef(null);
+  const isLaunchingRef = useRef(false);
 
   // Sync fresh config directly from server on mount (no stale cache)
   useEffect(() => {
@@ -300,12 +301,15 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   };
 
   const proceedSessionLaunch = () => {
+    if (isLaunchingRef.current) return;
+    isLaunchingRef.current = true;
     setIsSessionCodeModalOpen(false);
     if (audioFx && typeof audioFx.playGiftPopSound === 'function') {
       audioFx.playGiftPopSound();
     }
     setIsOpen(true);
     setTimeout(() => {
+      isLaunchingRef.current = false;
       if (typeof onStartSession === 'function') {
         onStartSession(config.customFrame, config.customFrames);
       }

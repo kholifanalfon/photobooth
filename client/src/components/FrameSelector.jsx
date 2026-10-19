@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, ArrowRight, Check, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 import { PAPER_PRESETS } from '../constants/framePresets.js';
 
@@ -13,12 +13,26 @@ export const PALETTES = [
 ];
 
 export default function FrameSelector({ onConfirm, onBack, availableCustomFrames = [] }) {
-  const hasCustomFrames = Array.isArray(availableCustomFrames) && availableCustomFrames.length > 0;
-  const [selectedCustomFrameId, setSelectedCustomFrameId] = useState(
-    hasCustomFrames ? (availableCustomFrames[0]?.id || '') : ''
+  // Filter valid custom frame objects defensively
+  const validCustomFrames = (Array.isArray(availableCustomFrames) ? availableCustomFrames : []).filter(
+    (f) => f && typeof f === 'object' && f.id
   );
+  const hasCustomFrames = validCustomFrames.length > 0;
+
   const [selectedLayout, setSelectedLayout] = useState('STRIP_3');
   const [selectedPalette, setSelectedPalette] = useState(PALETTES[0]);
+  const [selectedCustomFrameId, setSelectedCustomFrameId] = useState(
+    hasCustomFrames ? (validCustomFrames[0]?.id || '') : ''
+  );
+
+  // Keep selectedCustomFrameId synchronized if available frames change
+  useEffect(() => {
+    if (hasCustomFrames) {
+      if (!selectedCustomFrameId || !validCustomFrames.some((f) => f.id === selectedCustomFrameId)) {
+        setSelectedCustomFrameId(validCustomFrames[0]?.id || '');
+      }
+    }
+  }, [hasCustomFrames, validCustomFrames, selectedCustomFrameId]);
 
   const layouts = Object.entries(FRAME_CONFIGS);
 
@@ -26,10 +40,14 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
     if (typeof onConfirm !== 'function') return;
 
     if (hasCustomFrames) {
-      const chosen = availableCustomFrames.find((f) => f.id === selectedCustomFrameId) || availableCustomFrames[0];
+      const chosen = validCustomFrames.find((f) => f.id === selectedCustomFrameId) || validCustomFrames[0];
       if (chosen) {
-        const uniqueSlotsPhotoCount = Array.isArray(chosen.slots) && chosen.slots.length > 0
-          ? Math.max(...chosen.slots.map((s, idx) => Number(s.photoIndex ?? idx))) + 1
+        const slots = Array.isArray(chosen.slots) ? chosen.slots.filter(Boolean) : [];
+        const uniqueSlotsPhotoCount = slots.length > 0
+          ? Math.max(1, ...slots.map((s, idx) => {
+              const pIdx = Number(s?.photoIndex);
+              return Number.isFinite(pIdx) ? pIdx + 1 : (idx + 1);
+            }))
           : 4;
         const effectivePhotoCount = Number(chosen.photoCount) > 0
           ? Number(chosen.photoCount)
@@ -94,7 +112,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
         className={`w-12 h-16 sm:w-16 sm:h-24 rounded-lg mb-1.5 sm:mb-2 flex flex-col gap-0.5 sm:gap-1 p-1 sm:p-1.5 justify-center items-center shadow-xs transition-colors duration-200 ${borderStyle}`}
         style={{ backgroundColor: frameBg }}
       >
-        {Array.from({ length: config.photoCount }).map((_, i) => (
+        {Array.from({ length: config?.photoCount || 3 }).map((_, i) => (
           <div key={i} className="w-full h-full bg-slate-400/80 rounded-xs" />
         ))}
       </div>
@@ -112,7 +130,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
         {hasCustomFrames && (
           <div className="flex items-center gap-2 mt-0.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">
-              Desain Acara ({availableCustomFrames.length})
+              Desain Acara ({validCustomFrames.length})
             </span>
             <p className="text-xs sm:text-sm text-slate-500 font-medium">
               Sentuh frame pilihanmu untuk memulai sesi foto
@@ -126,15 +144,19 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
         <div className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 overflow-y-auto custom-scrollbar min-h-0 pb-28 sm:pb-32 overscroll-contain">
           <div
             className={`grid gap-2.5 sm:gap-5 justify-center items-start w-full mx-auto ${
-              availableCustomFrames.length === 1
+              validCustomFrames.length === 1
                 ? 'grid-cols-1 max-w-[240px] sm:max-w-xs'
                 : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 max-w-3xl'
             }`}
           >
-            {availableCustomFrames.map((f, idx) => {
+            {validCustomFrames.map((f, idx) => {
               const isSelected = f.id === selectedCustomFrameId || (!selectedCustomFrameId && idx === 0);
               const paperKey = f.paperSize || '4R';
-              const paperPreset = PAPER_PRESETS[paperKey] || PAPER_PRESETS['4R'];
+              const paperPreset = (PAPER_PRESETS && PAPER_PRESETS[paperKey]) || (PAPER_PRESETS && PAPER_PRESETS['4R']) || {
+                portrait: { width: 1200, height: 1800 },
+                landscape: { width: 1800, height: 1200 },
+                hasOrientation: true
+              };
 
               // Frame uses uploaded image dimensions if paperSize is 'image' or non-standard custom dimensions
               const isImageSize = f.paperSize === 'image' || (
@@ -150,7 +172,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
               if (Number(f.width) > 0 && Number(f.height) > 0) {
                 const rawW = Number(f.width);
                 const rawH = Number(f.height);
-                if (isImageSize || paperPreset.hasOrientation === false || rawW === rawH) {
+                if (isImageSize || paperPreset?.hasOrientation === false || rawW === rawH) {
                   frameWidth = rawW;
                   frameHeight = rawH;
                 } else if (f.orientation === 'landscape') {
@@ -164,17 +186,23 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                 frameWidth = Number(f.frameNaturalWidth);
                 frameHeight = Number(f.frameNaturalHeight);
               } else if (paperPreset && paperPreset.id !== 'image') {
-                const isLand = paperPreset.hasOrientation && f.orientation === 'landscape';
-                frameWidth = isLand ? paperPreset.landscape.width : paperPreset.portrait.width;
-                frameHeight = isLand ? paperPreset.landscape.height : paperPreset.portrait.height;
+                const isLand = Boolean(paperPreset.hasOrientation && f.orientation === 'landscape');
+                frameWidth = isLand ? (paperPreset.landscape?.width || 1800) : (paperPreset.portrait?.width || 1200);
+                frameHeight = isLand ? (paperPreset.landscape?.height || 1200) : (paperPreset.portrait?.height || 1800);
               }
 
-              const isLandscape = frameWidth > frameHeight;
-              const isSquare = frameWidth === frameHeight;
-              const slots = Array.isArray(f.slots) ? f.slots : [];
+              const safeFrameWidth = Math.max(100, Number(frameWidth) || 1200);
+              const safeFrameHeight = Math.max(100, Number(frameHeight) || 1800);
+
+              const isLandscape = safeFrameWidth > safeFrameHeight;
+              const isSquare = safeFrameWidth === safeFrameHeight;
+              const slots = Array.isArray(f.slots) ? f.slots.filter(Boolean) : [];
               const slotCount = slots.length;
               const uniqueSlotsPhotoCount = slots.length > 0
-                ? Math.max(...slots.map((s, sIdx) => Number(s.photoIndex ?? sIdx))) + 1
+                ? Math.max(1, ...slots.map((s, sIdx) => {
+                    const pIdx = Number(s?.photoIndex);
+                    return Number.isFinite(pIdx) ? pIdx + 1 : (sIdx + 1);
+                  }))
                 : 4;
               const photoCount = Number(f.photoCount) > 0 ? Number(f.photoCount) : uniqueSlotsPhotoCount;
 
@@ -211,7 +239,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                 >
                   {/* Thumbnail Container (Renders precisely at the exact frame aspect ratio) */}
                   <div
-                    style={{ aspectRatio: `${frameWidth} / ${frameHeight}` }}
+                    style={{ aspectRatio: `${safeFrameWidth} / ${safeFrameHeight}` }}
                     className="w-full max-h-[38vh] sm:max-h-[46vh] rounded-lg sm:rounded-xl overflow-hidden border border-slate-300/80 bg-slate-900 relative shadow-inner flex items-center justify-center"
                   >
                     {/* Background frame image (Supports Anti-Stretch, Custom Position & Mirror) */}
@@ -220,12 +248,15 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                         <img
                           src={f.imageUrl}
                           alt={f.name || `Frame ${idx + 1}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
                           style={{
                             position: 'absolute',
-                            left: `${((Number(f.imageX) || 0) / frameWidth) * 100}%`,
-                            top: `${((Number(f.imageY) || 0) / frameHeight) * 100}%`,
-                            width: `${((Number(f.imageWidth) || (f.imageMirror ? frameWidth / 2 : frameWidth)) / frameWidth) * 100}%`,
-                            height: `${((Number(f.imageHeight) || frameHeight) / frameHeight) * 100}%`
+                            left: `${((Number(f.imageX) || 0) / safeFrameWidth) * 100}%`,
+                            top: `${((Number(f.imageY) || 0) / safeFrameHeight) * 100}%`,
+                            width: `${((Number(f.imageWidth) || (f.imageMirror ? safeFrameWidth / 2 : safeFrameWidth)) / safeFrameWidth) * 100}%`,
+                            height: `${((Number(f.imageHeight) || safeFrameHeight) / safeFrameHeight) * 100}%`
                           }}
                           className="w-full h-full object-contain"
                         />
@@ -233,12 +264,15 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                           <img
                             src={f.imageUrl}
                             alt={`${f.name || 'Frame'} Mirror`}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                             style={{
                               position: 'absolute',
-                              left: `${((f.mirrorImageX !== undefined ? Number(f.mirrorImageX) : frameWidth / 2) / frameWidth) * 100}%`,
-                              top: `${((Number(f.mirrorImageY) || 0) / frameHeight) * 100}%`,
-                              width: `${((Number(f.mirrorImageWidth) || frameWidth / 2) / frameWidth) * 100}%`,
-                              height: `${((Number(f.mirrorImageHeight) || frameHeight) / frameHeight) * 100}%`,
+                              left: `${((f.mirrorImageX !== undefined ? Number(f.mirrorImageX) : safeFrameWidth / 2) / safeFrameWidth) * 100}%`,
+                              top: `${((Number(f.mirrorImageY) || 0) / safeFrameHeight) * 100}%`,
+                              width: `${((Number(f.mirrorImageWidth) || safeFrameWidth / 2) / safeFrameWidth) * 100}%`,
+                              height: `${((Number(f.mirrorImageHeight) || safeFrameHeight) / safeFrameHeight) * 100}%`,
                               transform: f.mirrorImageFlip ? 'scaleX(-1)' : 'none'
                             }}
                             className="w-full h-full object-contain"
@@ -250,11 +284,11 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                     {/* Mapped Slot Rectangles Visual Overlay */}
                     <div className="absolute inset-0 w-full h-full z-10 pointer-events-none">
                       {slots.map((s, sIdx) => {
-                        const leftPct = (Number(s.x) / frameWidth) * 100;
-                        const topPct = (Number(s.y) / frameHeight) * 100;
-                        const widthPct = (Number(s.width) / frameWidth) * 100;
-                        const heightPct = (Number(s.height) / frameHeight) * 100;
-                        const radiusPct = ((Number(s.radius) || 0) / frameWidth) * 100;
+                        const leftPct = ((Number(s.x) || 0) / safeFrameWidth) * 100;
+                        const topPct = ((Number(s.y) || 0) / safeFrameHeight) * 100;
+                        const widthPct = ((Number(s.width) || 100) / safeFrameWidth) * 100;
+                        const heightPct = ((Number(s.height) || 100) / safeFrameHeight) * 100;
+                        const radiusPct = (((Number(s.radius) || 0)) / safeFrameWidth) * 100;
 
                         return (
                           <div
@@ -282,12 +316,15 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                         <img
                           src={f.imageUrl}
                           alt={f.name || `Frame ${idx + 1}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
                           style={{
                             position: 'absolute',
-                            left: `${((Number(f.imageX) || 0) / frameWidth) * 100}%`,
-                            top: `${((Number(f.imageY) || 0) / frameHeight) * 100}%`,
-                            width: `${((Number(f.imageWidth) || (f.imageMirror ? frameWidth / 2 : frameWidth)) / frameWidth) * 100}%`,
-                            height: `${((Number(f.imageHeight) || frameHeight) / frameHeight) * 100}%`
+                            left: `${((Number(f.imageX) || 0) / safeFrameWidth) * 100}%`,
+                            top: `${((Number(f.imageY) || 0) / safeFrameHeight) * 100}%`,
+                            width: `${((Number(f.imageWidth) || (f.imageMirror ? safeFrameWidth / 2 : safeFrameWidth)) / safeFrameWidth) * 100}%`,
+                            height: `${((Number(f.imageHeight) || safeFrameHeight) / safeFrameHeight) * 100}%`
                           }}
                           className="w-full h-full object-contain"
                         />
@@ -295,12 +332,15 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                           <img
                             src={f.imageUrl}
                             alt={`${f.name || 'Frame'} Mirror`}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                             style={{
                               position: 'absolute',
-                              left: `${((f.mirrorImageX !== undefined ? Number(f.mirrorImageX) : frameWidth / 2) / frameWidth) * 100}%`,
-                              top: `${((Number(f.mirrorImageY) || 0) / frameHeight) * 100}%`,
-                              width: `${((Number(f.mirrorImageWidth) || frameWidth / 2) / frameWidth) * 100}%`,
-                              height: `${((Number(f.mirrorImageHeight) || frameHeight) / frameHeight) * 100}%`,
+                              left: `${((f.mirrorImageX !== undefined ? Number(f.mirrorImageX) : safeFrameWidth / 2) / safeFrameWidth) * 100}%`,
+                              top: `${((Number(f.mirrorImageY) || 0) / safeFrameHeight) * 100}%`,
+                              width: `${((Number(f.mirrorImageWidth) || safeFrameWidth / 2) / safeFrameWidth) * 100}%`,
+                              height: `${((Number(f.mirrorImageHeight) || safeFrameHeight) / safeFrameHeight) * 100}%`,
                               transform: f.mirrorImageFlip ? 'scaleX(-1)' : 'none'
                             }}
                             className="w-full h-full object-contain"
@@ -356,7 +396,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                     key={key}
                     role="button"
                     tabIndex={0}
-                    aria-label={config.name}
+                    aria-label={config?.name || key}
                     aria-pressed={active}
                     onClick={() => setSelectedLayout(key)}
                     onKeyDown={(e) => {
@@ -372,8 +412,8 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                     }`}
                   >
                     {renderLayoutThumbnail(key, config)}
-                    <span className="font-bold text-xs text-slate-900 line-clamp-1">{config.name}</span>
-                    <span className="text-[10px] sm:text-[11px] text-slate-500">{config.photoCount} Jepretan</span>
+                    <span className="font-bold text-xs text-slate-900 line-clamp-1">{config?.name || key}</span>
+                    <span className="text-[10px] sm:text-[11px] text-slate-500">{config?.photoCount || 3} Jepretan</span>
                   </div>
                 );
               })}

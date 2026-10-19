@@ -1,116 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import LandingPage from './components/LandingPage';
-import FrameSelector from './components/FrameSelector';
-import CameraSession from './components/CameraSession';
-import PreviewResult from './components/PreviewResult';
-import DownloadPage from './components/DownloadPage';
-import SplashScreen from './components/SplashScreen';
-import AdminLockScreen from './components/AdminLockScreen';
+import LandingPage from './components/LandingPage.jsx';
+import FrameSelector from './components/FrameSelector.jsx';
+import CameraSession from './components/CameraSession.jsx';
+import PreviewResult from './components/PreviewResult.jsx';
+import DownloadPage from './components/DownloadPage.jsx';
+import AdminLockScreen from './components/AdminLockScreen.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 import { SLOT_PRESETS } from './constants/framePresets.js';
 
-const ADMIN_SESSION_KEY = "pb_admin_unlock_ts";
-const ADMIN_SESSION_LIFETIME = 3 * 60 * 60 * 1000; // 3 Jam
-
-function getStoredBoothUnlocked() {
-  if (typeof window !== "undefined" && window.localStorage) {
-    try {
-      const ts = window.localStorage.getItem(ADMIN_SESSION_KEY);
-      if (ts && Date.now() - Number(ts) < ADMIN_SESSION_LIFETIME) {
-        return true;
-      }
-    } catch (_) {}
-  }
-  return false;
-}
+const ADMIN_SESSION_KEY = 'photobooth_admin_session_unlocked';
 
 export default function App() {
-  const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING, FRAME_PICKER, CAMERA, PREVIEW, DOWNLOAD
+  const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING | FRAME_PICKER | CAMERA | PREVIEW | DOWNLOAD
   const [layoutConfig, setLayoutConfig] = useState(null);
-  const [availableCustomFrames, setAvailableCustomFrames] = useState([]);
-  const [landingConfig, setLandingConfig] = useState(null);
   const [capturedPhotos, setCapturedPhotos] = useState([]);
-  const [downloadFilename, setDownloadFilename] = useState('');
-  const [showSplash, setShowSplash] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  const [adminExitCode, setAdminExitCode] = useState('9999');
-  const [isBoothUnlocked, setIsBoothUnlocked] = useState(() => getStoredBoothUnlocked());
+  const [landingConfig, setLandingConfig] = useState(null);
+  const [availableCustomFrames, setAvailableCustomFrames] = useState([]);
+  const [downloadFilename, setDownloadFilename] = useState(null);
 
-  // Detect live mode from URL path or query parameters
-  const [isLiveMode, setIsLiveMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      const search = new URLSearchParams(window.location.search);
-      return path === '/live' || search.get('mode') === 'live' || search.get('live') === 'true';
-    }
-    return false;
-  });
+  // Live Mode & Kiosk Lock States
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isBoothUnlocked, setIsBoothUnlocked] = useState(false);
+  const [adminExitCode, setAdminExitCode] = useState('1234');
+  const [showSplash, setShowSplash] = useState(true);
 
-  // Detect URL path to display dedicated mobile download page if accessed via /download/:filename
+  // Check URL on load for /download/:filename route or /live route
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.startsWith('/download/')) {
-        const file = path.replace(/^\/download\//, '').split('?')[0];
-        setDownloadFilename(file);
-        setCurrentStep('DOWNLOAD');
-        setShowSplash(false); // Direct mobile download doesn't need splash
-      } else if (path === '/live') {
+      const pathname = window.location.pathname;
+      if (pathname.startsWith('/download/')) {
+        const parts = pathname.split('/download/');
+        if (parts[1]) {
+          setDownloadFilename(decodeURIComponent(parts[1]));
+          setCurrentStep('DOWNLOAD');
+          return;
+        }
+      }
+
+      if (pathname === '/live' || pathname === '/kiosk') {
         setIsLiveMode(true);
       }
     }
-
-    // Sync database configuration across all devices directly from server
-    fetch(`/api/config/landing?_t=${Date.now()}`, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      }
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.config) {
-          setLandingConfig(data.config);
-          if (typeof window !== 'undefined' && window.localStorage) {
-            try {
-              window.localStorage.setItem('photobooth_landing_config', JSON.stringify(data.config));
-            } catch (_) {}
-          }
-          if (data.config.adminExitCode) {
-            setAdminExitCode(data.config.adminExitCode);
-          }
-          if (data.config.isLive !== undefined && (typeof window !== 'undefined' && window.location.pathname !== '/live')) {
-            setIsLiveMode(Boolean(data.config.isLive));
-          }
-        }
-      })
-      .catch(() => {});
   }, []);
 
-  // Dismiss splash screen smoothly after initial load
+  // Check existing session unlock state from localStorage
   useEffect(() => {
-    if (showSplash) {
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 900);
-      return () => clearTimeout(timer);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored = window.localStorage.getItem(ADMIN_SESSION_KEY);
+        if (stored) {
+          setIsBoothUnlocked(true);
+        }
+      } catch (_) {}
     }
-  }, [showSplash]);
+  }, []);
 
-  // On resume from background in PWA, re-verify 3-hour session validity
+  // Fetch admin settings & landing config to sync adminExitCode
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        const isStillValid = getStoredBoothUnlocked();
-        if (!isStillValid) {
+    let isMounted = true;
+    const fetchAdminSettings = async () => {
+      try {
+        const res = await fetch('/api/admin/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data) {
+            if (data.adminExitCode) {
+              setAdminExitCode(String(data.adminExitCode));
+            }
+            if (data.landingConfig) {
+              setLandingConfig(data.landingConfig);
+              if (data.landingConfig.adminCode) {
+                setAdminExitCode(String(data.landingConfig.adminCode));
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    };
+
+    fetchAdminSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hide splash screen after brief delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Keyboard shortcut: Shift + Escape to trigger lock screen when in live mode
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.shiftKey && e.key === 'Escape') {
+        if (isLiveMode) {
           setIsBoothUnlocked(false);
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              window.localStorage.removeItem(ADMIN_SESSION_KEY);
+            } catch (_) {}
+          }
         }
       }
     };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLiveMode]);
 
   const handleStartLanding = (customFrame = null, customFrames = null) => {
     const newSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
@@ -133,16 +134,18 @@ export default function App() {
     // Fallback if no frames exist
     if (activeFrames.length === 0) {
       activeFrames = [
-        customFrame || {
-          id: 'frame-1',
-          name: 'Frame 1 (4R)',
-          enabled: true,
-          orientation: 'portrait',
-          width: 1200,
-          height: 1800,
-          imageUrl: '',
-          slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
-        }
+        (customFrame && Array.isArray(customFrame.slots) && customFrame.slots.length > 0)
+          ? customFrame
+          : {
+              id: 'frame-1',
+              name: 'Frame 1 (4R)',
+              enabled: true,
+              orientation: 'portrait',
+              width: 1200,
+              height: 1800,
+              imageUrl: '',
+              slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
+            }
       ];
     }
 
@@ -189,14 +192,14 @@ export default function App() {
         />
       )}
 
-      {/* Smooth Page Transitions without Flashing */}
-      <AnimatePresence mode="wait">
+      {/* Smooth Page Transitions without Stuck Freezing */}
+      <AnimatePresence>
         <motion.div
           key={currentStep}
-          initial={{ opacity: 0 }}
+          initial={false}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15, ease: 'easeInOut' }}
+          transition={{ duration: 0.12, ease: 'easeOut' }}
           className={`w-full h-full flex flex-col justify-center bg-slate-50 ${currentStep === "DOWNLOAD" ? "overflow-y-auto" : "overflow-hidden"}`}
         >
           {currentStep === 'DOWNLOAD' && (

@@ -96,4 +96,23 @@ test('SessionManagerModal - Lifecycle, UI Markup & 5 Core Admin Actions', async 
     assert.ok(fileContent.includes('DELETE'), 'Must call DELETE API endpoint');
     assert.ok(fileContent.includes('Hapus Sesi &amp; File Foto?') || fileContent.includes('Hapus Sesi & File Foto?'), 'Must contain delete confirmation dialog');
   });
+
+  await t.test('implements 1:1 preview page and print choice modal matching post-photo preview', () => {
+    const fileContent = fs.readFileSync(path.join(componentsDir, 'SessionManagerModal.jsx'), 'utf8');
+
+    // 1:1 Preview Page layout matching PreviewResult
+    assert.ok(fileContent.includes('Hasil Fotomu Siap! 🎉'), 'Must display post-photo preview title');
+    assert.ok(fileContent.includes('Cetak langsung atau scan QR code untuk menyimpan di ponsel.'), 'Must display post-photo subtitle');
+    assert.ok(fileContent.includes('rounded-2xl shadow-xl border border-slate-200/80'), 'Frame preview must match PreviewResult styling');
+
+    // 1:1 Print Choice Modal
+    assert.ok(fileContent.includes('Pilihan Cetak Foto'), 'Must include Print Choice modal');
+    assert.ok(fileContent.includes('Full Frame'), 'Must offer Full Frame print mode');
+    assert.ok(fileContent.includes('Foto Saja'), 'Must offer Foto Saja print mode');
+    assert.ok(fileContent.includes('selectedPoseIndices'), 'Must manage selected pose indices for raw printing');
+    assert.ok(fileContent.includes('Pilih Semua'), 'Must provide select all option for poses');
+    assert.ok(fileContent.includes('Hapus Pilihan'), 'Must provide deselect option for poses');
+    assert.ok(fileContent.includes('Cetak Full Frame (1 Lembar)'), 'Must have full frame print button label');
+    assert.ok(fileContent.includes('Cetak Foto (${selectedPoseIndices.length} Lembar)'), 'Must have dynamic raw pose print counter');
+  });
 });
