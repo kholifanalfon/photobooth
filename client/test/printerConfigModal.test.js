@@ -94,6 +94,11 @@ test('PrinterConfigModal - Thermal Label & Printer Suite', async (t) => {
     assert.ok(markup.includes('50 × 30 mm'));
     assert.ok(markup.includes('203 DPI'));
 
+    // Label Sensor & Type Controls
+    assert.ok(markup.includes('Sensor &amp; Jenis Kertas:') || markup.includes('Sensor & Jenis Kertas:'));
+    assert.ok(markup.includes('Gap Putih'));
+    assert.ok(markup.includes('Transparan ✨'));
+
     // Safe Margin Controls
     assert.ok(markup.includes('Margin Aman (Safe Margin):'));
     assert.ok(markup.includes('1.5 mm ✨'));
@@ -138,5 +143,18 @@ test('PrinterConfigModal - Thermal Label & Printer Suite', async (t) => {
       })
     );
     assert.ok(markup.includes('300 DPI'));
+  });
+
+  await t.test('renders transparent label warning note when bluetoothLabelType is 5', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PrinterConfigModal, {
+        isOpen: true,
+        onClose: () => {},
+        config: { ...mockConfig, bluetoothLabelType: 5 },
+        onUpdateConfig: () => {}
+      })
+    );
+    assert.ok(markup.includes('Mode Stiker Transparan Aktif'));
+    assert.ok(markup.includes('Stiker Transparan ✨'));
   });
 });

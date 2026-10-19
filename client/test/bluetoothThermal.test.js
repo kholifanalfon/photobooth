@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCanvasForThermalLabel, ditherCanvasThermal, PRINTER_MODEL_OPTIONS, getPrinterProfile } from '../src/utils/bluetoothPrinter.js';
+import { formatCanvasForThermalLabel, ditherCanvasThermal, PRINTER_MODEL_OPTIONS, getPrinterProfile, resolveImageToCanvas } from '../src/utils/bluetoothPrinter.js';
 
 function createMockCanvas(width, height) {
   const operations = [];
@@ -196,10 +196,19 @@ test('PRINTER_MODEL_OPTIONS & getPrinterProfile resolution', () => {
   assert.equal(b1.printheadPixels, 384);
   assert.equal(b1.taskType, 'B1');
 
+  // Niimbot B21 Vintage (V1) uses B21_V1 protocol (total count)
   const b21 = getPrinterProfile('b21');
   assert.equal(b21.dpi, 203);
   assert.equal(b21.printheadPixels, 384);
-  assert.equal(b21.taskType, 'D110');
+  assert.equal(b21.taskType, 'B21_V1');
+  assert.equal(b21.modelId, 768);
+
+  // Niimbot B21S uses D110 protocol
+  const b21s = getPrinterProfile('b21s');
+  assert.equal(b21s.dpi, 203);
+  assert.equal(b21s.printheadPixels, 384);
+  assert.equal(b21s.taskType, 'D110');
+  assert.equal(b21s.modelId, 777);
 
   // Fallback auto-detection from device name
   const detectedPro = getPrinterProfile(null, 'B1 Pro-I708030351');
@@ -207,7 +216,32 @@ test('PRINTER_MODEL_OPTIONS & getPrinterProfile resolution', () => {
   assert.equal(detectedPro.dpi, 300);
   assert.equal(detectedPro.printheadPixels, 567);
 
-  const detectedB21 = getPrinterProfile(null, 'Niimbot B21S');
+  const detectedB21S = getPrinterProfile(null, 'Niimbot B21S');
+  assert.equal(detectedB21S.id, 'b21s');
+  assert.equal(detectedB21S.dpi, 203);
+  assert.equal(detectedB21S.taskType, 'D110');
+
+  const detectedB21 = getPrinterProfile(null, 'Niimbot B21');
   assert.equal(detectedB21.id, 'b21');
   assert.equal(detectedB21.dpi, 203);
+  assert.equal(detectedB21.taskType, 'B21_V1');
+});
+
+test('resolveImageToCanvas - Source validation & canvas resolution', async () => {
+  // 1. Rejects on empty input
+  await assert.rejects(
+    async () => {
+      await resolveImageToCanvas(null);
+    },
+    /Sumber gambar kosong/
+  );
+
+  // 2. Returns canvas directly if canvas-like
+  const mockCanvas = createMockCanvas(300, 200);
+  const resolved = await resolveImageToCanvas(mockCanvas);
+  assert.equal(resolved, mockCanvas);
+
+  // 3. Handles non-browser fallback safely for strings
+  const strResolved = await resolveImageToCanvas('https://example.com/photo.jpg');
+  assert.ok(strResolved);
 });

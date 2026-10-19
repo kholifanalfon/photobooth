@@ -339,6 +339,7 @@ export default function PreviewResult({
             const btLabelSize = printerConfig.bluetoothLabelSize || '50x50';
             const btLabelWidthMm = Number(printerConfig.bluetoothLabelWidthMm ?? 50);
             const btLabelHeightMm = btLabelSize === 'continuous' ? 0 : Number(printerConfig.bluetoothLabelHeightMm ?? 50);
+            const btLabelType = Number(printerConfig.bluetoothLabelType ?? (btLabelHeightMm <= 0 ? 3 : 1));
             const btMarginMm = Number(printerConfig.bluetoothMarginMm ?? 0);
             const btFitMode = printerConfig.bluetoothFitMode || 'fit';
             const btAutoRotate = printerConfig.bluetoothAutoRotate !== false;
@@ -363,7 +364,8 @@ export default function PreviewResult({
                 sheetCounter++;
                 setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
                 await bluetoothPrinter.printImage(imagesToPrint[i], {
-                  printerModelPreset: printerConfig.printerModelPreset || 'b1_pro',
+                  printerModelPreset: printerConfig.printerModelPreset || undefined,
+                  labelType: btLabelType,
                   density: btDensity,
                   brightness: btBrightness,
                   contrast: btContrast,

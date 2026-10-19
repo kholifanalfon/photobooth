@@ -4,6 +4,9 @@
  *
  * Supports:
  * - Native NIIMBOT Bluetooth Printers (B1 Pro, B1, B21 Pro, B21, B21S, D11, D110, B3S, etc.) via @mmote/niimbluelib
+ * - Accurate protocol selection: B21 V1 (model 768, B21_V1 task, total byte count), B21S (model 777, D110 task)
+ * - Label type support: WithGaps (1), Transparent Film (5), BlackMark (2), Continuous (3)
+ * - Hardware gap positioning and calibration
  * - Generic ESC/POS / BLE Serial Thermal Printers as fallback
  * - High-detail Floyd-Steinberg and Atkinson error diffusion dithering for photographic thermal printing
  */
@@ -290,7 +293,6 @@ export function ditherCanvasFloydSteinberg(sourceCanvas, targetWidth = 384, opti
   return ditherCanvasThermal(sourceCanvas, targetWidth, options);
 }
 
-
 export const PRINTER_MODEL_PROFILES = {
   b1_pro: {
     id: 'b1_pro',
@@ -330,8 +332,20 @@ export const PRINTER_MODEL_PROFILES = {
   },
   b21: {
     id: 'b21',
-    label: 'Niimbot B21 / B21S',
-    desc: '203 DPI • 384 px • Vintage',
+    label: 'Niimbot B21 / B21S (V1)',
+    desc: '203 DPI • 384 px • Protocol V1',
+    modelId: 768,
+    dpi: 203,
+    printheadPixels: 384,
+    taskType: 'B21_V1',
+    printDirection: 'top',
+    defaultLabelWidthMm: 50,
+    defaultLabelHeightMm: 30
+  },
+  b21s: {
+    id: 'b21s',
+    label: 'Niimbot B21S',
+    desc: '203 DPI • 384 px • Protocol D110',
     modelId: 777,
     dpi: 203,
     printheadPixels: 384,
@@ -369,17 +383,28 @@ export const PRINTER_MODEL_PROFILES = {
 export const PRINTER_MODEL_OPTIONS = Object.values(PRINTER_MODEL_PROFILES);
 
 export function getPrinterProfile(presetKey, fallbackDeviceName = '') {
+  const upper = (fallbackDeviceName || '').toUpperCase();
+
+  // If specific preset requested
   if (presetKey && PRINTER_MODEL_PROFILES[presetKey]) {
+    // If user requested generic b21 preset but device specifically identifies as B21S
+    if (presetKey === 'b21' && upper.includes('B21S')) {
+      return PRINTER_MODEL_PROFILES.b21s;
+    }
     return PRINTER_MODEL_PROFILES[presetKey];
   }
-  const upper = (fallbackDeviceName || '').toUpperCase();
+
+  // Auto-detect from device name
   if (upper.includes('B1 PRO') || upper.includes('B1PRO') || upper.includes('B1_PRO')) {
     return PRINTER_MODEL_PROFILES.b1_pro;
   }
   if (upper.includes('B21 PRO') || upper.includes('B21PRO') || upper.includes('B21_PRO')) {
     return PRINTER_MODEL_PROFILES.b21_pro;
   }
-  if (upper.includes('B21S') || upper.includes('B21')) {
+  if (upper.includes('B21S')) {
+    return PRINTER_MODEL_PROFILES.b21s;
+  }
+  if (upper.includes('B21')) {
     return PRINTER_MODEL_PROFILES.b21;
   }
   if (upper.includes('B1')) {
@@ -389,6 +414,97 @@ export function getPrinterProfile(presetKey, fallbackDeviceName = '') {
     return PRINTER_MODEL_PROFILES.d110;
   }
   return PRINTER_MODEL_PROFILES.b1_pro;
+}
+
+/**
+ * Converts any image source (HTMLCanvasElement, HTMLImageElement, Image URL string, Data URI, Blob)
+ * into a valid HTMLCanvasElement ready for thermal rendering.
+ */
+export async function resolveImageToCanvas(imageSource) {
+  if (!imageSource) {
+    throw new Error('Sumber gambar kosong (tidak ada foto yang akan dicetak).');
+  }
+
+  // 1. Already a Canvas or canvas-like object with 2D context
+  if (
+    (typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) ||
+    (imageSource && typeof imageSource.getContext === 'function' && typeof imageSource.width === 'number')
+  ) {
+    return imageSource;
+  }
+
+  // Non-browser / Node test environment fallback
+  if (typeof document === 'undefined') {
+    return imageSource;
+  }
+
+  // 2. Already an HTMLImageElement
+  if (typeof HTMLImageElement !== 'undefined' && imageSource instanceof HTMLImageElement) {
+    if (!imageSource.complete || !imageSource.naturalWidth) {
+      await new Promise((resolve, reject) => {
+        imageSource.onload = () => resolve(imageSource);
+        imageSource.onerror = () => reject(new Error('Gagal memuat elemen gambar'));
+      });
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = imageSource.naturalWidth || imageSource.width || 384;
+    canvas.height = imageSource.naturalHeight || imageSource.height || 384;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  // 3. Blob / File
+  if (typeof Blob !== 'undefined' && imageSource instanceof Blob) {
+    const objectUrl = URL.createObjectURL(imageSource);
+    try {
+      return await resolveImageToCanvas(objectUrl);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  // 4. String (URL / base64 Data URI / Blob URL)
+  if (typeof imageSource === 'string') {
+    return new Promise((resolve, reject) => {
+      if (typeof Image === 'undefined') {
+        const mockCanvas = document.createElement ? document.createElement('canvas') : { width: 384, height: 384, getContext: () => ({ drawImage: () => {} }) };
+        return resolve(mockCanvas);
+      }
+      const img = new Image();
+      if (!imageSource.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+      }
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width || 384;
+          canvas.height = img.naturalHeight || img.height || 384;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas);
+        } catch (err) {
+          reject(new Error(`Gagal menggambar citra ke canvas: ${err.message}`));
+        }
+      };
+      img.onerror = () => {
+        reject(new Error(`Gagal memuat file gambar dari URL: ${imageSource.slice(0, 80)}...`));
+      };
+      img.src = imageSource;
+    });
+  }
+
+  // 5. Duck-typed object with width/height
+  if (typeof imageSource === 'object' && (imageSource.width || imageSource.naturalWidth)) {
+    const canvas = document.createElement('canvas');
+    canvas.width = imageSource.naturalWidth || imageSource.width || 384;
+    canvas.height = imageSource.naturalHeight || imageSource.height || 384;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imageSource, 0, 0);
+    return canvas;
+  }
+
+  throw new Error(`Format sumber gambar tidak didukung: ${typeof imageSource}`);
 }
 
 export class WebBluetoothPrinter {
@@ -448,24 +564,25 @@ export class WebBluetoothPrinter {
           'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Niimbot Primary Service
           '000018f0-0000-1000-8000-00805f9b34fb', // Standard Print Service
           '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC Transparent UART
-          '0000ff00-0000-1000-8000-00805f9b34fb', // Common BLE Serial
-          '0000fee7-0000-1000-8000-00805f9b34fb'  // Tencent/WeChat BLE Hardware
+          '0000ff00-0000-1000-8000-00805f9b34fb', // Custom Thermal BLE Service
+          '0000fee7-0000-1000-8000-00805f9b34fb'  // Alternative BLE Serial
         ]
       });
 
       this.device = device;
-      this.printerName = device.name || 'Bluetooth Printer';
+      this.printerName = device.name || 'Bluetooth Thermal Printer';
 
       device.addEventListener('gattserverdisconnected', () => {
         this.isConnected = false;
-        this.server = null;
+        this.isNiimbot = false;
         this.writeCharacteristic = null;
-        if (this.niimbotClient) {
-          try { this.niimbotClient.disconnect(); } catch (_) {}
+        this.server = null;
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('Bluetooth printer disconnected.');
         }
       });
 
-      // 1. Try Niimbot client connection first
+      // 1. Attempt handshake via official Niimbot protocol client
       let niimbotConnected = false;
       try {
         const nbClient = new NiimbotBluetoothClient();
@@ -481,16 +598,23 @@ export class WebBluetoothPrinter {
         this.isConnected = true;
         niimbotConnected = true;
 
+        // Auto-detect profile from preset or device name
         const activeProfile = getPrinterProfile(this.printerModelPreset, this.printerName);
-        if (activeProfile.modelId) {
-          nbClient.printerInfo.modelId = activeProfile.modelId;
+
+        // Never overwrite modelId if hardware returned a valid positive modelId during initial GATT negotiate
+        const hardwareModelId = nbClient.printerInfo?.modelId;
+        if (!hardwareModelId || hardwareModelId <= 0) {
+          if (activeProfile.modelId) {
+            nbClient.printerInfo.modelId = activeProfile.modelId;
+          }
         }
-        const taskType = activeProfile.taskType || nbClient.getPrintTaskType();
-        this.printTaskType = taskType || 'D110M_V4';
+
+        const taskType = nbClient.getPrintTaskType() || activeProfile.taskType || 'B21_V1';
+        this.printTaskType = taskType;
         const meta = nbClient.getModelMetadata();
-        this.printerModel = activeProfile.label || meta?.model || device.name;
-        this.printheadPixels = activeProfile.printheadPixels || meta?.printheadPixels || 567;
-        this.printerDpi = activeProfile.dpi || meta?.dpi || 300;
+        this.printerModel = meta?.model || activeProfile.label || device.name;
+        this.printheadPixels = meta?.printheadPixels || activeProfile.printheadPixels || 384;
+        this.printerDpi = meta?.dpi || activeProfile.dpi || 203;
       } catch (nbErr) {
         if (typeof console !== 'undefined' && console.log) {
           console.log('Niimbot handshake skipped/failed, checking generic GATT:', nbErr?.message || nbErr);
@@ -545,85 +669,93 @@ export class WebBluetoothPrinter {
   }
 
   disconnect() {
-    if (this.niimbotClient) {
-      try { this.niimbotClient.disconnect(); } catch (_) {}
-      this.niimbotClient = null;
-    }
-    if (this.device && this.device.gatt?.connected) {
-      try { this.device.gatt.disconnect(); } catch (_) {}
-    }
-    this.isConnected = false;
+    try {
+      if (this.niimbotClient) {
+        this.niimbotClient.disconnect();
+      }
+    } catch (_) {}
+    try {
+      if (this.device?.gatt?.connected) {
+        this.device.gatt.disconnect();
+      }
+    } catch (_) {}
+    this.device = null;
     this.server = null;
     this.writeCharacteristic = null;
+    this.isConnected = false;
     this.isNiimbot = false;
-    this.printheadPixels = 384;
-    this.printerDpi = 203;
+    this.niimbotClient = null;
   }
 
   /**
-   * Send chunks of binary data to generic Bluetooth printer (ESC/POS fallback)
+   * Send raw byte buffer to generic thermal printer characteristic with chunking
    */
-  async sendData(dataBuffer, chunkSize = 128) {
-    if (!this.isConnected || !this.writeCharacteristic) {
+  async sendData(buffer, chunkSize = 128) {
+    if (!this.writeCharacteristic) {
+      throw new Error('Printer tidak terhubung atau write characteristic tidak tersedia.');
+    }
+
+    const uint8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    for (let offset = 0; offset < uint8.length; offset += chunkSize) {
+      const chunk = uint8.subarray(offset, Math.min(offset + chunkSize, uint8.length));
+      if (this.writeCharacteristic.properties.writeWithoutResponse) {
+        await this.writeCharacteristic.writeValueWithoutResponse(chunk);
+      } else {
+        await this.writeCharacteristic.writeValue(chunk);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 8));
+    }
+  }
+
+  /**
+   * Calibrate / feed paper to the exact die-cut label gap or tear bar
+   * Niimbot sends LabelPositioningCalibration command (0x2F / 47)
+   */
+  async calibrateGap() {
+    if (!this.isConnected) {
+      throw new Error('Printer Bluetooth belum terhubung. Silakan hubungkan terlebih dahulu.');
+    }
+    if (this.isNiimbot && this.niimbotClient?.protocol) {
+      try {
+        await this.niimbotClient.protocol.labelPositioningCalibration(1);
+        return { success: true, message: 'Kertas berhasil diposisikan ke celah gap!' };
+      } catch (e) {
+        try {
+          await this.niimbotClient.protocol.printEnd();
+          return { success: true, message: 'Kertas berhasil diposisikan ke gap!' };
+        } catch (err) {
+          throw new Error(`Gagal kalibrasi gap: ${e?.message || err?.message}`);
+        }
+      }
+    }
+    return { success: false, message: 'Fitur kalibrasi hanya tersedia untuk printer Niimbot.' };
+  }
+
+  /**
+   * Print Image Canvas or Image Element directly
+   */
+
+    async printImage(imageSource, options = {}, onProgress = null) {
+    if (!this.isConnected) {
       throw new Error('Printer Bluetooth belum terhubung.');
     }
 
-    const uint8 = new Uint8Array(dataBuffer);
-    for (let offset = 0; offset < uint8.byteLength; offset += chunkSize) {
-      const slice = uint8.slice(offset, offset + chunkSize);
-      if (this.writeCharacteristic.writeValueWithoutResponse) {
-        await this.writeCharacteristic.writeValueWithoutResponse(slice);
-      } else {
-        await this.writeCharacteristic.writeValue(slice);
-      }
-      await new Promise((r) => setTimeout(r, 25));
-    }
-  }
-
-  /**
-   * Print an image directly to the connected Bluetooth thermal printer
-   * Supports Niimbot native protocol and generic ESC/POS raster bit image
-   */
-  async printImage(imageSource, options = {}, onProgress = null) {
-    if (!this.isConnected) {
-      throw new Error('Printer Bluetooth belum terhubung. Silakan hubungkan terlebih dahulu di pengaturan printer.');
-    }
-
     const {
+      density = 2,
+      brightness = 22,
+      contrast = 1.15,
+      gamma = 1.75,
+      ditherMethod = 'atkinson',
+      sharpen = true,
       labelWidthMm = 50,
       labelHeightMm = 30,
       marginMm = 1.5,
       fitMode = 'fit',
       autoRotate = true,
-      orientation = 'auto',
-      density = 2,
-      ditherMethod = 'atkinson',
-      brightness = 22,
-      contrast = 1.15,
-      gamma = 1.75,
-      sharpen = true
+      orientation = 'auto'
     } = options;
 
-    // Convert source to HTMLCanvasElement if passed as Image/URL
-    let canvas = imageSource;
-    if (typeof HTMLCanvasElement !== 'undefined' && !(imageSource instanceof HTMLCanvasElement)) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      if (typeof imageSource === 'string') {
-        img.src = imageSource;
-      } else if (imageSource.src) {
-        img.src = imageSource.src;
-      }
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Gagal memuat gambar untuk dicetak.'));
-      });
-      canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-    }
+    const canvas = await resolveImageToCanvas(imageSource);
 
     if (this.isNiimbot && this.niimbotClient) {
       try {
@@ -637,15 +769,15 @@ export class WebBluetoothPrinter {
           this.niimbotClient.protocol.setPacketTimeout(5000);
         }
 
-        // 3. Resolve active printer profile and apply exact modelId
+        // 3. Resolve active printer profile without destroying genuine hardware modelId
         const activeProfile = getPrinterProfile(options.printerModelPreset || this.printerModelPreset, this.printerName);
-        if (activeProfile.modelId) {
+        if ((!this.niimbotClient.printerInfo?.modelId || this.niimbotClient.printerInfo?.modelId <= 0) && activeProfile.modelId) {
           this.niimbotClient.printerInfo.modelId = activeProfile.modelId;
         }
 
         const meta = this.niimbotClient.getModelMetadata();
-        const targetPixels = activeProfile.printheadPixels || meta?.printheadPixels || this.printheadPixels || 567;
-        const printerDpi = activeProfile.dpi || meta?.dpi || this.printerDpi || 300;
+        const targetPixels = activeProfile.printheadPixels || meta?.printheadPixels || this.printheadPixels || 384;
+        const printerDpi = activeProfile.dpi || meta?.dpi || this.printerDpi || 203;
         const dotsPerMm = printerDpi / 25.4;
 
         // 4. Format canvas to exact label dimensions, orientation & safe margin
@@ -660,7 +792,31 @@ export class WebBluetoothPrinter {
           dotsPerMm
         });
 
-        // 5. Process thermal halftoning
+        // 5. Determine effective label type:
+        // 1: WithGaps (Label stiker berjarak putih standar)
+        // 2: Black (Tanda garis hitam / Black mark)
+        // 3: Continuous (Kertas kasir / struk roll)
+        // 5: Transparent (Label plastik bening / transparan)
+        let effectiveLabelType = Number(options.labelType || 0);
+        if (!effectiveLabelType || effectiveLabelType <= 0) {
+          const rfidPaperType = this.niimbotClient.rfidInfo?.paperInfo?.paperType;
+          if (rfidPaperType) {
+            effectiveLabelType = rfidPaperType;
+          } else if (Number(labelHeightMm) <= 0) {
+            effectiveLabelType = 3;
+          } else {
+            effectiveLabelType = 1;
+          }
+        }
+
+        // For transparent stickers (labelType 5), transparent thermal coating requires higher heat
+        // Ensure density is at least 3 for transparent stickers to avoid faint/transparent output
+        let effectiveDensity = density;
+        if (effectiveLabelType === 5 && effectiveDensity < 3) {
+          effectiveDensity = 3;
+        }
+
+        // 6. Process thermal halftoning
         if (onProgress) onProgress(ditherMethod === 'atkinson' ? 'Memproses rasterisasi foto (Atkinson Halftone)...' : 'Memproses rasterisasi foto (Floyd-Steinberg)...');
         const dithered = ditherCanvasThermal(formattedCanvas, formattedCanvas.width, {
           algorithm: ditherMethod,
@@ -670,18 +826,19 @@ export class WebBluetoothPrinter {
           sharpen
         });
 
-        // 6. Initialize Niimbot print task
-        const taskType = activeProfile.taskType || this.niimbotClient.getPrintTaskType() || this.printTaskType || 'D110M_V4';
-        const detectedLabelType = (Number(labelHeightMm) <= 0) ? 3 : 1;
-        const effectiveLabelType = this.niimbotClient.printerInfo?.labelType ?? detectedLabelType;
+        // 7. Initialize Niimbot print task
+        const taskType = this.niimbotClient.getPrintTaskType() || activeProfile.taskType || this.printTaskType || 'B21_V1';
 
-        const task = this.niimbotClient.protocol.newPrintTask(taskType, {
+        const printTaskOptions = {
           totalPages: 1,
-          density,
+          density: effectiveDensity,
           labelType: effectiveLabelType,
-          pageTimeoutMs: 15000,
-          statusTimeoutMs: 8000
-        });
+          pageColor: PageColorType.SingleColor,
+          statusTimeoutMs: 8000,
+          pageTimeoutMs: 25000
+        };
+
+        const task = this.niimbotClient.protocol.newPrintTask(taskType, printTaskOptions);
 
         if (onProgress) onProgress('Menginisialisasi printer Niimbot...');
 
@@ -691,7 +848,7 @@ export class WebBluetoothPrinter {
         } catch (initErr) {
           // Fallback if individual firmware requires direct packets
           try {
-            await this.niimbotClient.protocol.send(PacketGenerator.setDensity(density), 2500);
+            await this.niimbotClient.protocol.send(PacketGenerator.setDensity(effectiveDensity), 2500);
           } catch (_) {}
           try {
             await this.niimbotClient.protocol.send(PacketGenerator.setLabelType(effectiveLabelType), 2500);
@@ -707,7 +864,7 @@ export class WebBluetoothPrinter {
           } catch (_) {}
         }
 
-        // 7. Encode image and send page packets
+        // 8. Encode image and send page packets
         if (onProgress) onProgress('Mengirim data cetak ke printer...');
         const printDirection = activeProfile.printDirection || meta?.printDirection || (taskType === 'D110' || taskType === 'D11_V1' ? 'left' : 'top');
         const encoded = ImageEncoder.encodeCanvas(dithered, PageColorType.SingleColor, printDirection);
@@ -743,10 +900,13 @@ export class WebBluetoothPrinter {
           if (taskType === 'D110' || taskType === 'B21L2_B') {
             await new Promise((resolve) => setTimeout(resolve, 1200));
           } else if (typeof task.waitForFinished === 'function') {
+            const waitTimeout = taskType === 'B21_V1' ? 7000 : 4000;
             await Promise.race([
               task.waitForFinished(),
-              new Promise((resolve) => setTimeout(resolve, 3000))
+              new Promise((resolve) => setTimeout(resolve, waitTimeout))
             ]);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 1500));
           }
         } catch (waitErr) {
           if (typeof console !== 'undefined' && console.warn) {
@@ -761,10 +921,9 @@ export class WebBluetoothPrinter {
           } catch (_) {}
         }
 
-        // Clean task termination
-        // B1 Pro (D110M_V4) sends printEnd followed by a heartbeat packet via task.printEnd()
-        // B1 and B21_V1 send protocol.printEnd()
-        // D110/B21S skip printEnd to prevent double label feed
+        // Clean task termination & gap advancement
+        // B1 and B21_V1 require protocol.printEnd() to commit buffer and feed to gap
+        // B1 Pro (D110M_V4) sends printEnd via task.printEnd()
         if (taskType === 'B1' || taskType === 'B21_V1') {
           try {
             await this.niimbotClient.protocol.printEnd();

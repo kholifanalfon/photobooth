@@ -19,7 +19,9 @@ import {
   RotateCcw,
   HelpCircle,
   FileText,
-  Compass
+  Compass,
+  Layers,
+  Target
 } from 'lucide-react';
 import {
   bluetoothPrinter,
@@ -43,6 +45,7 @@ export default function PrinterConfigModal({
   // Bluetooth connection states
   const [isBtConnecting, setIsBtConnecting] = useState(false);
   const [isTestingBtPrint, setIsTestingBtPrint] = useState(false);
+  const [isCalibratingGap, setIsCalibratingGap] = useState(false);
   const [btStatus, setBtStatus] = useState(null);
 
   // Preview & Zoom controls
@@ -59,6 +62,7 @@ export default function PrinterConfigModal({
   const labelSize = config.bluetoothLabelSize || '50x30';
   const labelWidthMm = Number(config.bluetoothLabelWidthMm ?? 50);
   const labelHeightMm = labelSize === 'continuous' ? 0 : Number(config.bluetoothLabelHeightMm ?? 30);
+  const labelType = Number(config.bluetoothLabelType ?? (labelHeightMm <= 0 ? 3 : 1));
   const marginMm = Number(config.bluetoothMarginMm ?? 1.5);
   const fitMode = config.bluetoothFitMode || 'fit';
   const autoRotate = config.bluetoothAutoRotate !== false;
@@ -70,9 +74,16 @@ export default function PrinterConfigModal({
   const gamma = Number(config.bluetoothGamma ?? 1.75);
   const ditherMethod = config.bluetoothDither || 'atkinson';
   const sharpen = config.bluetoothSharpen !== false;
-  const activeModelPreset = config.printerModelPreset || (
-    (config.bluetoothDeviceName || '').toUpperCase().includes('PRO') ? 'b1_pro' : 'b1'
-  );
+  const activeModelPreset = config.printerModelPreset || (() => {
+    const dev = (config.bluetoothDeviceName || '').toUpperCase();
+    if (dev.includes('B1 PRO') || dev.includes('B1PRO')) return 'b1_pro';
+    if (dev.includes('B21 PRO') || dev.includes('B21PRO')) return 'b21_pro';
+    if (dev.includes('B21S')) return 'b21s';
+    if (dev.includes('B21')) return 'b21';
+    if (dev.includes('B1')) return 'b1';
+    if (dev.includes('D110') || dev.includes('D11')) return 'd110';
+    return dev.includes('PRO') ? 'b1_pro' : 'b1';
+  })();
   const activeProfile = getPrinterProfile(activeModelPreset, config.bluetoothDeviceName);
   const effectiveDpi = activeProfile.dpi;
 
@@ -220,6 +231,24 @@ export default function PrinterConfigModal({
     }
   };
 
+  // Calibrate paper to gap
+  const handleCalibrateGap = async () => {
+    setIsCalibratingGap(true);
+    setBtStatus({ type: 'info', message: 'Memposisikan kertas ke batas garis potong (gap)...' });
+    try {
+      if (!bluetoothPrinter.isConnected) {
+        await bluetoothPrinter.connect();
+        onUpdateConfig({ bluetoothDeviceName: bluetoothPrinter.printerName });
+      }
+      const res = await bluetoothPrinter.calibrateGap();
+      setBtStatus({ type: 'success', message: res.message || 'Kertas berhasil diposisikan ke celah gap!' });
+    } catch (err) {
+      setBtStatus({ type: 'error', message: `Gagal kalibrasi gap: ${err.message}` });
+    } finally {
+      setIsCalibratingGap(false);
+    }
+  };
+
   // Test print
   const handleTestPrint = async () => {
     setIsTestingBtPrint(true);
@@ -265,6 +294,7 @@ export default function PrinterConfigModal({
 
       await bluetoothPrinter.printImage(testCanvas, {
         printerModelPreset: activeModelPreset,
+        labelType,
         density,
         ditherMethod,
         brightness,
@@ -294,6 +324,7 @@ export default function PrinterConfigModal({
       bluetoothLabelSize: '50x50',
       bluetoothLabelWidthMm: 50,
       bluetoothLabelHeightMm: 50,
+      bluetoothLabelType: 1,
       bluetoothMarginMm: 0,
       bluetoothFitMode: 'fit',
       bluetoothAutoRotate: true,
@@ -325,6 +356,7 @@ export default function PrinterConfigModal({
       bluetoothLabelSize: labelSize,
       bluetoothLabelWidthMm: labelWidthMm,
       bluetoothLabelHeightMm: labelHeightMm,
+      bluetoothLabelType: labelType,
       bluetoothMarginMm: marginMm,
       bluetoothFitMode: fitMode,
       bluetoothAutoRotate: autoRotate,
@@ -545,16 +577,29 @@ export default function PrinterConfigModal({
                   </button>
 
                   {bluetoothPrinter.isConnected && (
-                    <button
-                      type="button"
-                      onClick={handleTestPrint}
-                      disabled={isTestingBtPrint}
-                      className="py-1.5 px-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
-                      title="Kirim 1 lembar slip tes cetak ke printer"
-                    >
-                      {isTestingBtPrint ? <Loader2 size={12} className="animate-spin text-purple-600" /> : <Printer size={12} className="text-purple-600" />}
-                      <span>{isTestingBtPrint ? 'Mencetak...' : 'Test Cetak'}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleCalibrateGap}
+                        disabled={isCalibratingGap}
+                        className="py-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                        title="Posisikan kertas tepat di batas pemisah stiker (gap)"
+                      >
+                        {isCalibratingGap ? <Loader2 size={12} className="animate-spin text-amber-400" /> : <Target size={12} className="text-amber-400" />}
+                        <span>{isCalibratingGap ? 'Mengatur...' : 'Posisikan Gap'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleTestPrint}
+                        disabled={isTestingBtPrint}
+                        className="py-1.5 px-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                        title="Kirim 1 lembar slip tes cetak ke printer"
+                      >
+                        {isTestingBtPrint ? <Loader2 size={12} className="animate-spin text-purple-600" /> : <Printer size={12} className="text-purple-600" />}
+                        <span>{isTestingBtPrint ? 'Mencetak...' : 'Test Cetak'}</span>
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -660,6 +705,52 @@ export default function PrinterConfigModal({
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Jenis Kertas & Sensor Gap */}
+                <div className="pt-2 border-t border-slate-700/60">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                      <Layers size={12} className="text-purple-400" />
+                      <span>Sensor & Jenis Kertas:</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full font-mono">
+                      {labelType === 5 ? 'Stiker Transparan ✨' : labelType === 2 ? 'Black Mark' : labelType === 3 ? 'Continuous Roll' : 'Gap Standar (Putih)'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { id: 1, label: 'Gap Putih', desc: 'Stiker Standar' },
+                      { id: 5, label: 'Transparan ✨', desc: 'Stiker Bening' },
+                      { id: 2, label: 'Black Mark', desc: 'Garis Hitam' },
+                      { id: 3, label: 'Continuous', desc: 'Struk Roll' }
+                    ].map((t) => {
+                      const isSel = labelType === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => onUpdateConfig({ bluetoothLabelType: t.id })}
+                          className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            isSel
+                              ? 'border-purple-500 bg-purple-600 text-white font-extrabold shadow-sm ring-1 ring-purple-400/50'
+                              : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-700 hover:text-white'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{t.label}</div>
+                          <div className="text-[9px] opacity-75 mt-0.5">{t.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {labelType === 5 && (
+                    <div className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mt-2 flex items-start gap-1.5">
+                      <Sparkles size={12} className="text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Mode Stiker Transparan Aktif:</strong> Mengaktifkan deteksi sensor stiker bening dan boost pemanas thermal agar hasil cetak pekat (tidak transparan/pudar) dan kertas berhenti tepat di celah potong (gap).
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Safe Margin Selection */}

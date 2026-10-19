@@ -404,7 +404,8 @@ export default function LandingConfigDrawer({
       tCtx.strokeRect(12, 12, testCanvas.width - 24, testCanvas.height - 24);
 
       await bluetoothPrinter.printImage(testCanvas, {
-        printerModelPreset: config.printerModelPreset || 'b1_pro',
+        printerModelPreset: config.printerModelPreset || undefined,
+        labelType: Number(config.bluetoothLabelType ?? (labelHeightMm <= 0 ? 3 : 1)),
         density: Number(config.bluetoothDensity ?? 2),
         ditherMethod: config.bluetoothDither || 'atkinson',
         brightness: Number(config.bluetoothBrightness ?? 22),
