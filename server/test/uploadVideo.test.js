@@ -3,9 +3,8 @@ const assert = require('node:assert');
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
-const { app } = require('../src/app');
-
-const uploadsDir = path.resolve(__dirname, '../uploads');
+const { app, uploadsDir, mediaDir } = require('../src/app');
+const { teardownTestEnvironment } = require('./testHelper');
 
 test('POST /api/photos/upload-video handles file uploads and returns accessible videoUrl', async () => {
   const dummyVideoBuffer = Buffer.from('fake mp4 video stream header 00000018ftypmp42');
@@ -22,7 +21,7 @@ test('POST /api/photos/upload-video handles file uploads and returns accessible 
   assert.ok(res.body.relativeUrl);
 
   // Verify file was physically written to uploads directory
-  const uploadedPath = path.join(uploadsDir, res.body.filename);
+  const uploadedPath = path.join(mediaDir, res.body.filename);
   assert.ok(fs.existsSync(uploadedPath));
 
   // Verify file can be retrieved via /uploads/ static endpoint
@@ -57,7 +56,11 @@ test("POST /api/photos/upload-video handles image file uploads (JPG/PNG) and ret
   assert.match(res.body.filename, /^image_landing_\d+\.png$/);
   assert.ok(res.body.videoUrl);
 
-  const uploadedPath = path.join(uploadsDir, res.body.filename);
+  const uploadedPath = path.join(mediaDir, res.body.filename);
   assert.ok(fs.existsSync(uploadedPath));
   await fs.promises.unlink(uploadedPath).catch(() => {});
+});
+
+test.after(async () => {
+  await teardownTestEnvironment();
 });

@@ -32,6 +32,7 @@ export default function App() {
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [downloadFilename, setDownloadFilename] = useState('');
   const [showSplash, setShowSplash] = useState(true);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [adminExitCode, setAdminExitCode] = useState('9999');
   const [isBoothUnlocked, setIsBoothUnlocked] = useState(() => getStoredBoothUnlocked());
 
@@ -112,6 +113,8 @@ export default function App() {
   }, []);
 
   const handleStartLanding = (customFrame = null, customFrames = null) => {
+    const newSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    setCurrentSessionId(newSessionId);
     const framesList = Array.isArray(customFrames) && customFrames.length > 0
       ? customFrames
       : (customFrame ? [customFrame] : []);
@@ -160,6 +163,7 @@ export default function App() {
   const handleResetSession = () => {
     setCapturedPhotos([]);
     setLayoutConfig(null);
+    setCurrentSessionId(null);
     setCurrentStep('LANDING');
   };
 
@@ -243,6 +247,7 @@ export default function App() {
             <PreviewResult
               photos={capturedPhotos}
               layoutConfig={layoutConfig}
+              sessionId={currentSessionId}
               onResetSession={handleResetSession}
             />
           )}

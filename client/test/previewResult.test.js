@@ -155,6 +155,19 @@ test('resolveApiUrl - Configuration and Fallback Resolution', async (t) => {
     assert.ok(url.endsWith('/api/print'));
     assert.ok(url.startsWith('http://localhost:5000') || url.startsWith('/api'));
   });
+
+  await t.test('safely handles undefined, null, non-string, or empty paths without throwing', () => {
+    assert.strictEqual(resolveApiUrl(undefined), '');
+    assert.strictEqual(resolveApiUrl(null), '');
+    assert.strictEqual(resolveApiUrl(''), '');
+    assert.strictEqual(resolveApiUrl(12345), '');
+  });
+
+  await t.test('preserves absolute http/https/blob/data URLs', () => {
+    assert.strictEqual(resolveApiUrl('https://example.com/photo.jpg'), 'https://example.com/photo.jpg');
+    assert.strictEqual(resolveApiUrl('blob:http://localhost:5125/uuid'), 'blob:http://localhost:5125/uuid');
+    assert.strictEqual(resolveApiUrl('data:image/png;base64,abc'), 'data:image/png;base64,abc');
+  });
 });
 
 // ---------------------------------------------------------
@@ -308,19 +321,19 @@ test('ResetConfirmModal - Markup, Accessibility, and Actions', async (t) => {
     assert.ok(html.includes('aria-modal=\"true\"'), 'Must have aria-modal=\"true\"');
     assert.ok(html.includes('aria-labelledby=\"reset-modal-title\"'), 'Must link title id');
     assert.ok(html.includes('aria-describedby=\"reset-modal-desc\"'), 'Must link description id');
-    assert.ok(html.includes('Mulai Sesi Baru?'), 'Must render warning title');
+    assert.ok(html.includes('Mulai Sesi Baru?'), 'Must render modal title');
     assert.ok(
-      html.includes('segera dihapus permanen'),
-      'Must warn visitor about permanent photo deletion'
+      html.includes('tersimpan dengan aman'),
+      'Must inform visitor that photos are safely saved'
     );
-    assert.ok(html.includes('Batal'), 'Must render cancel button');
+    assert.ok(html.includes('Kembali') || html.includes('Batal'), 'Must render cancel/back button');
     assert.ok(
-      html.includes('Ya, Hapus &amp; Mulai') || html.includes('Ya, Hapus & Mulai'),
+      html.includes('Ya, Mulai Sesi Baru'),
       'Must render confirm button'
     );
     assert.ok(
-      html.includes('lucide-triangle-alert') || html.includes('lucide-alert-triangle'),
-      'Must render alert icon'
+      html.includes('lucide-rotate-ccw'),
+      'Must render rotate/reset icon'
     );
   });
 
@@ -578,7 +591,7 @@ test('PreviewResult - Interactive Actions & Modals Lifecycle', async (t) => {
       // Trigger confirm on ResetConfirmModal
       await resetModal.props.onConfirm();
 
-      assert.strictEqual(deleteApiCalledWith, 'http://localhost:5000/api/sessions/test_session_xyz');
+      assert.strictEqual(deleteApiCalledWith, null, 'DELETE API must NOT be called when starting a new session so photos are preserved');
       assert.strictEqual(sessionResetCalled, true, 'onResetSession must be invoked on confirm');
       assert.strictEqual(harness.states.get(2), false, 'isResetOpen must be reset to false');
       assert.strictEqual(harness.states.get(0), null, 'compositeUrl volatile state must be purged');

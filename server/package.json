@@ -6,7 +6,11 @@
     "start": "node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "test": "node --test test/**/*.test.js"
+    "pretest": "node --env-file=.env.test test/cleanup.js",
+    "test": "node --env-file=.env.test --test --test-concurrency=1 test/**/*.test.js",
+    "posttest": "node --env-file=.env.test test/cleanup.js",
+    "test:cleanup": "node --env-file=.env.test test/cleanup.js",
+    "test:db:push": "node --env-file=.env.test ./node_modules/.bin/prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

@@ -5,7 +5,12 @@ const fs = require('fs');
 const { prisma } = require('../db');
 
 const router = express.Router();
-const uploadsDir = path.resolve(__dirname, '../../uploads');
+const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
+const uploadsDir = process.env.UPLOADS_DIR
+  ? (path.isAbsolute(process.env.UPLOADS_DIR)
+      ? process.env.UPLOADS_DIR
+      : path.resolve(__dirname, '../..', process.env.UPLOADS_DIR))
+  : path.resolve(__dirname, '../..', defaultUploadsDirName);
 const photosDir = path.resolve(uploadsDir, 'photos');
 
 // Ensure photos directory exists
@@ -106,10 +111,18 @@ router.get('/', async (req, res) => {
 
     // Associate photos with sessions
     for (const [filename, fileInfo] of fileMap.entries()) {
-      const parts = filename.replace(/^photo_/, '').split('_');
-      let sessionId = parts[0] || 'legacy';
-      if (parts.length > 2) {
-        sessionId = parts.slice(0, parts.length - 1).join('_');
+      const raw = filename.replace(/^photo_/, '').replace(/\.[a-zA-Z0-9]+$/, '');
+      let sessionId = 'legacy';
+      let isCompositeFile = false;
+
+      if (raw.includes('_composite_')) {
+        sessionId = raw.split('_composite_')[0];
+        isCompositeFile = true;
+      } else if (raw.includes('_pose_')) {
+        sessionId = raw.split('_pose_')[0];
+      } else {
+        const parts = raw.split('_');
+        sessionId = parts.length > 1 ? parts.slice(0, parts.length - 1).join('_') : parts[0];
       }
 
       if (!sessionMap.has(sessionId)) {
@@ -120,14 +133,14 @@ router.get('/', async (req, res) => {
           photoCount: 1,
           frameTemplate: 'custom',
           photos: [],
-          compositeUrl: fileInfo.url,
+          compositeUrl: null,
           printJobs: []
         });
       }
 
       const s = sessionMap.get(sessionId);
       s.photos.push(fileInfo);
-      if (!s.compositeUrl) {
+      if (isCompositeFile || !s.compositeUrl) {
         s.compositeUrl = fileInfo.url;
       }
     }
@@ -223,19 +236,27 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/sessions/:id - Purges session and deletes associated photo files
+// DELETE /api/sessions/:id - Purges session and deletes associated photo files from disk and store
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     let session;
     try {
-      if (process.env.DATABASE_URL) {
-        session = await prisma.boothSession.update({
-          where: { id },
-          data: {
-            status: 'PURGED',
-            purgedAt: new Date()
-          }
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUuid && process.env.DATABASE_URL) {
+        // Cascade delete records from PostgreSQL store
+        await prisma.printJob.deleteMany({ where: { sessionId: id } }).catch(() => {});
+        await prisma.capturedPhoto.deleteMany({ where: { sessionId: id } }).catch(() => {});
+        session = await prisma.boothSession.delete({
+          where: { id }
+        }).catch(async () => {
+          return await prisma.boothSession.update({
+            where: { id },
+            data: {
+              status: 'PURGED',
+              purgedAt: new Date()
+            }
+          });
         });
       }
     } catch (dbErr) {
@@ -258,6 +279,7 @@ router.delete('/:id', async (req, res) => {
     // Delete local photo files from uploads/photos and uploads
     const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');
     const prefix = `photo_${safeId}_`;
+    const photoboothPrefix = `photobooth_${safeId}`;
 
     let deletedFilesCount = 0;
     const searchDirs = [photosDir, uploadsDir];
@@ -267,7 +289,12 @@ router.delete('/:id', async (req, res) => {
         try {
           const files = await fs.promises.readdir(dir);
           for (const file of files) {
-            if (file.startsWith(prefix) || file === id) {
+            if (
+              file.startsWith(prefix) ||
+              file.startsWith(photoboothPrefix) ||
+              file === id ||
+              file.includes(safeId)
+            ) {
               await fs.promises.unlink(path.join(dir, file)).catch(() => {});
               deletedFilesCount++;
             }
@@ -282,7 +309,7 @@ router.delete('/:id', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Session purged and local files removed',
+      message: 'Session purged and local files removed from store',
       deletedFilesCount,
       session
     });
@@ -291,7 +318,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/sessions/photo/:filename - Deletes an individual photo file
+// DELETE /api/sessions/photo/:filename - Deletes an individual photo file from disk and store
 router.delete('/photo/:filename', async (req, res) => {
   try {
     const filename = path.basename(req.params.filename);
@@ -308,6 +335,31 @@ router.delete('/photo/:filename', async (req, res) => {
       if (fs.existsSync(fullPath)) {
         await fs.promises.unlink(fullPath).catch(() => {});
         deleted = true;
+      }
+    }
+
+    // Delete record from database store
+    if (process.env.DATABASE_URL) {
+      try {
+        await prisma.capturedPhoto.deleteMany({
+          where: {
+            OR: [
+              { filePath: { contains: filename } },
+              { imageDataUri: { contains: filename } }
+            ]
+          }
+        }).catch(() => {});
+      } catch (dbErr) {}
+    }
+
+    // Also update in-memory session store
+    for (const [sessId, sess] of memorySessions.entries()) {
+      if (sess && Array.isArray(sess.photos)) {
+        const initialCount = sess.photos.length;
+        sess.photos = sess.photos.filter((p) => p.filename !== filename);
+        if (sess.photos.length !== initialCount) {
+          memorySessions.set(sessId, sess);
+        }
       }
     }
 

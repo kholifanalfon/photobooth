@@ -4,12 +4,13 @@ const request = require('supertest');
 const fs = require('fs');
 const path = require('path');
 const { app, uploadsDir, photosDir } = require('../src/app.js');
+const { teardownTestEnvironment } = require('./testHelper');
 
 test('Session Management & Upload Functional Grouping Suite', async (t) => {
   const sampleBase64 = 'data:image/jpeg;base64,' + Buffer.from('photo-session-test-data').toString('base64');
   const testSessionId = `sess_test_${Date.now()}`;
 
-  await t.test('POST /api/photos/upload saves photo in photos/ subfolder and mirrors to root', async () => {
+  await t.test('POST /api/photos/upload saves photo in photos/ subfolder without root duplication', async () => {
     const uploadRes = await request(app)
       .post('/api/photos/upload')
       .send({
@@ -27,9 +28,9 @@ test('Session Management & Upload Functional Grouping Suite', async (t) => {
     const photoSubdirPath = path.join(photosDir, uploadRes.body.filename);
     assert.ok(fs.existsSync(photoSubdirPath), 'File must exist in uploads/photos/');
 
-    // Must also be accessible in root uploads/
+    // Must NOT be duplicated directly in root uploads/
     const rootPath = path.join(uploadsDir, uploadRes.body.filename);
-    assert.ok(fs.existsSync(rootPath), 'File must exist in uploads/ root mirror');
+    assert.ok(!fs.existsSync(rootPath), 'File must NOT be duplicated in uploads/ root');
   });
 
   await t.test('GET /api/sessions returns list including the uploaded session and photos', async () => {
@@ -68,5 +69,9 @@ test('Session Management & Upload Functional Grouping Suite', async (t) => {
     // Verify deletion from both photos/ and uploads/
     assert.ok(!fs.existsSync(path.join(photosDir, targetFile)), 'File should be removed from photos/');
     assert.ok(!fs.existsSync(path.join(uploadsDir, targetFile)), 'File should be removed from uploads/');
+  });
+
+  t.after(async () => {
+    await teardownTestEnvironment();
   });
 });

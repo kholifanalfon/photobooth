@@ -18,7 +18,12 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Static uploads serving with grouped subdirectories (photos, frames, media)
-const uploadsDir = path.join(__dirname, '../uploads');
+const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
+const uploadsDir = process.env.UPLOADS_DIR
+  ? (path.isAbsolute(process.env.UPLOADS_DIR)
+      ? process.env.UPLOADS_DIR
+      : path.resolve(__dirname, '..', process.env.UPLOADS_DIR))
+  : path.resolve(__dirname, '..', defaultUploadsDirName);
 const framesDir = path.join(uploadsDir, 'frames');
 const mediaDir = path.join(uploadsDir, 'media');
 const photosDir = path.join(uploadsDir, 'photos');
@@ -28,6 +33,14 @@ const photosDir = path.join(uploadsDir, 'photos');
     fs.mkdirSync(dir, { recursive: true });
   }
 });
+
+// Ensure 'foto' directory alias / symlink exists for photos
+const fotoSymlink = path.join(uploadsDir, 'foto');
+if (!fs.existsSync(fotoSymlink)) {
+  try {
+    fs.symlinkSync('photos', fotoSymlink, 'dir');
+  } catch (_) {}
+}
 
 // Fallback resolver for root /uploads/:filename to check subdirectories (photos, frames, media)
 app.get('/uploads/:filename', (req, res, next) => {

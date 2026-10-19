@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Image as ImageIcon } from 'lucide-react';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
+import { PAPER_PRESETS } from '../constants/framePresets.js';
 
 export const PALETTES = [
   { name: 'Pure White', hex: '#FFFFFF', text: '#1e293b' },
@@ -132,15 +133,61 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
           >
             {availableCustomFrames.map((f, idx) => {
               const isSelected = f.id === selectedCustomFrameId || (!selectedCustomFrameId && idx === 0);
-              const isLandscape = f.orientation === 'landscape';
-              const frameWidth = isLandscape ? (f.width || 1800) : (f.width || 1200);
-              const frameHeight = isLandscape ? (f.height || 1200) : (f.height || 1800);
+              const paperKey = f.paperSize || '4R';
+              const paperPreset = PAPER_PRESETS[paperKey] || PAPER_PRESETS['4R'];
+
+              // Frame uses uploaded image dimensions if paperSize is 'image' or non-standard custom dimensions
+              const isImageSize = f.paperSize === 'image' || (
+                Number(f.width) > 0 && Number(f.height) > 0 &&
+                f.paperSize !== '4R' && f.paperSize !== '3x5cm' && f.paperSize !== '5x5cm' &&
+                ((Number(f.width) !== 1200 || Number(f.height) !== 1800) && (Number(f.width) !== 1800 || Number(f.height) !== 1200))
+              );
+
+              // Calculate precise dimensions
+              let frameWidth = f.orientation === 'landscape' ? 1800 : 1200;
+              let frameHeight = f.orientation === 'landscape' ? 1200 : 1800;
+
+              if (Number(f.width) > 0 && Number(f.height) > 0) {
+                const rawW = Number(f.width);
+                const rawH = Number(f.height);
+                if (isImageSize || paperPreset.hasOrientation === false || rawW === rawH) {
+                  frameWidth = rawW;
+                  frameHeight = rawH;
+                } else if (f.orientation === 'landscape') {
+                  frameWidth = Math.max(rawW, rawH);
+                  frameHeight = Math.min(rawW, rawH);
+                } else {
+                  frameWidth = Math.min(rawW, rawH);
+                  frameHeight = Math.max(rawW, rawH);
+                }
+              } else if (Number(f.frameNaturalWidth) > 0 && Number(f.frameNaturalHeight) > 0 && isImageSize) {
+                frameWidth = Number(f.frameNaturalWidth);
+                frameHeight = Number(f.frameNaturalHeight);
+              } else if (paperPreset && paperPreset.id !== 'image') {
+                const isLand = paperPreset.hasOrientation && f.orientation === 'landscape';
+                frameWidth = isLand ? paperPreset.landscape.width : paperPreset.portrait.width;
+                frameHeight = isLand ? paperPreset.landscape.height : paperPreset.portrait.height;
+              }
+
+              const isLandscape = frameWidth > frameHeight;
+              const isSquare = frameWidth === frameHeight;
               const slots = Array.isArray(f.slots) ? f.slots : [];
               const slotCount = slots.length;
               const uniqueSlotsPhotoCount = slots.length > 0
                 ? Math.max(...slots.map((s, sIdx) => Number(s.photoIndex ?? sIdx))) + 1
                 : 4;
               const photoCount = Number(f.photoCount) > 0 ? Number(f.photoCount) : uniqueSlotsPhotoCount;
+
+              // Do NOT display 4R if frame uses uploaded image size
+              const paperLabel = (() => {
+                if (isImageSize) {
+                  if (isSquare) return 'Ukuran Frame (Kotak)';
+                  return `Ukuran Frame ${isLandscape ? 'Landscape' : 'Portrait'}`;
+                }
+                if (f.paperSize === '5x5cm') return '5×5 cm';
+                if (f.paperSize === '3x5cm') return `3×5 cm ${isLandscape ? 'Landscape' : 'Portrait'}`;
+                return `4R ${isLandscape ? 'Landscape' : 'Portrait'}`;
+              })();
 
               return (
                 <div
@@ -162,11 +209,10 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                       : 'border-slate-200 hover:border-rose-300 hover:shadow-md bg-white shadow-xs'
                   }`}
                 >
-                  {/* Thumbnail Container */}
+                  {/* Thumbnail Container (Renders precisely at the exact frame aspect ratio) */}
                   <div
-                    className={`w-full ${
-                      isLandscape ? 'aspect-[3/2]' : 'aspect-[2/3]'
-                    } max-h-[38vh] sm:max-h-[46vh] rounded-lg sm:rounded-xl overflow-hidden border border-slate-300/80 bg-slate-900 relative shadow-inner flex items-center justify-center`}
+                    style={{ aspectRatio: `${frameWidth} / ${frameHeight}` }}
+                    className="w-full max-h-[38vh] sm:max-h-[46vh] rounded-lg sm:rounded-xl overflow-hidden border border-slate-300/80 bg-slate-900 relative shadow-inner flex items-center justify-center"
                   >
                     {/* Background frame image (Supports Anti-Stretch, Custom Position & Mirror) */}
                     {f.imageUrl && f.layerMode !== 'overlay' && (
@@ -181,7 +227,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                             width: `${((Number(f.imageWidth) || (f.imageMirror ? frameWidth / 2 : frameWidth)) / frameWidth) * 100}%`,
                             height: `${((Number(f.imageHeight) || frameHeight) / frameHeight) * 100}%`
                           }}
-                          className="object-contain"
+                          className="w-full h-full object-contain"
                         />
                         {f.imageMirror && (
                           <img
@@ -195,7 +241,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                               height: `${((Number(f.mirrorImageHeight) || frameHeight) / frameHeight) * 100}%`,
                               transform: f.mirrorImageFlip ? 'scaleX(-1)' : 'none'
                             }}
-                            className="object-contain"
+                            className="w-full h-full object-contain"
                           />
                         )}
                       </div>
@@ -243,7 +289,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                             width: `${((Number(f.imageWidth) || (f.imageMirror ? frameWidth / 2 : frameWidth)) / frameWidth) * 100}%`,
                             height: `${((Number(f.imageHeight) || frameHeight) / frameHeight) * 100}%`
                           }}
-                          className="object-contain"
+                          className="w-full h-full object-contain"
                         />
                         {f.imageMirror && (
                           <img
@@ -257,7 +303,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                               height: `${((Number(f.mirrorImageHeight) || frameHeight) / frameHeight) * 100}%`,
                               transform: f.mirrorImageFlip ? 'scaleX(-1)' : 'none'
                             }}
-                            className="object-contain"
+                            className="w-full h-full object-contain"
                           />
                         )}
                       </div>
@@ -286,7 +332,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
                     </h4>
                     <div className="flex items-center justify-center gap-1 text-[11px] text-slate-600 font-semibold flex-wrap">
                       <span className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[9px] sm:text-[10px] text-slate-700 font-bold">
-                        4R {isLandscape ? 'Landscape' : 'Portrait'} • {slotCount > photoCount ? `${slotCount} Slot (${photoCount}x Foto)` : `${slotCount} Foto`}
+                        {paperLabel} • {slotCount > photoCount ? `${slotCount} Slot (${photoCount}x Foto)` : `${slotCount} Foto`}
                       </span>
                     </div>
                   </div>

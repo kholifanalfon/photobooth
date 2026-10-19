@@ -8,7 +8,8 @@ router.post('/', async (req, res) => {
   try {
     const { sessionId, copies = 1, printerName = 'Default Printer' } = req.body || {};
     let printJob;
-    if (sessionId && process.env.DATABASE_URL) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+    if (isUuid && process.env.DATABASE_URL) {
       try {
         printJob = await prisma.printJob.create({
           data: {

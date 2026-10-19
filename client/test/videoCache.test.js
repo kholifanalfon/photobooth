@@ -8,7 +8,8 @@ import {
   getCachedVideoBlobUrl,
   hasCachedVideo,
   seedLocalVideoCache,
-  resolveMediaUrl
+  resolveMediaUrl,
+  clearVideoCache
 } from '../src/utils/videoCache.js';
 
 test('videoCache - isDirectVideoUrl detection', () => {
@@ -163,5 +164,33 @@ test("videoCache - getCachedVideoBlobUrl and hasCachedVideo behavior", async () 
     if (originalUrlCreate) {
       global.URL.createObjectURL = originalUrlCreate;
     }
+  }
+});
+
+test("videoCache - clearVideoCache purges video from in-memory and CacheStorage store", async () => {
+  const originalUrlCreate = global.URL?.createObjectURL;
+  const originalRevoke = global.URL?.revokeObjectURL;
+  let revokedUrl = null;
+  if (!global.URL) global.URL = {};
+  global.URL.createObjectURL = () => "blob:mock-seeded-to-clear";
+  global.URL.revokeObjectURL = (url) => { revokedUrl = url; };
+
+  try {
+    const fakeUrl = "/uploads/media/video_to_purge.mp4";
+    const fakeBlob = new Blob([new Uint8Array([10, 20])], { type: "video/mp4" });
+    await seedLocalVideoCache(fakeUrl, fakeBlob);
+
+    assert.strictEqual(await hasCachedVideo(fakeUrl), true);
+
+    // Call clearVideoCache
+    await clearVideoCache("video_to_purge.mp4");
+
+    // Cache should be completely purged
+    assert.strictEqual(await hasCachedVideo(fakeUrl), false);
+    assert.strictEqual(await getCachedVideoBlobUrl(fakeUrl), null);
+    assert.strictEqual(revokedUrl, "blob:mock-seeded-to-clear");
+  } finally {
+    if (originalUrlCreate) global.URL.createObjectURL = originalUrlCreate;
+    if (originalRevoke) global.URL.revokeObjectURL = originalRevoke;
   }
 });

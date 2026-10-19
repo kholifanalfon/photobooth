@@ -4,6 +4,7 @@ const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
 const { app, uploadsDir, clientDistDir } = require('../src/app');
+const { teardownTestEnvironment } = require('./testHelper');
 
 test('Health & Server Inspection Suite', async (t) => {
   await t.test('GET /health returns 200 OK with valid status and ISO timestamp', async () => {
@@ -126,5 +127,9 @@ test('Client Production Bundle Integration & Static Delivery', async (t) => {
       assert.strictEqual(res.status, 200);
       assert.ok(res.headers['content-type'], 'Content-type must be defined for static asset');
     }
+  });
+
+  t.after(async () => {
+    await teardownTestEnvironment();
   });
 });

@@ -9,8 +9,15 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 const configFile = path.resolve(__dirname, "../../data/landing_config.json");
-const uploadsDir = path.resolve(__dirname, "../../uploads");
+const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
+const uploadsDir = process.env.UPLOADS_DIR
+  ? (path.isAbsolute(process.env.UPLOADS_DIR)
+      ? process.env.UPLOADS_DIR
+      : path.resolve(__dirname, '../..', process.env.UPLOADS_DIR))
+  : path.resolve(__dirname, '../..', defaultUploadsDirName);
 const mediaDir = path.resolve(uploadsDir, "media");
+const framesDir = path.resolve(uploadsDir, "frames");
+const photosDir = path.resolve(uploadsDir, "photos");
 
 function getLatestLandingMedia() {
   try {
@@ -299,27 +306,126 @@ router.get("/media", (req, res) => {
   }
 });
 
-// DELETE /api/config/media
-router.delete("/media", (req, res) => {
+// DELETE /api/config/media - Deletes media file from storage and updates config store
+router.delete("/media", async (req, res) => {
   try {
     const { filename } = req.body || {};
     if (!filename) {
       return res.status(400).json({ error: "Filename wajib disertakan" });
     }
     const safeName = path.basename(filename);
-    const searchDirs = [mediaDir, uploadsDir];
+    const searchDirs = [mediaDir, uploadsDir, framesDir, photosDir];
 
+    let deleted = false;
     for (const dir of searchDirs) {
       const filePath = path.join(dir, safeName);
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        return res.json({ success: true, deleted: true, filename: safeName });
+        try {
+          fs.unlinkSync(filePath);
+          deleted = true;
+        } catch (_) {}
       }
     }
 
-    return res.status(404).json({ error: "File tidak ditemukan" });
+    if (!deleted) {
+      return res.status(404).json({ error: "File tidak ditemukan" });
+    }
+
+    // Also update config store if deleted file was active videoUrl or media
+    try {
+      let cfg = null;
+      if (fs.existsSync(configFile)) {
+        cfg = JSON.parse(fs.readFileSync(configFile, "utf8"));
+      }
+      if (cfg && cfg.videoUrl && cfg.videoUrl.includes(safeName)) {
+        cfg.videoUrl = "";
+        cfg.enableVideo = false;
+        fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), "utf8");
+        if (process.env.DATABASE_URL) {
+          await prisma.appConfig.upsert({
+            where: { key: "landing_config" },
+            create: { key: "landing_config", value: cfg },
+            update: { value: cfg }
+          }).catch(() => {});
+        }
+      }
+    } catch (_) {}
+
+    return res.json({ success: true, deleted: true, filename: safeName });
   } catch (err) {
     return res.status(500).json({ error: "Gagal menghapus file media" });
+  }
+});
+
+// DELETE /api/config/frame - Deletes custom frame image from storage and removes from customFrames config store
+router.delete("/frame", async (req, res) => {
+  try {
+    const { frameId, filename, imageUrl } = req.body || {};
+    if (!frameId && !filename && !imageUrl) {
+      return res.status(400).json({ error: "frameId, filename, atau imageUrl wajib disertakan" });
+    }
+
+    const targetName = filename ? path.basename(filename) : (imageUrl ? path.basename(imageUrl) : "");
+    let fileDeleted = false;
+
+    // Delete image file from storage if safe file name exists and is not a built-in static asset
+    if (targetName && !targetName.startsWith("default_") && targetName.length > 3) {
+      const searchDirs = [framesDir, uploadsDir, mediaDir];
+      for (const dir of searchDirs) {
+        const filePath = path.join(dir, targetName);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+            fileDeleted = true;
+          } catch (_) {}
+        }
+      }
+    }
+
+    // Update config store: remove from customFrames & reset customFrame if needed
+    let updatedConfig = null;
+    try {
+      let cfg = null;
+      if (fs.existsSync(configFile)) {
+        cfg = JSON.parse(fs.readFileSync(configFile, "utf8"));
+      }
+      if (cfg && Array.isArray(cfg.customFrames)) {
+        cfg.customFrames = cfg.customFrames.filter((f) => {
+          if (frameId && f.id === frameId) return false;
+          if (targetName && f.imageUrl && f.imageUrl.includes(targetName)) return false;
+          return true;
+        });
+
+        // If active frame was the deleted one, reset to first available frame
+        if (cfg.customFrame && (
+          (frameId && cfg.customFrame.id === frameId) ||
+          (targetName && cfg.customFrame.imageUrl && cfg.customFrame.imageUrl.includes(targetName))
+        )) {
+          cfg.customFrame = cfg.customFrames[0] || null;
+        }
+
+        fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), "utf8");
+        if (process.env.DATABASE_URL) {
+          await prisma.appConfig.upsert({
+            where: { key: "landing_config" },
+            create: { key: "landing_config", value: cfg },
+            update: { value: cfg }
+          }).catch(() => {});
+        }
+        updatedConfig = cfg;
+      }
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      deleted: true,
+      fileDeleted,
+      frameId,
+      filename: targetName,
+      config: updatedConfig
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Gagal menghapus file frame dan konfigurasi" });
   }
 });
 

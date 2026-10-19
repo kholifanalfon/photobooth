@@ -1,8 +1,23 @@
 /**
  * Resolves the target API URL based on configuration or environment.
  * Supports standalone (e.g. http://localhost:5000) or proxied setups (e.g. relative /api).
+ * Safely guards against undefined, null, non-strings, or already-resolved URLs.
  */
 export function resolveApiUrl(path, customBaseUrl) {
+  if (!path || typeof path !== 'string') {
+    return '';
+  }
+
+  // If already absolute or blob/data URI, return as-is
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('blob:') ||
+    path.startsWith('data:')
+  ) {
+    return path;
+  }
+
   let base = customBaseUrl;
   if (base === undefined) {
     if (

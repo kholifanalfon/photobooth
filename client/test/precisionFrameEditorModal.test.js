@@ -215,6 +215,22 @@ test('PrecisionFrameEditorModal - Precision Mapping Frame Suite', async (t) => {
     assert.ok(markup.includes("Tata Letak Desain Frame (Anti-Stretch):"), "Must render Anti-Stretch layout section");
     assert.ok(markup.includes("2 Strip (600 × 1800)"), "Must render 2-Strip anti-stretch preset button");
     assert.ok(markup.includes("Penuh 4R (1200 × 1800)"), "Must render full 4R preset button");
+    // Verify selection state: mockFrame has imageMirror undefined/false -> Full layout is selected
+    assert.ok(markup.includes("1 Lembar Penuh (Full Layar)"), "Must render full layout subtitle");
+    assert.ok(markup.includes("Terpilih"), "Must mark selected layout with Terpilih badge");
+
+    // Test with mirror layout enabled: 2-Strip should be selected
+    const mirrorFrame = { ...mockFrame, imageMirror: true, imageWidth: 600 };
+    const mirrorMarkup = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: mirrorFrame,
+        onUpdateFrame: () => {}
+      })
+    );
+    assert.ok(mirrorMarkup.includes("border-cyan-500"), "2-Strip button must have active cyan styling when selected");
+    assert.ok(mirrorMarkup.includes("2 Strip (600 × 1800)"), "Must render 2-Strip button");
     assert.ok(markup.includes("Posisi Desain Utama:"), "Must render Main frame image position label");
     assert.ok(markup.includes("Fitur Mirror Gambar Frame (Duplikat Strip):"), "Must render Mirror Frame Image toggle");
     assert.ok(markup.includes("Posisi &amp; Geser Mirror:"), "Must render Mirror position controls");
@@ -252,6 +268,8 @@ test('PrecisionFrameEditorModal - Precision Mapping Frame Suite', async (t) => {
       })
     );
     assert.ok(markup4R.includes("Ukuran Kertas Frame:"), "Must render paper size section label");
+    assert.ok(markup4R.includes('role="combobox"'), "Must render custom combobox dropdown trigger");
+    assert.ok(markup4R.includes('role="listbox"'), "Must render custom listbox menu");
     assert.ok(markup4R.includes("4R"), "Must render 4R button");
     assert.ok(markup4R.includes("3×5 cm"), "Must render 3×5 cm button");
     assert.ok(markup4R.includes("5×5 cm"), "Must render 5×5 cm button");
@@ -317,5 +335,24 @@ test('PrecisionFrameEditorModal - Precision Mapping Frame Suite', async (t) => {
     assert.ok(markupImage.includes("Ikuti Frame"), "Must render Ikuti Frame button");
     assert.ok(markupImage.includes("720 × 1280 px"), "Canvas and badge must display uploaded frame dimensions");
     assert.ok(markupImage.includes("Resolusi Mengikuti Gambar Frame"), "Must render automatic resolution notice");
+  });  await t.test("renders 2-tab navigation in sidebar (Frame & Kertas and Slot Foto & Gaya)", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PrecisionFrameEditorModal, {
+        isOpen: true,
+        onClose: () => {},
+        customFrame: mockFrame,
+        onUpdateFrame: () => {}
+      })
+    );
+
+    // Verify 2-Tab Navigation Buttons
+    assert.ok(markup.includes("Frame &amp; Kertas"), "Must render Frame & Kertas tab button");
+    assert.ok(markup.includes("Slot Foto &amp; Gaya"), "Must render Slot Foto & Gaya tab button");
+    assert.ok(markup.includes("role=\"tab\""), "Tabs must have role=\"tab\" accessibility attribute");
+    assert.ok(markup.includes(`${mockFrame.slots.length}`), "Must render slot count badge in Tab 2");
+
+    // Verify both tab panels exist in markup
+    assert.ok(markup.includes("Ukuran Kertas Frame:"), "Tab 1 (Frame) content must exist");
+    assert.ok(markup.includes("Daftar Slot Foto"), "Tab 2 (Slots) content must exist");
   });
 });

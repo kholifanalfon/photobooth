@@ -6,7 +6,12 @@ const { generateQrDataUri } = require('../services/qrService');
 const { prisma } = require('../db');
 
 const router = express.Router();
-const uploadsDir = path.resolve(__dirname, '../../uploads');
+const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
+const uploadsDir = process.env.UPLOADS_DIR
+  ? (path.isAbsolute(process.env.UPLOADS_DIR)
+      ? process.env.UPLOADS_DIR
+      : path.resolve(__dirname, '../..', process.env.UPLOADS_DIR))
+  : path.resolve(__dirname, '../..', defaultUploadsDirName);
 const framesDir = path.resolve(uploadsDir, 'frames');
 const mediaDir = path.resolve(uploadsDir, 'media');
 const photosDir = path.resolve(uploadsDir, 'photos');
@@ -34,21 +39,7 @@ function determineCategory(req, originalname = '') {
   return 'media';
 }
 
-/**
- * Link or mirror subfolder file to root uploads for full backward compatibility
- */
-async function mirrorToRoot(subfolderPath, filename) {
-  const rootPath = path.join(uploadsDir, filename);
-  if (subfolderPath !== rootPath && !fs.existsSync(rootPath)) {
-    try {
-      await fs.promises.link(subfolderPath, rootPath);
-    } catch (_) {
-      try {
-        await fs.promises.copyFile(subfolderPath, rootPath);
-      } catch (_) {}
-    }
-  }
-}
+// Direct storage into subdirectories without root duplication
 
 // Multer storage configuration for direct media uploads (video, frame, image)
 const videoStorage = multer.diskStorage({
@@ -112,6 +103,10 @@ const uploadChunkMiddleware = multer({
 
 // POST /api/photos/upload-chunk
 router.post('/upload-chunk', (req, res) => {
+  // Explicit timeout guards to prevent hanging sockets/file descriptors
+  req.setTimeout(30000);
+  res.setTimeout(30000);
+
   uploadChunkMiddleware(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -193,8 +188,7 @@ router.post('/merge-chunks', async (req, res) => {
     // Cleanup session temp chunk directory
     await fs.promises.rm(sessionChunkDir, { recursive: true, force: true }).catch(() => {});
 
-    // Maintain root mirror for 100% backward compatibility
-    await mirrorToRoot(finalFilepath, finalFilename);
+// Saved directly into subfolder
 
     const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `${req.protocol}://${req.headers.host}` : 'http://localhost:5000');
     const videoUrl = `${host}/uploads/${subfolder}/${finalFilename}`;
@@ -234,8 +228,7 @@ router.post('/upload-video', (req, res) => {
     if (req.file.destination.endsWith('frames')) subfolder = 'frames';
     else if (req.file.destination.endsWith('photos')) subfolder = 'photos';
 
-    // Maintain root mirror for 100% backward compatibility
-    await mirrorToRoot(req.file.path, filename);
+// Saved directly into subfolder
 
     const relativeUrl = `/uploads/${subfolder}/${filename}`;
     const fullUrl = `${host}${relativeUrl}`;
@@ -290,14 +283,20 @@ router.post('/upload', async (req, res) => {
       }
     }
 
+    const { isComposite } = req.body;
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    const filename = `photo_${safeSessionId}_${Date.now()}${ext}`;
+    let tag = '';
+    if (isComposite) {
+      tag = `composite_${Date.now()}`;
+    } else if (poseIndex !== undefined && poseIndex !== null) {
+      tag = `pose_${poseIndex}_${Date.now()}`;
+    } else {
+      tag = `${Date.now()}`;
+    }
+    const filename = `photo_${safeSessionId}_${tag}${ext}`;
     const filepath = path.join(photosDir, filename);
 
     await fs.promises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
-
-    // Maintain root mirror for 100% backward compatibility
-    await mirrorToRoot(filepath, filename);
 
     const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `http://${req.headers.host}` : 'http://localhost:3001');
     const downloadPageUrl = `${host}/download/${filename}`;
@@ -306,7 +305,8 @@ router.post('/upload', async (req, res) => {
     const qrCodeDataUri = await generateQrDataUri(downloadPageUrl);
 
     // Save to DB if safeSessionId and DATABASE_URL are present without bloating DB with multi-MB base64
-    if (sessionId && process.env.DATABASE_URL) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+    if (isUuid && process.env.DATABASE_URL) {
       try {
         const truncatedDataUri = imageBase64.length > 256
           ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
@@ -336,6 +336,26 @@ router.post('/upload', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/photos/chunks/:uploadId - Deletes temporary chunk files from storage and cleanup
+router.delete('/chunks/:uploadId', async (req, res) => {
+  try {
+    const { uploadId } = req.params;
+    if (!uploadId) {
+      return res.status(400).json({ error: 'uploadId wajib disertakan' });
+    }
+    const safeUploadId = path.basename(uploadId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const sessionDir = path.join(tempChunksDir, safeUploadId);
+    let deleted = false;
+    if (fs.existsSync(sessionDir)) {
+      await fs.promises.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
+      deleted = true;
+    }
+    return res.json({ success: true, deleted, uploadId: safeUploadId });
+  } catch (err) {
+    return res.status(500).json({ error: 'Gagal menghapus temp chunks' });
   }
 });
 

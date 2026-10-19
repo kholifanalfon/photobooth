@@ -8,6 +8,7 @@ export const DEFAULT_CHUNK_SIZE = 512 * 1024; // 512 KB safe for Nginx/reverse p
  * Initialize IndexedDB using idb library
  */
 export async function getChunkDatabase() {
+  if (typeof indexedDB === 'undefined') return null;
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
       if (!db.objectStoreNames.contains('chunks')) {
@@ -21,7 +22,7 @@ export async function getChunkDatabase() {
 }
 
 /**
- * Step 1: Slice video file into chunks and store them in IndexedDB
+ * Step 1: Slice video file into chunks and store session metadata
  * @param {File} file - Original video file
  * @param {number} [chunkSize=DEFAULT_CHUNK_SIZE]
  * @returns {Promise<{ uploadId: string, totalChunks: number, chunkSize: number }>}
@@ -30,55 +31,137 @@ export async function sliceAndStoreInIndexedDB(file, chunkSize = DEFAULT_CHUNK_S
   const uploadId = `upl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
 
-  const db = await getChunkDatabase();
-  const tx = db.transaction(['chunks', 'metadata'], 'readwrite');
-  const chunksStore = tx.objectStore('chunks');
-  const metaStore = tx.objectStore('metadata');
+  try {
+    const db = await getChunkDatabase();
+    if (!db) return { uploadId, totalChunks, chunkSize };
+    const tx = db.transaction(['metadata'], 'readwrite');
+    const metaStore = tx.objectStore('metadata');
 
-  // Save upload session metadata
-  await metaStore.put(
-    {
-      uploadId,
-      filename: file.name,
-      fileSize: file.size,
-      mimeType: file.type || 'application/octet-stream',
-      totalChunks,
-      chunkSize,
-      createdAt: Date.now()
-    },
-    uploadId
-  );
-
-  // Store each sliced chunk into IndexedDB
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * chunkSize;
-    const end = Math.min(file.size, start + chunkSize);
-    const chunkBlob = file.slice(start, end, file.type || 'video/mp4');
-    await chunksStore.put(chunkBlob, `${uploadId}_${i}`);
+    // Save upload session metadata
+    await metaStore.put(
+      {
+        uploadId,
+        filename: file.name,
+        fileSize: file.size,
+        mimeType: file.type || 'application/octet-stream',
+        totalChunks,
+        chunkSize,
+        createdAt: Date.now()
+      },
+      uploadId
+    );
+    await tx.done;
+  } catch (err) {
+    console.warn('[chunkUploader] Non-critical metadata save failed:', err);
   }
-
-  await tx.done;
 
   return { uploadId, totalChunks, chunkSize };
 }
 
 /**
- * Cleanup chunks from IndexedDB once upload completes or fails
+ * Cleanup chunks and metadata once upload completes or fails
  */
-export async function cleanupIndexedDB(uploadId, totalChunks) {
+export async function cleanupIndexedDB(uploadId, totalChunks = 0, options = {}) {
   try {
     const db = await getChunkDatabase();
-    const tx = db.transaction(['chunks', 'metadata'], 'readwrite');
-    const chunksStore = tx.objectStore('chunks');
-    const metaStore = tx.objectStore('metadata');
+    if (db) {
+      const tx = db.transaction(['chunks', 'metadata'], 'readwrite');
+      const chunksStore = tx.objectStore('chunks');
+      const metaStore = tx.objectStore('metadata');
 
-    for (let i = 0; i < totalChunks; i++) {
-      await chunksStore.delete(`${uploadId}_${i}`);
+      for (let i = 0; i < totalChunks; i++) {
+        await chunksStore.delete(`${uploadId}_${i}`);
+      }
+      await metaStore.delete(uploadId);
+      await tx.done;
     }
-    await metaStore.delete(uploadId);
-    await tx.done;
   } catch (err) {
     console.warn('[chunkUploader] Failed to cleanup IndexedDB:', err);
+  }
+
+  // Also clean up server temp chunk files from storage
+  if (uploadId && options.cleanupServer) {
+    try {
+      const apiBase = options.apiBase || '';
+      const cleanUrl = `${apiBase ? apiBase.replace(/\/+$/, '') : ''}/api/photos/chunks/${encodeURIComponent(uploadId)}`;
+      if (typeof fetch === 'function') {
+        fetch(cleanUrl, { method: 'DELETE' }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+}
+
+/**
+ * Helper to upload a single chunk with explicit timeout and socket release
+ */
+async function uploadSingleChunk(url, formData, timeoutMs = 25000) {
+  if (typeof XMLHttpRequest !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.timeout = timeoutMs;
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (_) {
+            resolve({ success: true });
+          }
+        } else {
+          let errorMsg = `HTTP ${xhr.status}`;
+          if (xhr.status === 413) {
+            errorMsg = 'Ukuran chunk terlalu besar untuk server proxy (413 Payload Too Large)';
+          } else {
+            try {
+              const errJson = JSON.parse(xhr.responseText);
+              if (errJson.error) errorMsg = errJson.error;
+            } catch (_) {}
+          }
+          reject(new Error(errorMsg));
+        }
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error(`Koneksi upload chunk timeout (${Math.round(timeoutMs / 1000)} detik)`));
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Koneksi jaringan terputus saat mengunggah chunk'));
+      };
+
+      xhr.send(formData);
+    });
+  }
+
+  // Fallback for non-browser environments (e.g. Node tests)
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: controller?.signal
+    });
+
+    if (!res.ok) {
+      let errorMsg = `HTTP ${res.status}`;
+      if (res.status === 413) {
+        errorMsg = 'Ukuran chunk terlalu besar untuk server proxy (413 Payload Too Large)';
+      } else {
+        try {
+          const errJson = await res.json();
+          if (errJson.error) errorMsg = errJson.error;
+        } catch (_) {}
+      }
+      throw new Error(errorMsg);
+    }
+
+    const data = await res.json().catch(() => ({ success: true }));
+    return data;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -109,6 +192,7 @@ export async function uploadDirectMedia(file, options = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadEndpoint, true);
+    xhr.timeout = 60000;
 
     if (xhr.upload && typeof onProgress === 'function') {
       xhr.upload.onprogress = (e) => {
@@ -141,6 +225,10 @@ export async function uploadDirectMedia(file, options = {}) {
       }
     };
 
+    xhr.ontimeout = () => {
+      reject(new Error('Upload media timeout (60 detik)'));
+    };
+
     xhr.onerror = () => {
       reject(new Error('Koneksi jaringan terputus saat mengunggah'));
     };
@@ -150,19 +238,19 @@ export async function uploadDirectMedia(file, options = {}) {
 }
 
 /**
- * Step 2: Upload chunks sequentially/in-parallel from IndexedDB to server with fine-grained progress
+ * Step 2: Upload chunks sequentially/in-parallel with explicit socket release and retry resilience
  * @param {string} uploadId
  * @param {File} file
  * @param {number} totalChunks
  * @param {Object} options
  * @param {Function} [options.onProgress] - (percent: number, currentChunk: number, totalChunks: number) => void
  * @param {string} [options.apiBase] - API base URL
- * @param {string} [options.category] - functional category ('media' | 'frames' | 'photos')
+ * @param {number} [options.concurrency=2] - Parallel connection limit (default 2 to prevent proxy socket pool stall)
+ * @param {string} [options.category='media'] - functional category ('media' | 'frames' | 'photos')
  * @returns {Promise<{ videoUrl: string, relativeUrl: string, filename: string }>}
  */
 export async function uploadChunksWithProgress(uploadId, file, totalChunks, options = {}) {
-  const { onProgress, apiBase = '', concurrency = 3, category = 'media' } = options;
-  const db = await getChunkDatabase();
+  const { onProgress, apiBase = '', concurrency = 2, category = 'media' } = options;
 
   const resolveUrl = (path) => {
     if (!apiBase) return path;
@@ -178,24 +266,15 @@ export async function uploadChunksWithProgress(uploadId, file, totalChunks, opti
     let completedChunks = 0;
     let nextChunkIndex = 0;
 
-    // Worker task to upload individual chunk
+    // Worker task to upload individual chunk with retry
     const uploadWorker = async () => {
       while (nextChunkIndex < totalChunks) {
         const i = nextChunkIndex++;
-        // Fast path: slice directly from File in memory to bypass IndexedDB read latency
+
+        // Fast path: slice directly from File
         const start = i * DEFAULT_CHUNK_SIZE;
         const end = Math.min(file.size, start + DEFAULT_CHUNK_SIZE);
-        let chunkBlob = (file && typeof file.slice === 'function')
-          ? file.slice(start, end, file.type || 'application/octet-stream')
-          : await db.get('chunks', `${uploadId}_${i}`);
-
-        if (!chunkBlob) {
-          chunkBlob = await db.get('chunks', `${uploadId}_${i}`);
-        }
-
-        if (!chunkBlob) {
-          throw new Error(`Chunk ${i} tidak ditemukan`);
-        }
+        const chunkBlob = file.slice(start, end, 'application/octet-stream');
 
         const formData = new FormData();
         formData.append('uploadId', uploadId);
@@ -211,35 +290,18 @@ export async function uploadChunksWithProgress(uploadId, file, totalChunks, opti
         while (attempt < 3 && !success) {
           attempt++;
           try {
-            const res = await fetch(chunkEndpoint, {
-              method: 'POST',
-              body: formData
-            });
-
-            if (!res.ok) {
-              let errorMsg = `Gagal mengunggah chunk ${i + 1}/${totalChunks} (HTTP ${res.status})`;
-              if (res.status === 413) {
-                errorMsg = `Ukuran chunk terlalu besar untuk server proxy (413 Payload Too Large).`;
-              } else {
-                try {
-                  const errJson = await res.json();
-                  if (errJson.error) errorMsg = errJson.error;
-                } catch (_) {}
-              }
-              throw new Error(errorMsg);
-            }
-
+            await uploadSingleChunk(chunkEndpoint, formData, 25000);
             success = true;
           } catch (fetchErr) {
             lastErr = fetchErr;
             if (attempt < 3) {
-              await new Promise((r) => setTimeout(r, 250 * attempt));
+              await new Promise((r) => setTimeout(r, 300 * attempt));
             }
           }
         }
 
         if (!success) {
-          throw lastErr || new Error(`Gagal mengunggah chunk ${i + 1}/${totalChunks}`);
+          throw lastErr || new Error(`Gagal mengunggah chunk ke-${i + 1} dari ${totalChunks}`);
         }
 
         completedChunks++;
@@ -250,8 +312,8 @@ export async function uploadChunksWithProgress(uploadId, file, totalChunks, opti
       }
     };
 
-    // Parallel multi-stream upload pipeline
-    const poolSize = Math.min(concurrency, totalChunks);
+    // Safe multi-stream upload pipeline (concurrency 1-2 prevents dev server socket pool deadlocks)
+    const poolSize = Math.max(1, Math.min(concurrency || 2, totalChunks));
     const workers = Array.from({ length: poolSize }, () => uploadWorker());
     await Promise.all(workers);
 
@@ -278,9 +340,7 @@ export async function uploadChunksWithProgress(uploadId, file, totalChunks, opti
       onProgress(100, totalChunks, totalChunks);
     }
 
-    // Cleanup IndexedDB store for this upload
     await cleanupIndexedDB(uploadId, totalChunks);
-
     return mergeData;
   } catch (err) {
     await cleanupIndexedDB(uploadId, totalChunks);

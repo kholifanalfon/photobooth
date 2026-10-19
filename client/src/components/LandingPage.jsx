@@ -49,12 +49,14 @@ import {
   Minimize2,
   DownloadCloud,
   CheckCircle2,
-  FolderArchive
+  FolderArchive,
+  Layers
 } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
 import SessionCodeModal from './SessionCodeModal.jsx';
 import SessionManagerModal from './SessionManagerModal.jsx';
+import FrameManagerModal from './FrameManagerModal.jsx';
 import {
   getFastVideoUrl,
   preloadAndCacheVideo,
@@ -142,6 +144,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
 
   const [cachedVideoSrc, setCachedVideoSrc] = useState(() => getFastVideoUrl(config?.videoUrl));
   const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
+  const [isFrameManagerOpen, setIsFrameManagerOpen] = useState(false);
   const prevVideoUrlRef = useRef(null);
 
   // Sync fresh config directly from server on mount (no stale cache)
@@ -207,12 +210,16 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
           window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
         } catch (_) {}
       }
-      // Persist directly to server
+      // Persist directly to server (exclude volatile blob: URLs)
       if (typeof window !== 'undefined' && typeof fetch === 'function') {
+        const payload = { ...next };
+        if (payload.videoUrl && payload.videoUrl.startsWith('blob:')) {
+          delete payload.videoUrl;
+        }
         fetch('/api/config/landing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(next)
+          body: JSON.stringify(payload)
         }).catch((err) => console.warn('Failed to sync landing config to server:', err));
       }
       return next;
@@ -602,6 +609,15 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
             className="p-2.5 sm:p-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center justify-center"
           >
             <SlidersHorizontal size={18} className="text-rose-500 sm:w-5 sm:h-5" />
+          </button>
+          <button
+            onClick={() => setIsFrameManagerOpen(true)}
+            aria-label="Kelola Frame Photobooth"
+            title="Kelola Frame Photobooth (Desain, Slot Foto, Ukuran Kertas & Upload)"
+            className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
+          >
+            <Layers size={17} className="text-rose-500" />
+            <span className="hidden sm:inline">Kelola Frame</span>
           </button>
           <button
             onClick={() => setIsSessionsModalOpen(true)}
@@ -1110,6 +1126,15 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         onUpdateConfig={handleUpdateConfig}
         onGoLive={handleGoLive}
         onOpenSessions={() => setIsSessionsModalOpen(true)}
+        onOpenFrameManager={() => setIsFrameManagerOpen(true)}
+      />
+
+      {/* Frame Manager Modal */}
+      <FrameManagerModal
+        isOpen={isFrameManagerOpen}
+        onClose={() => setIsFrameManagerOpen(false)}
+        config={config}
+        onUpdateConfig={handleUpdateConfig}
       />
 
       {/* Session Manager Modal */}

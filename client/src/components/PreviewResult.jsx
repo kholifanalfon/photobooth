@@ -122,6 +122,66 @@ export default function PreviewResult({
     }
   }, [compositeUrl]);
 
+  // Auto-save session results (composite full frame + individual poses) to backend uploads/photos/
+  const hasAutoSavedRef = useRef(false);
+  useEffect(() => {
+    if (!compositeUrl || !photos || photos.length === 0 || hasAutoSavedRef.current) return;
+    hasAutoSavedRef.current = true;
+
+    async function autoSaveSession() {
+      const activeSessionId = sessionId || `session_${Date.now()}`;
+      const uploadEndpoint = resolveApiUrl('/api/photos/upload', apiBaseUrl);
+
+      // 1. Upload composite full frame
+      try {
+        const compRes = await fetch(uploadEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: compositeUrl,
+            sessionId: activeSessionId,
+            isComposite: true
+          })
+        });
+        if (compRes.ok) {
+          const compData = await compRes.json();
+          if (compData.qrCodeDataUri) setQrCodeDataUri(compData.qrCodeDataUri);
+          if (compData.downloadUrl) setDownloadUrl(compData.downloadUrl);
+        }
+      } catch (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('Failed to auto-save composite frame:', e);
+        }
+      }
+
+      // 2. Upload each pose photo
+      for (let i = 0; i < photos.length; i++) {
+        const poseImg = photos[i];
+        if (!poseImg) continue;
+        try {
+          await fetch(uploadEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageBase64: poseImg,
+              sessionId: activeSessionId,
+              poseIndex: i + 1,
+              isComposite: false
+            })
+          });
+        } catch (e) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn(`Failed to auto-save pose ${i + 1}:`, e);
+          }
+        }
+      }
+    }
+
+    if (typeof fetch !== 'undefined') {
+      autoSaveSession();
+    }
+  }, [compositeUrl, photos, sessionId, apiBaseUrl]);
+
   const handleDownloadQr = async () => {
     const targetUrl = compositeUrl;
     if (!targetUrl) return;
@@ -350,16 +410,8 @@ export default function PreviewResult({
   const handleConfirmReset = async () => {
     setIsResetOpen(false);
 
-    if (sessionId) {
-      try {
-        const deleteEndpoint = resolveApiUrl(`/api/sessions/${sessionId}`, apiBaseUrl);
-        await fetch(deleteEndpoint, { method: 'DELETE' });
-      } catch (err) {
-        // Ephemeral session cleanup is best-effort
-      }
-    }
-
-    // Purge volatile client memory
+    // Retain photos and session on the server/store so admin and users can revisit/download anytime.
+    // Purge only volatile local client display state.
     setCompositeUrl(null);
     setQrCodeDataUri(null);
     setDownloadUrl(null);

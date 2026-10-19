@@ -3,7 +3,8 @@ const assert = require("node:assert");
 const request = require("supertest");
 const fs = require("fs");
 const path = require("path");
-const { app } = require("../src/app");
+const { app, uploadsDir, framesDir } = require("../src/app");
+const { teardownTestEnvironment } = require("./testHelper");
 
 const dataDir = path.resolve(__dirname, "../../data");
 const configFile = path.join(dataDir, "landing_config.json");
@@ -60,7 +61,7 @@ test("GET /api/config/media returns files array", async () => {
 });
 
 test("DELETE /api/config/media deletes dummy media file safely", async () => {
-  const uploadsDir = path.resolve(__dirname, "../uploads");
+  // uploadsDir is imported from app
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
@@ -90,4 +91,43 @@ test("POST /api/config/verify-admin validates admin code", async () => {
     .send({ adminCode: "wrong-code" });
   assert.strictEqual(invalidRes.status, 401);
   assert.strictEqual(invalidRes.body.success, false);
+});
+
+test("DELETE /api/config/frame deletes frame image and removes frame from config store", async () => {
+  // framesDir is imported from app
+  if (!fs.existsSync(framesDir)) {
+    fs.mkdirSync(framesDir, { recursive: true });
+  }
+  const dummyFrameFile = path.join(framesDir, "frame_custom_test_dummy.png");
+  fs.writeFileSync(dummyFrameFile, "dummy frame data", "utf8");
+
+  const res = await request(app)
+    .delete("/api/config/frame")
+    .send({
+      frameId: "test-frame-to-delete",
+      filename: "frame_custom_test_dummy.png"
+    });
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(res.body.deleted, true);
+  assert.strictEqual(fs.existsSync(dummyFrameFile), false);
+});
+
+test("DELETE /api/photos/chunks/:uploadId cleans up temporary chunk directory from storage", async () => {
+  const tempDir = path.resolve(uploadsDir, "temp_chunks/test_upload_purge_123");
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(tempDir, "chunk_0"), "temp chunk", "utf8");
+  assert.strictEqual(fs.existsSync(tempDir), true);
+
+  const res = await request(app).delete("/api/photos/chunks/test_upload_purge_123");
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(fs.existsSync(tempDir), false);
+});
+
+test.after(async () => {
+  await teardownTestEnvironment();
 });

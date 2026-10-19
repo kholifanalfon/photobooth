@@ -433,8 +433,8 @@ export default function PrinterConfigModal({
           <div className="w-full lg:w-[460px] xl:w-[500px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800/80 p-4 sm:p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 text-white">
             {/* 1. Pairing & Test Print Card */}
             <div className="p-3.5 bg-slate-800/50 rounded-2xl border border-purple-500/30 flex flex-col gap-2.5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col items-start justify-between">
+                <div className="mb-2">
                   <div className="text-xs font-bold text-white flex items-center gap-1.5">
                     <Sparkles size={13} className="text-purple-400" />
                     <span>Pairing Bluetooth Niimbot / Thermal</span>

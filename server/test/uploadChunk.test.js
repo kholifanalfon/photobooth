@@ -3,9 +3,8 @@ const assert = require('node:assert');
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
-const { app } = require('../src/app');
-
-const uploadsDir = path.resolve(__dirname, '../uploads');
+const { app, uploadsDir, mediaDir } = require('../src/app');
+const { teardownTestEnvironment } = require('./testHelper');
 
 test('POST /api/photos/upload-chunk and /merge-chunks successfully processes chunked video', async () => {
   const uploadId = `test_upl_${Date.now()}`;
@@ -65,7 +64,7 @@ test('POST /api/photos/upload-chunk and /merge-chunks successfully processes chu
   assert.ok(mergeRes.body.videoUrl);
   assert.ok(mergeRes.body.relativeUrl);
 
-  const mergedPath = path.join(uploadsDir, mergeRes.body.filename);
+  const mergedPath = path.join(mediaDir, mergeRes.body.filename);
   assert.ok(fs.existsSync(mergedPath));
 
   // Verify merged file content matches concatenated chunks
@@ -90,4 +89,8 @@ test('POST /api/photos/merge-chunks returns 404 if uploadId does not exist', asy
 
   assert.strictEqual(res.status, 404);
   assert.ok(res.body.error);
+});
+
+test.after(async () => {
+  await teardownTestEnvironment();
 });

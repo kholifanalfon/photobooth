@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import PrecisionFrameEditorModal from './PrecisionFrameEditorModal.jsx';
 import PrinterConfigModal from './PrinterConfigModal.jsx';
 import {
   X,
@@ -38,7 +37,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { preloadAndCacheVideo, seedLocalVideoCache } from '../utils/videoCache.js';
+import { preloadAndCacheVideo, seedLocalVideoCache, clearVideoCache } from '../utils/videoCache.js';
 import { sliceAndStoreInIndexedDB, uploadChunksWithProgress, uploadDirectMedia } from '../utils/chunkUploader.js';
 import { resolveApiUrl } from '../utils/apiConfig.js';
 import { bluetoothPrinter } from '../utils/bluetoothPrinter.js';
@@ -90,6 +89,7 @@ export default function LandingConfigDrawer({
   onUpdateConfig,
   onGoLive,
   onOpenSessions,
+  onOpenFrameManager,
   initialTab = 'media_theme'
 }) {
   // Hanya 2 Tab: 'media_theme' (Media & Tema) dan 'printer' (Konfigurasi Printer)
@@ -202,17 +202,12 @@ export default function LandingConfigDrawer({
         onUpdateConfig({ videoUrl: "", enableVideo: false });
       }
 
-      // Clear matching video from browser CacheStorage
-      if (typeof window !== "undefined" && "caches" in window) {
-        try {
-          const cache = await window.caches.open("photobooth-video-cache-v1");
-          await cache.delete(fileItem.url);
-          await cache.delete(new URL(fileItem.url, window.location.href).href);
-        } catch (_) {}
-      }
+      // Clear matching video from browser CacheStorage & memory store
+      await clearVideoCache(fileItem.filename);
+      await clearVideoCache(fileItem.url);
 
       setDeleteConfirmTarget(null);
-      setUploadStatus(`✓ File "${fileItem.filename}" berhasil dihapus permanen dari server`);
+      setUploadStatus(`✓ File "${fileItem.filename}" berhasil dihapus permanen dari server & cache store`);
       await fetchServerMedia();
     } catch (err) {
       setUploadError(`Gagal menghapus file dari server: ${err.message}`);
@@ -234,10 +229,26 @@ export default function LandingConfigDrawer({
     onUpdateConfig({ enableVideo: !config.enableVideo });
   };
 
-  const handleRemoveVideo = () => {
+  const handleRemoveVideo = async () => {
+    const currentVideo = config.videoUrl;
+    if (currentVideo) {
+      clearVideoCache(currentVideo);
+      const filename = currentVideo.split('?')[0].split('/').pop();
+      if (filename && (currentVideo.includes('/uploads/') || filename.startsWith('video_') || filename.startsWith('media_'))) {
+        try {
+          const endpoint = resolveApiUrl('/api/config/media', getApiBase());
+          await fetch(endpoint, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename })
+          });
+        } catch (_) {}
+      }
+    }
     onUpdateConfig({ videoUrl: '', enableVideo: false });
     setUploadStatus('');
     setUploadError(null);
+    await fetchServerMedia();
   };
 
   const handleGenerateRandomCode = () => {
@@ -259,7 +270,6 @@ export default function LandingConfigDrawer({
 
     // Fast local preview while uploading in background
     const tempBlobUrl = URL.createObjectURL(file);
-    onUpdateConfig({ videoUrl: tempBlobUrl, enableVideo: true });
 
     try {
       let apiBase = '';
@@ -291,11 +301,11 @@ export default function LandingConfigDrawer({
         const { uploadId, totalChunks } = await sliceAndStoreInIndexedDB(file);
         setChunkDetail(`0 / ${totalChunks} chunk`);
 
-        setUploadStatus('Mengunggah chunk paralel (3 koneksi)...');
+        setUploadStatus('Mengunggah chunk media...');
         const mergeData = await uploadChunksWithProgress(uploadId, file, totalChunks, {
           apiBase,
           category: "media",
-          concurrency: 3,
+          concurrency: 2,
           onProgress: (percent, currentChunk, total) => {
             setUploadPercent(percent);
             setChunkDetail(`Chunk ${currentChunk} dari ${total} (${percent}%)`);
@@ -1137,7 +1147,13 @@ export default function LandingConfigDrawer({
                             <span>Layanan Cetak Photobooth</span>
                             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                           </div>
-                          <div className="text-[10px] text-emerald-700">Status: Siap Mencetak (/api/print)</div>
+                          <div className="text-[10px] text-emerald-700">
+                            {config.printMethod === 'bluetooth'
+                              ? (config.bluetoothDeviceName ? `Web Bluetooth (${config.bluetoothDeviceName})` : 'Web Bluetooth: Siap Dipasangkan')
+                              : config.printMethod === 'browser'
+                              ? 'Dialog Browser: window.print()'
+                              : 'Kiosk Silent: Siap Mencetak (/api/print)'}
+                          </div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
@@ -1145,390 +1161,8 @@ export default function LandingConfigDrawer({
                       </span>
                     </div>
 
-                    {/* Perangkat Printer Target */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <Printer size={13} className="text-rose-500" />
-                        <span>Nama Perangkat Printer</span>
-                      </label>
-                      <div className="space-y-1.5">
-                        {PRINTER_PRESETS.map((preset) => {
-                          const isSelected = (config.printerName || 'Niimbot 4R Photo Printer') === preset.id;
-                          return (
-                            <div
-                              key={preset.id}
-                              onClick={() => onUpdateConfig({ printerName: preset.id })}
-                              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                                isSelected
-                                  ? 'border-rose-500 bg-rose-50/50 shadow-2xs font-semibold'
-                                  : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="text-xs font-bold text-slate-800">{preset.name}</div>
-                                <div className="text-[10px] text-slate-400">{preset.desc}</div>
-                              </div>
-                              {isSelected && (
-                                <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0">
-                                  <Check size={12} />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Custom Printer Input */}
-                      <div className="pt-1">
-                        <label className="text-[10px] font-medium text-slate-500 block mb-1">
-                          Atau gunakan nama printer kustom lainnya:
-                        </label>
-                        <input
-                          type="text"
-                          value={config.printerName || 'Default System Printer'}
-                          onChange={(e) => onUpdateConfig({ printerName: e.target.value })}
-                          placeholder="Ketik nama printer..."
-                          className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-rose-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Desain Frame & Mapping Slot Foto */}
-                    {(() => {
-                      const rawFrames = Array.isArray(config.customFrames) && config.customFrames.length > 0
-                        ? config.customFrames
-                        : [
-                            config.customFrame || {
-                              id: "frame-1",
-                              name: "Frame 1",
-                              enabled: true,
-                              imageUrl: "",
-                              orientation: "portrait",
-                              paperSize: "4R",
-                              width: 1200,
-                              height: 1800,
-                              slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
-                            }
-                          ];
-
-                      const safeFrameIndex = Math.min(
-                        Math.max(0, selectedFrameIndex),
-                        Math.max(0, rawFrames.length - 1)
-                      );
-                      const currentCustomFrame = rawFrames[safeFrameIndex] || rawFrames[0];
-                      const currentPaperPreset = PAPER_PRESETS[currentCustomFrame?.paperSize || '4R'] || PAPER_PRESETS['4R'];
-
-                      const updateFrame = (patch) => {
-                        const updated = rawFrames.map((f, idx) => {
-                          if (idx === safeFrameIndex) {
-                            return { ...f, ...patch };
-                          }
-                          return f;
-                        });
-                        const activeFrame = updated.find((f) => f.enabled) || updated[0];
-                        onUpdateConfig({
-                          customFrames: updated,
-                          customFrame: activeFrame
-                        });
-                      };
-
-                      const addNewFrame = () => {
-                        const newId = `frame-${Date.now()}`;
-                        const newName = `Frame ${rawFrames.length + 1}`;
-                        const newFrame = {
-                          id: newId,
-                          name: newName,
-                          enabled: true,
-                          imageUrl: "",
-                          orientation: "portrait",
-                          paperSize: "4R",
-                          width: 1200,
-                          height: 1800,
-                          slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
-                        };
-                        const updated = [...rawFrames, newFrame];
-                        setSelectedFrameIndex(rawFrames.length);
-                        setSelectedSlotIndex(0);
-                        onUpdateConfig({
-                          customFrames: updated,
-                          customFrame: newFrame
-                        });
-                      };
-
-                      const duplicateFrame = (indexToDup) => {
-                        const source = rawFrames[indexToDup] || currentCustomFrame;
-                        const newId = `frame-${Date.now()}`;
-                        const newFrame = {
-                          ...JSON.parse(JSON.stringify(source)),
-                          id: newId,
-                          name: `${source.name || "Frame"} (Salinan)`,
-                          enabled: true
-                        };
-                        const updated = [...rawFrames, newFrame];
-                        setSelectedFrameIndex(rawFrames.length);
-                        setSelectedSlotIndex(0);
-                        onUpdateConfig({
-                          customFrames: updated,
-                          customFrame: newFrame
-                        });
-                      };
-
-                      const removeFrame = (indexToRemove) => {
-                        if (rawFrames.length <= 1) return;
-                        const updated = rawFrames.filter((_, idx) => idx !== indexToRemove);
-                        const nextIdx = Math.max(0, indexToRemove - 1);
-                        setSelectedFrameIndex(nextIdx);
-                        setSelectedSlotIndex(0);
-                        const activeFrame = updated.find((f) => f.enabled) || updated[0];
-                        onUpdateConfig({
-                          customFrames: updated,
-                          customFrame: activeFrame
-                        });
-                      };
-
-                      const updateFrameAtIndex = (idxToUpdate, patch) => {
-                        const updated = rawFrames.map((f, idx) => {
-                          if (idx === idxToUpdate) {
-                            return { ...f, ...patch };
-                          }
-                          return f;
-                        });
-                        const activeFrame = updated.find((f) => f.enabled) || updated[0];
-                        onUpdateConfig({
-                          customFrames: updated,
-                          customFrame: activeFrame
-                        });
-                      };
-
-                      return (
-                        <div className="space-y-3 pt-1 border-t border-slate-100">
-                          {/* Ukuran Kertas Cetak: Mengikat ke Frame */}
-                          <div className="space-y-1.5 pb-2 border-b border-slate-100">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                <FileText size={13} className="text-rose-500" />
-                                <span>Ukuran Kertas Foto</span>
-                              </label>
-                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
-                                Mengikat di Frame ({currentPaperPreset.label})
-                              </span>
-                            </div>
-                            <div className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/40 flex items-center justify-between">
-                              <div>
-                                <div className="text-xs font-bold text-rose-950">
-                                  {currentPaperPreset.name}
-                                </div>
-                                <div className="text-[10px] text-slate-500">
-                                  Dimensi frame aktif: {currentCustomFrame?.width || 1200} × {currentCustomFrame?.height || 1800} px (Disesuaikan di form mapping)
-                                </div>
-                              </div>
-                              <CheckCircle2 size={16} className="text-rose-600 shrink-0" />
-                            </div>
-                          </div>
-
-                          {/* Header Seksi & Tambah Frame */}
-                          <div className="flex items-center justify-between px-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <Layers size={14} className="text-rose-500" />
-                              <span className="text-xs font-bold text-slate-900">
-                                Daftar Desain Frame ({rawFrames.length} Frame)
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={addNewFrame}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                            >
-                              <Plus size={12} />
-                              <span>Tambah Frame Baru</span>
-                            </button>
-                          </div>
-
-                          {/* 1 Card Lengkap Per Frame: Preview, Nama, Checkbox Aktif, Duplikat, Hapus, dan Mapping Frame */}
-                          <div className="space-y-2.5">
-                            {rawFrames.map((f, idx) => {
-                              const isSelected = idx === safeFrameIndex;
-                              const slotCount = Array.isArray(f.slots) ? f.slots.length : 0;
-                              const isOrientLandscape = f.orientation === "landscape";
-
-                              return (
-                                <div
-                                  key={f.id || idx}
-                                  className={`p-3 rounded-2xl border-2 transition-all flex flex-col gap-2.5 ${
-                                    isSelected
-                                      ? "border-rose-500 bg-rose-50/50 shadow-xs ring-1 ring-rose-400/30"
-                                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
-                                  }`}
-                                >
-                                  {/* Baris Atas: Preview Frame + Input Nama & Meta */}
-                                  <div className="flex items-center gap-3">
-                                    {/* Preview Frame Thumbnail */}
-                                    <div
-                                      onClick={() => {
-                                        setSelectedFrameIndex(idx);
-                                        setSelectedSlotIndex(0);
-                                        setIsPrecisionModalOpen(true);
-                                      }}
-                                      className={`w-14 sm:w-16 shrink-0 rounded-xl border overflow-hidden bg-slate-900 relative shadow-2xs flex items-center justify-center cursor-pointer transition-transform hover:scale-102 ${
-                                        (PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).hasOrientation === false ? "aspect-square" : isOrientLandscape ? "aspect-[3/2]" : "aspect-[2/3]"
-                                      } ${isSelected ? "border-rose-400 ring-2 ring-rose-400/40" : "border-slate-300"}`}
-                                      title="Klik untuk membuka form mapping frame"
-                                    >
-                                      {f.imageUrl ? (
-                                        <img
-                                          src={f.imageUrl}
-                                          alt={f.name || `Frame #${idx + 1}`}
-                                          className="w-full h-full object-contain"
-                                        />
-                                      ) : (
-                                        <div className="flex flex-col items-center justify-center p-1 text-slate-400 text-center">
-                                          <ImageIcon size={15} className="opacity-60" />
-                                          <span className="text-[7px] font-bold mt-0.5 leading-tight opacity-75">
-                                            No File
-                                          </span>
-                                        </div>
-                                      )}
-                                      <span
-                                        className={`absolute top-1 right-1 w-2.5 h-2.5 rounded-full border border-white ${
-                                          f.enabled ? "bg-emerald-500 shadow-xs" : "bg-slate-400"
-                                        }`}
-                                        title={f.enabled ? "Frame Aktif" : "Frame Nonaktif"}
-                                      />
-                                    </div>
-
-                                    {/* Input Nama & Metadata Badge */}
-                                    <div className="flex-1 min-w-0 space-y-1.5">
-                                      <div className="flex items-center gap-2">
-                                        <input
-                                          type="text"
-                                          value={f.name || `Frame #${idx + 1}`}
-                                          onChange={(e) => {
-                                            setSelectedFrameIndex(idx);
-                                            updateFrameAtIndex(idx, { name: e.target.value });
-                                          }}
-                                          placeholder="Nama Frame..."
-                                          className="w-full max-w-[190px] px-2.5 py-1 text-xs font-extrabold bg-slate-50 hover:bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-rose-500 focus:bg-white transition-colors"
-                                        />
-                                        <span
-                                          className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                                            f.enabled
-                                              ? "bg-emerald-100 text-emerald-800"
-                                              : "bg-slate-100 text-slate-500"
-                                          }`}
-                                        >
-                                          {f.enabled ? "Aktif" : "Nonaktif"}
-                                        </span>
-                                      </div>
-
-                                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium flex-wrap">
-                                        <span className="px-1.5 py-0.2 rounded bg-slate-100 font-mono text-[9px] text-slate-700 font-bold">
-                                          {(PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).label} {(PAPER_PRESETS[f.paperSize || "4R"] || PAPER_PRESETS["4R"]).hasOrientation !== false ? (isOrientLandscape ? "Landscape" : "Portrait") : "Square"}
-                                        </span>
-                                        <span>•</span>
-                                        {(() => {
-                                        const uniqueSlotsPhotoCount = (Array.isArray(f.slots) && f.slots.length > 0)
-                                          ? Math.max(...f.slots.map((s, sIdx) => Number(s.photoIndex ?? sIdx))) + 1
-                                          : slotCount;
-                                        const effectivePhotoCount = Number(f.photoCount) > 0 ? Number(f.photoCount) : uniqueSlotsPhotoCount;
-                                        return (
-                                          <span className="font-bold text-slate-700">
-                                            {slotCount > effectivePhotoCount
-                                              ? `${slotCount} Slot (${effectivePhotoCount}x Foto Mirror)`
-                                              : `${slotCount} Foto`}
-                                          </span>
-                                        );
-                                      })()}
-                                        <span>•</span>
-                                        <span
-                                          className={
-                                            f.imageUrl ? "text-emerald-700 font-semibold truncate max-w-[90px]" : "text-amber-600 font-medium"
-                                          }
-                                        >
-                                          {f.imageUrl ? "Desain Siap" : "Belum Upload"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Baris Aksi Card: Checkbox Aktif, Duplikat, Hapus, dan Tombol Mapping Frame */}
-                                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-200/80 flex-wrap">
-                                    <div className="flex items-center gap-1.5">
-                                      <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                                        <input
-                                          type="checkbox"
-                                          checked={Boolean(f.enabled)}
-                                          onChange={() => {
-                                            setSelectedFrameIndex(idx);
-                                            updateFrameAtIndex(idx, { enabled: !f.enabled });
-                                          }}
-                                          className="w-3.5 h-3.5 accent-rose-500 cursor-pointer rounded"
-                                        />
-                                        <span>Aktif</span>
-                                      </label>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => duplicateFrame(idx)}
-                                        className="px-2 py-1 text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                                        title="Duplikat frame ini"
-                                      >
-                                        <Copy size={11} />
-                                        <span>Duplikat</span>
-                                      </button>
-
-                                      {rawFrames.length > 1 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => removeFrame(idx)}
-                                          className="px-2 py-1 text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                                          title="Hapus frame ini"
-                                        >
-                                          <Trash2 size={11} />
-                                          <span>Hapus</span>
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    {/* Tombol Mapping Frame */}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedFrameIndex(idx);
-                                        setSelectedSlotIndex(0);
-                                        setIsPrecisionModalOpen(true);
-                                      }}
-                                      className="px-3 py-1.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:shadow-md active:scale-98"
-                                      title="Buka form mapping frame layar penuh"
-                                    >
-                                      <Maximize2 size={13} />
-                                      <span>Mapping Frame</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          <PrinterConfigModal
-                            isOpen={isPrinterModalOpen}
-                            onClose={() => setIsPrinterModalOpen(false)}
-                            config={config}
-                            onUpdateConfig={onUpdateConfig}
-                          />
-
-                          <PrecisionFrameEditorModal
-                            isOpen={isPrecisionModalOpen}
-                            onClose={() => setIsPrecisionModalOpen(false)}
-                            customFrame={currentCustomFrame}
-                            onUpdateFrame={updateFrame}
-                            frameName={currentCustomFrame.name || `Frame #${safeFrameIndex + 1}`}
-                          />
-                        </div>
-                      );
-                    })()}
-
-                    {/* Mode Cetak & Auto-Print */}
-                    <div className="space-y-2.5 pt-1 border-t border-slate-100">
+                    {/* Metode & Otomatisasi Cetak */}
+                    <div className="space-y-2.5">
                       <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                         <SlidersHorizontal size={13} className="text-rose-500" />
                         <span>Metode & Otomatisasi Cetak</span>
@@ -1591,7 +1225,7 @@ export default function LandingConfigDrawer({
                       {/* Bluetooth Pairing & Printer Config Card */}
                       {config.printMethod === 'bluetooth' && (
                         <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2.5 animate-fade-in">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-col items-start justify-between">
                             <div>
                               <div className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
                                 <Sparkles size={13} className="text-purple-600" />
@@ -1601,38 +1235,15 @@ export default function LandingConfigDrawer({
                                 {config.bluetoothDeviceName ? `Terhubung ke: ${config.bluetoothDeviceName}` : 'Niimbot B21/B21S / Printer Thermal Bluetooth'}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                disabled={isBtConnecting || isTestingBtPrint}
-                                onClick={handleConnectBluetooth}
-                                className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                              >
-                                {isBtConnecting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                <span>{isBtConnecting ? 'Mencari...' : (config.bluetoothDeviceName ? 'Hubungkan Ulang' : 'Hubungkan')}</span>
-                              </button>
-                              {config.bluetoothDeviceName && (
-                                <button
-                                  type="button"
-                                  disabled={isBtConnecting || isTestingBtPrint}
-                                  onClick={handleTestBluetoothPrint}
-                                  className="px-2.5 py-1.5 bg-white hover:bg-purple-50 text-purple-700 border border-purple-300 rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                                  title="Kirim slip tes cetak ke printer Bluetooth"
-                                >
-                                  {isTestingBtPrint ? <Loader2 size={12} className="animate-spin text-purple-600" /> : <Printer size={12} className="text-purple-600" />}
-                                  <span>{isTestingBtPrint ? 'Mencetak...' : 'Test Cetak'}</span>
-                                </button>
-                              )}
-                            </div>
                           </div>
 
                           {btStatus && (
                             <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
                               btStatus.type === 'success'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                ? 'bg-emerald-100 text-emerald-800'
                                 : btStatus.type === 'info'
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-rose-100 text-rose-800'
                             }`}>
                               <span>{btStatus.message}</span>
                             </div>
@@ -1685,47 +1296,126 @@ export default function LandingConfigDrawer({
                           <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
                         </label>
                       </div>
-                    </div>
 
-                    {/* Tombol Uji Coba Cetak (Test Print) */}
-                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 pt-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">Uji Koneksi Printer</span>
-                        <button
-                          type="button"
-                          disabled={isTestingPrint}
-                          onClick={handleTestPrint}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          {isTestingPrint ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
-                            <Printer size={13} />
-                          )}
-                          <span>{isTestingPrint ? 'Mengirim...' : 'Kirim Uji Cetak'}</span>
-                        </button>
-                      </div>
-
-                      {testPrintStatus && (
-                        <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
-                          testPrintStatus.type === 'success'
-                            ? 'bg-emerald-100/70 text-emerald-800 border border-emerald-200'
-                            : 'bg-rose-100/70 text-rose-800 border border-rose-200'
-                        }`}>
-                          {testPrintStatus.type === 'success' ? (
-                            <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                          ) : (
-                            <AlertCircle size={13} className="shrink-0 text-rose-600" />
-                          )}
-                          <span>{testPrintStatus.message}</span>
+                      {/* Tombol Uji Coba Cetak (Test Print) */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 pt-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">Uji Koneksi Printer</span>
+                          <button
+                            type="button"
+                            disabled={isTestingPrint || isTestingBtPrint}
+                            onClick={config.printMethod === 'bluetooth' ? handleTestBluetoothPrint : handleTestPrint}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {(isTestingPrint || isTestingBtPrint) ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Printer size={13} />
+                            )}
+                            <span>{(isTestingPrint || isTestingBtPrint) ? 'Mengirim...' : 'Kirim Uji Cetak'}</span>
+                          </button>
                         </div>
-                      )}
+
+                        {testPrintStatus && (
+                          <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                            testPrintStatus.type === 'success'
+                              ? 'bg-emerald-100/70 text-emerald-800 border border-emerald-200'
+                              : 'bg-rose-100/70 text-rose-800 border border-rose-200'
+                          }`}>
+                            {testPrintStatus.type === 'success' ? (
+                              <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                            ) : (
+                              <AlertCircle size={13} className="shrink-0 text-rose-600" />
+                            )}
+                            <span>{testPrintStatus.message}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Desain Frame & Mapping Slot Foto */}
+                    {(() => {
+                      const rawFrames = Array.isArray(config.customFrames) && config.customFrames.length > 0
+                        ? config.customFrames
+                        : [
+                            config.customFrame || {
+                              id: "frame-1",
+                              name: "Frame 1",
+                              enabled: true,
+                              imageUrl: "",
+                              orientation: "portrait",
+                              paperSize: "4R",
+                              width: 1200,
+                              height: 1800,
+                              slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
+                            }
+                          ];
+
+                      const safeFrameIndex = Math.min(
+                        Math.max(0, selectedFrameIndex),
+                        Math.max(0, rawFrames.length - 1)
+                      );
+                      const currentCustomFrame = rawFrames[safeFrameIndex] || rawFrames[0];
+                      const currentPaperPreset = PAPER_PRESETS[currentCustomFrame?.paperSize || '4R'] || PAPER_PRESETS['4R'];
+
+                      return (
+                        <div className="space-y-3 pt-1 border-t border-slate-100">
+
+                          {/* Kelola Desain Frame Card (Ringkas, Terarah & Tidak Redundan) */}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white flex items-center justify-center shadow-xs">
+                                  <Layers size={16} />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-slate-900">
+                                    Kelola Desain Frame
+                                  </div>
+                                  <div className="text-[11px] text-slate-500">
+                                    {rawFrames.filter((f) => f.enabled).length} dari {rawFrames.length} frame aktif untuk tamu
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                                {rawFrames.length} Desain
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 leading-relaxed">
+                              Atur seluruh desain frame, ukuran kertas, posisi slot foto, upload gambar transparan, dan duplikasi frame melalui modal tampilan luas.
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (typeof onOpenFrameManager === 'function') {
+                                  onOpenFrameManager();
+                                }
+                              }}
+                              className="w-full py-2.5 px-3.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                            >
+                              <Layers size={14} />
+                              <span>Buka Kelola Frame (Tampilan Luas)</span>
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+
+                          <PrinterConfigModal
+                            isOpen={isPrinterModalOpen}
+                            onClose={() => setIsPrinterModalOpen(false)}
+                            config={config}
+                            onUpdateConfig={onUpdateConfig}
+                          />
+                        </div>
+                      );
+                    })()}
+
                   </div>
                 )}
               </div>
 
-              {/* Drawer Footer Actions */}
+                            {/* Drawer Footer Actions */}
               <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <button
                   type="button"

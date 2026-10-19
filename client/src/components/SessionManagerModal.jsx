@@ -68,6 +68,7 @@ export default function SessionManagerModal({
   
   // Sub-modal states
   const [previewPhoto, setPreviewPhoto] = useState(null); // photo/session object for lightbox
+  const [previewActiveIndex, setPreviewActiveIndex] = useState(0);
   const [qrModalData, setQrModalData] = useState(null); // { url, qrCodeDataUri, filename, sessionId }
   const [deleteConfirmSession, setDeleteConfirmSession] = useState(null); // session object to confirm delete
   const [isDeleting, setIsDeleting] = useState(false);
@@ -75,6 +76,45 @@ export default function SessionManagerModal({
   const [printStatusMap, setPrintStatusMap] = useState({}); // sessionId -> 'printing' | 'success' | 'error'
   const [copiedLink, setCopiedLink] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
+
+  const handleOpenPreview = (session, initialIndex = 0) => {
+    setPreviewPhoto(session);
+    setPreviewActiveIndex(initialIndex);
+    setPreviewZoom(1);
+  };
+
+  const previewItems = useMemo(() => {
+    if (!previewPhoto) return [];
+    const items = [];
+    if (previewPhoto.compositeUrl) {
+      items.push({
+        type: 'composite',
+        label: 'Full Frame',
+        url: previewPhoto.compositeUrl,
+        filename: `composite_${previewPhoto.id ? String(previewPhoto.id).slice(0, 8) : 'session'}.jpg`,
+        isComposite: true
+      });
+    }
+    if (Array.isArray(previewPhoto.photos)) {
+      previewPhoto.photos.forEach((p, idx) => {
+        if (p?.url) {
+          items.push({
+            type: 'pose',
+            label: `Pose ${idx + 1}`,
+            url: p.url,
+            filename: p.filename || `pose_${idx + 1}.jpg`,
+            size: p.size,
+            isPose: true,
+            photoObj: p
+          });
+        }
+      });
+    }
+    return items;
+  }, [previewPhoto]);
+
+  const activePreviewItem = previewItems[previewActiveIndex] || previewItems[0];
+  const activeImageUrl = activePreviewItem?.url ? resolveApiUrl(activePreviewItem.url) : '';
 
   const showToast = (msg, duration = 3000) => {
     setToastMessage(msg);
@@ -161,9 +201,9 @@ export default function SessionManagerModal({
   }, [sessions, searchQuery, filterPeriod]);
 
   // Action: Print Ulang
-  const handleReprint = async (session) => {
+  const handleReprint = async (session, specificPhotoUrl = null) => {
     const sessId = session.id;
-    const photoUrl = session.compositeUrl || session.photos?.[0]?.url;
+    const photoUrl = specificPhotoUrl || session.compositeUrl || session.photos?.[0]?.url;
     if (!photoUrl) {
       showToast('⚠️ URL foto tidak tersedia untuk dicetak');
       return;
@@ -466,7 +506,7 @@ export default function SessionManagerModal({
                   >
                     {/* THUMBNAIL AREA */}
                     <div
-                      onClick={() => setPreviewPhoto(session)}
+                      onClick={() => handleOpenPreview(session, 0)}
                       className="relative w-full aspect-[4/3] bg-slate-950 flex items-center justify-center overflow-hidden cursor-pointer group/thumb"
                     >
                       {photoSrc ? (
@@ -545,7 +585,7 @@ export default function SessionManagerModal({
                         {/* 1. Preview Ulang */}
                         <button
                           type="button"
-                          onClick={() => setPreviewPhoto(session)}
+                          onClick={() => handleOpenPreview(session, 0)}
                           title="Preview Ulang Resolusi Penuh"
                           className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
                         >
@@ -658,11 +698,17 @@ export default function SessionManagerModal({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Lightbox Controls Header */}
-              <div className="w-full flex items-center justify-between px-3 py-2 bg-slate-900/80 backdrop-blur-md rounded-2xl mb-2 text-xs border border-slate-800">
+              <div className="w-full flex items-center justify-between px-3 py-2 bg-slate-900/90 backdrop-blur-md rounded-2xl mb-2 text-xs border border-slate-800">
                 <div className="flex items-center gap-2 text-slate-300 font-mono">
-                  <span className="font-bold text-white">ID: {previewPhoto.id.slice(0, 16)}...</span>
+                  <span className="font-bold text-white">ID: {previewPhoto.id ? String(previewPhoto.id).slice(0, 16) : '-'}...</span>
                   <span>•</span>
                   <span>{formatDateIndo(previewPhoto.createdAt)}</span>
+                  {activePreviewItem && (
+                    <>
+                      <span>•</span>
+                      <span className="text-rose-400 font-semibold">{activePreviewItem.label}</span>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -698,7 +744,7 @@ export default function SessionManagerModal({
 
                   <button
                     type="button"
-                    onClick={() => handleDownload(previewPhoto)}
+                    onClick={() => handleDownload(previewPhoto, activePreviewItem?.photoObj || null)}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold"
                   >
                     <Download size={13} />
@@ -706,11 +752,21 @@ export default function SessionManagerModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleReprint(previewPhoto)}
+                    onClick={() => handleReprint(previewPhoto, activePreviewItem?.url || null)}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold"
                   >
                     <Printer size={13} />
                     <span>Cetak</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteConfirmSession(previewPhoto);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold"
+                  >
+                    <Trash2 size={13} />
+                    <span>Hapus</span>
                   </button>
                   <button
                     type="button"
@@ -723,14 +779,53 @@ export default function SessionManagerModal({
               </div>
 
               {/* Lightbox Image Container */}
-              <div className="relative max-h-[78vh] overflow-auto flex items-center justify-center p-2 rounded-2xl bg-black/60 border border-slate-800">
-                <img
-                  src={resolveApiUrl(previewPhoto.compositeUrl || previewPhoto.photos?.[0]?.url)}
-                  alt="High Resolution Preview"
-                  style={{ transform: `scale(${previewZoom})`, transformOrigin: 'center center' }}
-                  className="max-h-[74vh] max-w-full object-contain rounded-lg shadow-2xl transition-transform duration-150"
-                />
+              <div className="relative w-full max-h-[72vh] min-h-[280px] overflow-auto flex items-center justify-center p-3 rounded-2xl bg-black/70 border border-slate-800">
+                {activeImageUrl ? (
+                  <img
+                    src={activeImageUrl}
+                    alt={activePreviewItem?.label || "Preview Foto"}
+                    style={{ transform: `scale(${previewZoom})`, transformOrigin: 'center center' }}
+                    className="max-h-[68vh] max-w-full object-contain rounded-lg shadow-2xl transition-transform duration-150 select-none"
+                  />
+                ) : (
+                  <div className="py-16 px-6 flex flex-col items-center justify-center text-center text-slate-400 gap-3">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-slate-500">
+                      <ImageIcon size={32} />
+                    </div>
+                    <p className="text-sm font-bold text-slate-200">Belum Ada File Foto</p>
+                    <p className="text-xs text-slate-500 max-w-xs">
+                      Sesi ini belum memiliki file foto atau hasil komposit pada storage server.
+                    </p>
+                  </div>
+                )}
               </div>
+
+              {/* Thumbnail Selector (Full Frame + Poses) */}
+              {previewItems.length > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-3 overflow-x-auto max-w-full px-2 py-1">
+                  {previewItems.map((item, idx) => {
+                    const isSelected = (previewActiveIndex === idx) || (!previewItems[previewActiveIndex] && idx === 0);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setPreviewActiveIndex(idx);
+                          setPreviewZoom(1);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/40 ring-1 ring-rose-400'
+                            : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {item.type === 'composite' ? <Layers size={13} /> : <ImageIcon size={13} />}
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           </div>
         )}

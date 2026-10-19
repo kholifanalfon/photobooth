@@ -3,20 +3,13 @@ const assert = require('node:assert');
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
-const { app } = require('../src/app');
+const { app, uploadsDir, photosDir } = require('../src/app');
 
-const uploadsDir = path.resolve(__dirname, '../uploads');
+const { teardownTestEnvironment } = require('./testHelper');
 
-// Cleanup all test files created during test suite execution
+// Clean up all testing data from separate test DB and upload files after test suite
 test.after(async () => {
-  if (fs.existsSync(uploadsDir)) {
-    const files = await fs.promises.readdir(uploadsDir);
-    for (const file of files) {
-      if (file.startsWith('photo_test-session') || file.startsWith('photo_purge-test-session') || file.startsWith('photo_traversal')) {
-        await fs.promises.unlink(path.join(uploadsDir, file)).catch(() => {});
-      }
-    }
-  }
+  await teardownTestEnvironment();
 });
 
 test('GET /health returns status ok', async () => {
@@ -73,7 +66,7 @@ test('POST /api/photos/upload sanitizes sessionId to prevent directory traversal
   // Verifies directory traversal stripped and .jpg extension detected
   assert.match(res.body.filename, /^photo_traversal_test_.*\.jpg$/);
   // Confirm file was created safely inside uploadsDir
-  assert.ok(fs.existsSync(path.join(uploadsDir, res.body.filename)));
+  assert.ok(fs.existsSync(path.join(photosDir, res.body.filename)));
 });
 
 test('POST /api/photos/upload returns 400 if imageBase64 is missing', async () => {
@@ -128,7 +121,7 @@ test('DELETE /api/sessions/:id purges session and cleans local files with anchor
       sessionId
     });
 
-  const createdFile = path.join(uploadsDir, uploadRes.body.filename);
+  const createdFile = path.join(photosDir, uploadRes.body.filename);
   assert.ok(fs.existsSync(createdFile), 'Uploaded file should exist prior to purge');
 
   const res = await request(app).delete(`/api/sessions/${sessionId}`);

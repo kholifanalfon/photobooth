@@ -32,7 +32,8 @@ import {
   MoveHorizontal,
   ClipboardPaste,
   LayoutGrid,
-  FileText
+  FileText,
+  ChevronDown
 } from 'lucide-react';
 import { SLOT_PRESETS, SAMPLE_PLACEHOLDER_PHOTOS, resolveSlotsPhotoMapping,
   PAPER_PRESETS
@@ -60,6 +61,25 @@ export default function PrecisionFrameEditorModal({
   const fileInputRef = useRef(null);
   const [activeEditorMode, setActiveEditorMode] = useState("slots"); // "slots" | "image"
   const [selectedImageTarget, setSelectedImageTarget] = useState("main"); // "main" | "mirror"
+  const [sidebarTab, setSidebarTab] = useState("frame"); // "frame" | "slots"
+  const [isPaperDropdownOpen, setIsPaperDropdownOpen] = useState(false);
+  const paperDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (paperDropdownRef.current && !paperDropdownRef.current.contains(e.target)) {
+        setIsPaperDropdownOpen(false);
+      }
+    };
+    if (isPaperDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isPaperDropdownOpen]);
 
   const getApiBase = () => {
     if (typeof window !== "undefined") {
@@ -424,6 +444,8 @@ export default function PrecisionFrameEditorModal({
     : canvasH;
 
   const isImageMirror = Boolean(customFrame?.imageMirror);
+  const is2StripLayoutSelected = isImageMirror;
+  const isFullLayoutSelected = !isImageMirror;
   const mirrorImageX = customFrame?.mirrorImageX !== undefined
     ? Number(customFrame.mirrorImageX)
     : (canvasW - imageWidth);
@@ -665,6 +687,7 @@ export default function PrecisionFrameEditorModal({
   // Direct drag handler for moving slots on canvas (mouse + touch)
   const handleSlotDragStart = (clientX, clientY, idx) => {
     setSelectedSlotIndex(idx);
+    setSidebarTab("slots");
 
     const slot = activeSlots[idx];
     if (!slot || !canvasBoxRef.current) return;
@@ -1364,7 +1387,10 @@ export default function PrecisionFrameEditorModal({
             <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
               <button
                 type="button"
-                onClick={() => setActiveEditorMode("slots")}
+                onClick={() => {
+                  setActiveEditorMode("slots");
+                  setSidebarTab("slots");
+                }}
                 className={`p-1.5 rounded-md cursor-pointer transition-colors ${
                   activeEditorMode === "slots"
                     ? "bg-rose-500 text-white shadow-xs"
@@ -1378,7 +1404,10 @@ export default function PrecisionFrameEditorModal({
               {customFrame?.imageUrl && (
                 <button
                   type="button"
-                  onClick={() => setActiveEditorMode("image")}
+                  onClick={() => {
+                    setActiveEditorMode("image");
+                    setSidebarTab("frame");
+                  }}
                   className={`p-1.5 rounded-md cursor-pointer transition-colors ${
                     activeEditorMode === "image"
                       ? "bg-cyan-600 text-white shadow-xs"
@@ -1932,7 +1961,48 @@ export default function PrecisionFrameEditorModal({
 
           {/* Right Sidebar: Precision Controls Panel */}
           <div className="w-full lg:w-[440px] xl:w-[480px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800/80 p-3.5 sm:p-4 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-3 text-white">
-            {/* Ukuran Kertas & Orientasi Frame */}
+            {/* Tab Navigation: Frame & Kertas vs Slot Foto & Gaya */}
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800 shrink-0 sticky top-0 z-20 backdrop-blur-md shadow-xs">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sidebarTab === 'frame'}
+                onClick={() => setSidebarTab('frame')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  sidebarTab === 'frame'
+                    ? 'bg-rose-500 text-white shadow-md ring-1 ring-rose-400/40'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <ImageIcon size={14} />
+                <span>Frame & Kertas</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sidebarTab === 'slots'}
+                onClick={() => setSidebarTab('slots')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  sidebarTab === 'slots'
+                    ? 'bg-rose-500 text-white shadow-md ring-1 ring-rose-400/40'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <LayoutGrid size={14} />
+                <span>Slot Foto & Gaya</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  sidebarTab === 'slots'
+                    ? 'bg-rose-700/80 text-white border border-rose-300/40'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  {activeSlots.length}
+                </span>
+              </button>
+            </div>
+
+            {/* TAB 1: Frame & Kertas */}
+            <div className={`flex flex-col gap-3 ${sidebarTab === 'frame' ? '' : 'hidden'}`}>
+              {/* Ukuran Kertas & Orientasi Frame */}
             <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800/80 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
@@ -1944,38 +2014,125 @@ export default function PrecisionFrameEditorModal({
                 </span>
               </div>
 
-              {/* Pilihan Ukuran Kertas Frame: 4R, 3x5cm, 5x5cm, dan Sesuai Gambar Frame */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                {Object.values(PAPER_PRESETS).map((preset) => {
-                  const isSelected = (customFrame?.paperSize || '4R') === preset.id;
-                  const isImagePreset = preset.id === 'image';
-                  let dimLabel = `${preset.widthMm}×${preset.heightMm} mm`;
-                  if (isImagePreset) {
-                    dimLabel = customFrame?.imageUrl ? `${canvasW}×${canvasH} px` : 'Auto Desain';
-                  }
-
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => handlePaperSizeChange(preset.id)}
-                      className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-rose-500 bg-rose-500/25 text-white font-extrabold shadow-sm ring-1 ring-rose-400/50'
-                          : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              {/* Pilihan Ukuran Kertas Frame - Custom Combobox Dropdown */}
+              <div ref={paperDropdownRef} className="relative">
+                <button
+                  type="button"
+                  role="combobox"
+                  aria-expanded={isPaperDropdownOpen}
+                  aria-haspopup="listbox"
+                  aria-label="Pilih Ukuran Kertas Frame"
+                  onClick={() => setIsPaperDropdownOpen((prev) => !prev)}
+                  className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500 ${
+                    isPaperDropdownOpen
+                      ? 'border-rose-500 bg-slate-800 ring-1 ring-rose-500/40 shadow-md'
+                      : 'border-slate-700/80 bg-slate-800/90 hover:bg-slate-800 hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center shrink-0">
+                      {paperPreset.id === 'image' ? <Sparkles size={14} className="text-amber-400" /> : <FileText size={14} />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-white flex items-center gap-1.5 truncate">
+                        <span>{paperPreset.name || paperPreset.label}</span>
+                        <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/20 px-1.5 py-0.2 rounded border border-rose-500/30">
+                          {paperPreset.label}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                        {paperPreset.id === 'image'
+                          ? (customFrame?.imageUrl ? `Auto Resolusi: ${canvasW} × ${canvasH} px` : 'Ukuran kertas mengikuti gambar desain frame yang diupload')
+                          : `${paperPreset.desc} (${paperPreset.widthMm}×${paperPreset.heightMm} mm)`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className="text-[10px] font-mono text-slate-400 hidden sm:inline bg-slate-900/60 px-2 py-0.5 rounded border border-slate-700/60">
+                      {paperPreset.id === 'image'
+                        ? 'Ikuti Frame'
+                        : `${paperPreset.widthMm}×${paperPreset.heightMm} mm`}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-slate-400 transition-transform duration-200 ${
+                        isPaperDropdownOpen ? 'rotate-180 text-rose-400' : ''
                       }`}
-                      title={preset.desc}
-                    >
-                      <div className="font-extrabold text-xs flex items-center justify-center gap-1">
-                        {isImagePreset && <Sparkles size={11} className="text-amber-400 shrink-0" />}
-                        <span>{preset.label}</span>
-                      </div>
-                      <div className="text-[9px] text-slate-400 mt-0.5 truncate">
-                        {dimLabel}
-                      </div>
-                    </button>
-                  );
-                })}
+                    />
+                  </div>
+                </button>
+
+                {/* Dropdown Options List */}
+                <div
+                  role="listbox"
+                  className={`absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl p-1.5 space-y-1 backdrop-blur-md transition-all ${
+                    isPaperDropdownOpen
+                      ? 'opacity-100 scale-100 pointer-events-auto block'
+                      : 'opacity-0 scale-95 pointer-events-none hidden'
+                  }`}
+                >
+                  {Object.values(PAPER_PRESETS).map((preset) => {
+                    const isSelected = (customFrame?.paperSize || '4R') === preset.id;
+                    const isImagePreset = preset.id === 'image';
+                    let dimLabel = `${preset.widthMm}×${preset.heightMm} mm`;
+                    if (isImagePreset) {
+                      dimLabel = customFrame?.imageUrl ? `${canvasW}×${canvasH} px` : 'Auto Desain';
+                    }
+
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          handlePaperSizeChange(preset.id);
+                          setIsPaperDropdownOpen(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'border-rose-500 bg-rose-500/20 text-white font-bold ring-1 ring-rose-500/40'
+                            : 'border-transparent bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-xs ${
+                              isSelected
+                                ? 'bg-rose-500 text-white'
+                                : 'border border-slate-700 text-transparent'
+                            }`}
+                          >
+                            <Check size={12} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold flex items-center gap-1.5">
+                              {isImagePreset && <Sparkles size={11} className="text-amber-400 shrink-0" />}
+                              <span>{preset.name}</span>
+                              <span className="text-[10px] font-normal text-slate-400">
+                                ({preset.label})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                              {preset.desc}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className="text-[10px] font-mono bg-slate-900/80 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+                            {dimLabel}
+                          </span>
+                          {isSelected && (
+                            <span className="text-[9px] font-bold text-rose-400 bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                              Terpilih
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Orientasi (Portrait / Landscape) or Info Kanvas Mengikuti Gambar */}
@@ -2037,7 +2194,25 @@ export default function PrecisionFrameEditorModal({
                 {customFrame?.imageUrl && (
                   <button
                     type="button"
-                    onClick={() => onUpdateFrame({ imageUrl: '' })}
+                    onClick={async () => {
+                      const oldUrl = customFrame.imageUrl;
+                      onUpdateFrame({ imageUrl: '' });
+                      if (oldUrl && (oldUrl.includes('/uploads/') || oldUrl.startsWith('frame_'))) {
+                        try {
+                          const endpoint = resolveApiUrl('/api/config/frame');
+                          await fetch(endpoint, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              frameId: customFrame.id,
+                              imageUrl: oldUrl
+                            })
+                          });
+                        } catch (err) {
+                          console.warn('Failed to delete frame file from store:', err);
+                        }
+                      }
+                    }}
                     className="text-[11px] text-rose-400 hover:text-rose-300 font-bold flex items-center gap-0.5 cursor-pointer"
                   >
                     <Trash2 size={11} /> Hapus File
@@ -2157,12 +2332,23 @@ export default function PrecisionFrameEditorModal({
                           mirrorImageFlip: false
                         });
                       }}
-                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 rounded-lg text-left cursor-pointer transition-colors"
+                      className={`p-2 rounded-lg text-left cursor-pointer transition-all border ${
+                        is2StripLayoutSelected
+                          ? 'border-cyan-500 bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/50 shadow-sm font-bold'
+                          : 'border-slate-700/80 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-slate-200'
+                      }`}
                       title="Paskan desain 1 strip photobooth di kolom kiri (600x1800) dan aktifkan mirror kembar di kolom kanan (600x1800)"
                     >
-                      <div className="font-bold flex items-center gap-1 text-[11px]">
-                        <Columns size={12} className="text-cyan-400" />
-                        <span>{paperPreset.id === '4R' ? '2 Strip (600 × 1800)' : `2 Strip (${Math.round(canvasW / 2)} × ${canvasH})`}</span>
+                      <div className="font-bold flex items-center justify-between gap-1 text-[11px]">
+                        <div className="flex items-center gap-1">
+                          <Columns size={12} className={is2StripLayoutSelected ? 'text-cyan-400' : 'text-slate-400'} />
+                          <span>{paperPreset.id === '4R' ? '2 Strip (600 × 1800)' : `2 Strip (${Math.round(canvasW / 2)} × ${canvasH})`}</span>
+                        </div>
+                        {is2StripLayoutSelected && (
+                          <span className="text-[9px] bg-cyan-500 text-slate-950 font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                            <Check size={9} /> Terpilih
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">Anti-stretch + Mirror Kanan</div>
                     </button>
@@ -2177,14 +2363,25 @@ export default function PrecisionFrameEditorModal({
                           imageMirror: false
                         });
                       }}
-                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-left cursor-pointer transition-colors"
-                      title="Penuh 1 lembar kanvas 4R (1200x1800)"
+                      className={`p-2 rounded-lg text-left cursor-pointer transition-all border ${
+                        isFullLayoutSelected
+                          ? 'border-rose-500 bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/50 shadow-sm font-bold'
+                          : 'border-slate-700/80 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Penuh 1 lembar kanvas (Full Layar)"
                     >
-                      <div className="font-bold flex items-center gap-1 text-[11px]">
-                        <Maximize2 size={12} className="text-rose-400" />
-                        <span>{paperPreset.id === '4R' ? 'Penuh 4R (1200 × 1800)' : `Penuh Frame (${canvasW} × ${canvasH})`}</span>
+                      <div className="font-bold flex items-center justify-between gap-1 text-[11px]">
+                        <div className="flex items-center gap-1">
+                          <Maximize2 size={12} className={isFullLayoutSelected ? 'text-rose-400' : 'text-slate-400'} />
+                          <span>{paperPreset.id === '4R' ? 'Penuh 4R (1200 × 1800)' : `Penuh Frame (${canvasW} × ${canvasH})`}</span>
+                        </div>
+                        {isFullLayoutSelected && (
+                          <span className="text-[9px] bg-rose-500 text-white font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                            <Check size={9} /> Terpilih
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">1 Lembar Penuh</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">1 Lembar Penuh (Full Layar)</div>
                     </button>
                   </div>
 
@@ -2467,8 +2664,11 @@ export default function PrecisionFrameEditorModal({
                 </div>
               </div>
             </div>
+            </div>
 
-            {/* Daftar Slot Foto & Toolbar Aksi (Simple & Informatif) */}
+            {/* TAB 2: Slot Foto & Gaya */}
+            <div className={`flex flex-col gap-3 ${sidebarTab === 'slots' ? '' : 'hidden'}`}>
+              {/* Daftar Slot Foto & Toolbar Aksi (Simple & Informatif) */}
             <div className="p-3 sm:p-3.5 bg-slate-800/40 rounded-xl border border-slate-800/80 flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold text-slate-300">
                 <div className="flex items-center gap-1.5">
@@ -3080,6 +3280,7 @@ export default function PrecisionFrameEditorModal({
                 <div><span className="text-white bg-slate-800 px-1 py-0.5 rounded border border-slate-700">Shift + Panah</span> : Geser 10px</div>
                 <div><span className="text-white bg-slate-800 px-1 py-0.5 rounded border border-slate-700">Delete</span> : Hapus Slot</div>
               </div>
+            </div>
             </div>
           </div>
         </div>

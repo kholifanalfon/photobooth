@@ -95,7 +95,7 @@ test('Multi-Frame Support - FrameSelector renders custom event frames when avail
   assert.ok(html.includes('4R Landscape • 3 Foto'), 'Should render landscape frame details');
 });
 
-test('Multi-Frame Support - LandingConfigDrawer renders frame switcher and add frame button', async () => {
+test('Multi-Frame Support - LandingConfigDrawer renders dedicated Kelola Frame summary and trigger', async () => {
   const { default: LandingConfigDrawer } = await buildAndImportComponent('LandingConfigDrawer');
 
   const config = {
@@ -132,15 +132,12 @@ test('Multi-Frame Support - LandingConfigDrawer renders frame switcher and add f
     })
   );
 
-  assert.ok(html.includes('Daftar Desain Frame (2 Frame)'), 'Should indicate 2 frames available');
-  assert.ok(html.includes('Tambah Frame Baru'), 'Should have button to add new frame');
-  assert.ok(html.includes('Desain Floral'), 'Should render Desain Floral tab');
-  assert.ok(html.includes('Desain Strip Gold'), 'Should render Desain Strip Gold tab');
-  assert.ok(html.includes('Duplikat'), 'Should have Duplicate button');
-  assert.ok(html.includes('Hapus'), 'Should have Delete button when multiple frames exist');
-  assert.ok(html.includes('Mapping Frame'), 'Should have Mapping Frame button on each frame card');
-  assert.ok(html.includes('Aktif'), 'Should have Aktif checkbox on card');
-  assert.ok(!html.includes('Pratinjau Kertas 4R &amp; Slot Foto') && !html.includes('Pratinjau Kertas 4R & Slot Foto'), 'Mini canvas preview should be removed from sidebar');
+  assert.ok(html.includes('Kelola Desain Frame'), 'Should render Kelola Desain Frame section title');
+  assert.ok(html.includes('Buka Kelola Frame (Tampilan Luas)'), 'Should have button to open full frame manager');
+  assert.ok(html.includes('1 dari 2 frame aktif untuk tamu'), 'Should display active frame count summary');
+  assert.ok(html.includes('2 Desain'), 'Should indicate total 2 designs badge');
+  assert.ok(!html.includes('Daftar Desain Frame (2 Frame)'), 'Redundant frame list header should be removed from drawer');
+  assert.ok(!html.includes('Mapping Frame'), 'Redundant mapping frame buttons should be removed from drawer');
 });
 
 test('Multi-Frame Support - FrameSelector with single frame renders mapped frame and confirms CUSTOM_4R layout', async () => {
@@ -228,4 +225,55 @@ test('Modern 4R Frames - 4 kiosk frames exist, have valid slots fitting 1200x180
   assert.ok(html.includes('Bingkai 3 Foto'), 'Should render Bingkai 3 Foto');
   assert.ok(html.includes('Bingkai 4 Foto'), 'Should render Bingkai 4 Foto');
   assert.ok(html.includes('Desain Acara (4)'), 'Should display count of 4 frames');
+});
+
+test("Multi-Frame Support - FrameSelector renders custom uploaded image dimensions with dynamic aspectRatio and without 4R label when paperSize is image", async () => {
+  const { default: FrameSelector } = await buildAndImportComponent("FrameSelector");
+
+  const customUploadedFrames = [
+    {
+      id: "frame-custom-img-portrait",
+      name: "Bingkai Foto Kustom 709x945",
+      paperSize: "image",
+      width: 709,
+      height: 945,
+      orientation: "portrait",
+      imageUrl: "/uploads/frames/frame_709x945.jpg",
+      enabled: true,
+      slots: [
+        { id: 1, x: 50, y: 50, width: 600, height: 600 }
+      ]
+    },
+    {
+      id: "frame-custom-img-square",
+      name: "Bingkai Foto Square 1080x1080",
+      paperSize: "image",
+      width: 1080,
+      height: 1080,
+      orientation: "portrait",
+      imageUrl: "/uploads/frames/frame_square.jpg",
+      enabled: true,
+      slots: [
+        { id: 1, x: 40, y: 40, width: 1000, height: 1000 }
+      ]
+    }
+  ];
+
+  const html = renderToStaticMarkup(
+    React.createElement(FrameSelector, {
+      onConfirm: () => {},
+      onBack: () => {},
+      availableCustomFrames: customUploadedFrames
+    })
+  );
+
+  // Aspect ratio must be dynamic based on exact dimensions
+  assert.ok(html.includes("709 / 945"), "Should use dynamic aspect ratio for 709x945 frame");
+  assert.ok(html.includes("1080 / 1080"), "Should use dynamic aspect ratio for square frame");
+
+  // Badge must NOT contain 4R when paperSize is image
+  assert.ok(html.includes("Ukuran Frame Portrait • 1 Foto"), "Should show Ukuran Frame Portrait badge");
+  assert.ok(html.includes("Ukuran Frame (Kotak) • 1 Foto"), "Should show Ukuran Frame (Kotak) badge");
+  assert.ok(!html.includes("4R Portrait"), "Should not show 4R Portrait for uploaded image frame");
+  assert.ok(!html.includes("4R Landscape"), "Should not show 4R Landscape for uploaded image frame");
 });
