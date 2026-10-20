@@ -51,6 +51,7 @@ async function buildAndImportComponent(entryName) {
 
 const { default: QrModal } = await buildAndImportComponent('QrModal');
 const { default: ResetConfirmModal } = await buildAndImportComponent('ResetConfirmModal');
+const { default: PrintProgressModal } = await buildAndImportComponent('PrintProgressModal');
 const { default: PreviewResult, resolveApiUrl } = await buildAndImportComponent('PreviewResult');
 
 // Test Harness to simulate component rendering with controllable hooks
@@ -290,6 +291,58 @@ test('QrModal - Markup, Accessibility, and State Rendering', async (t) => {
         delete global.window;
       }
     }
+  });
+});
+
+// ---------------------------------------------------------
+// 2b. PrintProgressModal Component Tests
+// ---------------------------------------------------------
+test('PrintProgressModal - Animated Dialog, Progress and Cancel CTA', async (t) => {
+  await t.test('returns empty markup when isOpen is false under AnimatePresence', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PrintProgressModal, { isOpen: false, status: 'Menunggu...', onCancel: () => {} })
+    );
+    assert.strictEqual(html, '');
+  });
+
+  await t.test('renders modal with dialog role, animation graphic and progress percentage', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PrintProgressModal, {
+        isOpen: true,
+        status: 'Mencetak lembar 2 dari 3...',
+        currentSheet: 2,
+        totalSheets: 3,
+        onCancel: () => {}
+      })
+    );
+
+    assert.ok(html.includes('role="dialog"'), 'Modal must have dialog role');
+    assert.ok(html.includes('aria-modal="true"'), 'Modal must have aria-modal attribute');
+    assert.ok(html.includes('Sedang Mencetak Foto'), 'Must render active title');
+    assert.ok(html.includes('Mencetak lembar 2 dari 3...'), 'Must render active status');
+    assert.ok(html.includes('Batalkan Cetak'), 'Must render cancel button');
+    assert.ok(html.includes('printing-animation.svg'), 'Must reference animated printing graphic');
+  });
+
+  await t.test('clicking cancel button triggers onCancel callback', () => {
+    let canceled = false;
+    const harness = createTestHarness(PrintProgressModal, {
+      isOpen: true,
+      status: 'Mencetak lembar 1 dari 2...',
+      currentSheet: 1,
+      totalSheets: 2,
+      onCancel: () => {
+        canceled = true;
+      }
+    });
+
+    const backdrop = harness.vdom.props.children || harness.vdom;
+    const modalContent = backdrop.props.children;
+    const actionContainer = modalContent.props.children[modalContent.props.children.length - 1];
+    const cancelBtn = actionContainer.props.children;
+    assert.strictEqual(typeof cancelBtn.props.onClick, 'function');
+    cancelBtn.props.onClick();
+    assert.strictEqual(canceled, true, 'Cancel button click must trigger onCancel');
   });
 });
 

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { resolveApiUrl } from '../utils/apiConfig.js';
 import { bluetoothPrinter } from '../utils/bluetoothPrinter.js';
+import PrintProgressModal from './PrintProgressModal.jsx';
 
 function formatFileSize(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
@@ -88,8 +89,20 @@ export default function SessionManagerModal({
   const [isPrinting, setIsPrinting] = useState(false);
 
   const isPrintingRef = useRef(false);
+  const printCancelRef = useRef(false);
+  const printProgressInfoRef = useRef({ currentSheet: 1, totalSheets: 1 });
 
-  const handleOpenPreview = (session, initialIndex = 0) => {
+  const handleCancelPrint = () => {
+    printCancelRef.current = true;
+    setPrintStatus('Pencetakan dibatalkan.');
+    isPrintingRef.current = false;
+    setIsPrinting(false);
+    setTimeout(() => {
+      setPrintStatus(null);
+    }, 2000);
+  };
+
+    const handleOpenPreview = (session, initialIndex = 0) => {
     setPreviewPhoto(session);
     setPreviewActiveIndex(initialIndex);
     setPrintStatus(null);
@@ -258,6 +271,8 @@ export default function SessionManagerModal({
     }
 
     isPrintingRef.current = true;
+    printCancelRef.current = false;
+    printProgressInfoRef.current = { currentSheet: 1, totalSheets: 1 };
     setIsPrinting(true);
     setPrintStatus('Menyiapkan lembar cetak...');
     setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'printing' }));
@@ -339,11 +354,16 @@ export default function SessionManagerModal({
         });
 
         const totalSheetsToPrint = imagesToPrint.length * copies;
+        printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
         setPrintStatus(`Mencetak via Bluetooth (${totalSheetsToPrint} lembar)...`);
         let sheetCounter = 0;
         for (let c = 0; c < copies; c++) {
           for (let i = 0; i < imagesToPrint.length; i++) {
+            if (printCancelRef.current) {
+              throw new Error('Pencetakan dibatalkan oleh pengguna.');
+            }
             sheetCounter++;
+            printProgressInfoRef.current = { currentSheet: sheetCounter, totalSheets: totalSheetsToPrint };
             setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
             await bluetoothPrinter.printImage(imagesToPrint[i], {
               printerModelPreset: effectiveConfig.printerModelPreset || undefined,
@@ -361,9 +381,14 @@ export default function SessionManagerModal({
               autoRotate: btAutoRotate,
               orientation: btOrientation,
               onProgress: (statusMsg) => {
-                setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+                if (!printCancelRef.current) {
+                  setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+                }
               }
             });
+            if (printCancelRef.current) {
+              throw new Error('Pencetakan dibatalkan oleh pengguna.');
+            }
             if (sheetCounter < totalSheetsToPrint) {
               await new Promise((r) => setTimeout(r, 600));
             }
@@ -395,8 +420,14 @@ export default function SessionManagerModal({
 
       // 3. Server Kiosk /api/print endpoint
       setPrintStatus(`Mengirim perintah cetak (${imagesToPrint.length} lembar)...`);
+      printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
       const printEndpoint = resolveApiUrl('/api/print');
-      for (const imgUrl of imagesToPrint) {
+      for (let i = 0; i < imagesToPrint.length; i++) {
+        const imgUrl = imagesToPrint[i];
+        if (printCancelRef.current) {
+          throw new Error('Pencetakan dibatalkan oleh pengguna.');
+        }
+        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
         const res = await fetch(printEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -422,13 +453,22 @@ export default function SessionManagerModal({
       }, 3000);
     } catch (err) {
       console.error('Error printing:', err);
-      setPrintStatus(`Gagal mencetak: ${err.message} ❌`);
-      setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'error' }));
-      showToast(`❌ Gagal mencetak: ${err.message}`);
-      setTimeout(() => {
-        setPrintStatus(null);
+      if (printCancelRef.current || err?.message?.includes('dibatalkan')) {
+        setPrintStatus('Pencetakan dibatalkan.');
+        showToast('ℹ️ Pencetakan dibatalkan');
         setPrintStatusMap((prev) => ({ ...prev, [sessId]: null }));
-      }, 4000);
+        setTimeout(() => {
+          setPrintStatus(null);
+        }, 2000);
+      } else {
+        setPrintStatus(`Gagal mencetak: ${err.message} ❌`);
+        setPrintStatusMap((prev) => ({ ...prev, [sessId]: 'error' }));
+        showToast(`❌ Gagal mencetak: ${err.message}`);
+        setTimeout(() => {
+          setPrintStatus(null);
+          setPrintStatusMap((prev) => ({ ...prev, [sessId]: null }));
+        }, 4000);
+      }
     } finally {
       isPrintingRef.current = false;
       setIsPrinting(false);
@@ -1399,6 +1439,17 @@ export default function SessionManagerModal({
           </div>
         )}
       </AnimatePresence>
+
+      {/* PRINT PROGRESS MODAL WITH ANIMATION & CANCEL */}
+      <PrintProgressModal
+        isOpen={isPrinting}
+        status={printStatus || 'Sedang memproses perintah cetak...'}
+        currentSheet={printProgressInfoRef.current?.currentSheet || 1}
+        totalSheets={printProgressInfoRef.current?.totalSheets || 1}
+        onCancel={handleCancelPrint}
+        isFinished={printStatus?.includes('Berhasil')}
+        isError={printStatus?.includes('Gagal')}
+      />
 
       {/* TOAST FEEDBACK */}
       <AnimatePresence>

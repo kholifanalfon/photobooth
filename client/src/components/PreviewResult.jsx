@@ -4,6 +4,7 @@ import { Printer, QrCode, RefreshCcw, CheckCircle2, AlertCircle, Loader2, Layers
 import { composePhotosToFrame, renderPhotoToPaper } from '../utils/canvasCompositor.js';
 import QrModal from './QrModal.jsx';
 import ResetConfirmModal from './ResetConfirmModal.jsx';
+import PrintProgressModal from './PrintProgressModal.jsx';
 import { bluetoothPrinter } from '../utils/bluetoothPrinter.js';
 
 import { resolveApiUrl } from '../utils/apiConfig.js';
@@ -40,6 +41,8 @@ export default function PreviewResult({
   const printTimerRef = useRef(null);
   const isPrintingRef = useRef(false);
   const hasAutoPrintedRef = useRef(false);
+  const printCancelRef = useRef(false);
+  const printProgressInfoRef = useRef({ currentSheet: 1, totalSheets: 1 });
 
   // Clear print timer on unmount
   useEffect(() => {
@@ -238,6 +241,8 @@ export default function PreviewResult({
     }
 
     isPrintingRef.current = true;
+    printCancelRef.current = false;
+    printProgressInfoRef.current = { currentSheet: 1, totalSheets: 1 };
     setIsPrinting(true);
 
     try {
@@ -359,9 +364,14 @@ export default function PreviewResult({
             });
 
             let sheetCounter = 0;
+            printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
             for (let c = 0; c < copies; c++) {
               for (let i = 0; i < imagesToPrint.length; i++) {
+                if (printCancelRef.current) {
+                  throw new Error('Pencetakan dibatalkan oleh pengguna.');
+                }
                 sheetCounter++;
+                printProgressInfoRef.current = { currentSheet: sheetCounter, totalSheets: totalSheetsToPrint };
                 setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
                 await bluetoothPrinter.printImage(imagesToPrint[i], {
                   printerModelPreset: printerConfig.printerModelPreset || undefined,
@@ -379,9 +389,14 @@ export default function PreviewResult({
                   autoRotate: btAutoRotate,
                   orientation: btOrientation,
                   onProgress: (statusMsg) => {
-                    setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+                    if (!printCancelRef.current) {
+                      setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
+                    }
                   }
                 });
+                if (printCancelRef.current) {
+                  throw new Error('Pencetakan dibatalkan oleh pengguna.');
+                }
                 if (sheetCounter < totalSheetsToPrint) {
                   await new Promise((r) => setTimeout(r, 600));
                 }
@@ -398,12 +413,16 @@ export default function PreviewResult({
           if (typeof console !== 'undefined' && console.warn) {
             console.warn('Bluetooth print error:', btErr);
           }
-          setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
+          if (printCancelRef.current || btErr?.message?.includes('dibatalkan')) {
+            setPrintStatus('Pencetakan dibatalkan.');
+          } else {
+            setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
+          }
           if (printTimerRef.current) clearTimeout(printTimerRef.current);
           printTimerRef.current = setTimeout(() => {
             setPrintStatus(null);
             printTimerRef.current = null;
-          }, 4000);
+          }, printCancelRef.current ? 2000 : 4000);
         } finally {
           isPrintingRef.current = false;
           setIsPrinting(false);
@@ -429,7 +448,12 @@ export default function PreviewResult({
 
       try {
         const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
+        printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
         for (let i = 0; i < imagesToPrint.length; i++) {
+          if (printCancelRef.current) {
+            throw new Error('Pencetakan dibatalkan oleh pengguna.');
+          }
+          printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
           const res = await fetch(printEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -462,10 +486,19 @@ export default function PreviewResult({
           printTimerRef.current = null;
         }, 3000);
       } catch (err) {
-        // Fallback: trigger native browser window print dialog
-        setPrintStatus(null);
-        if (typeof window !== 'undefined' && typeof window.print === 'function') {
-          window.print();
+        if (printCancelRef.current || err?.message?.includes('dibatalkan')) {
+          setPrintStatus('Pencetakan dibatalkan.');
+          if (printTimerRef.current) clearTimeout(printTimerRef.current);
+          printTimerRef.current = setTimeout(() => {
+            setPrintStatus(null);
+            printTimerRef.current = null;
+          }, 2000);
+        } else {
+          // Fallback: trigger native browser window print dialog
+          setPrintStatus(null);
+          if (typeof window !== 'undefined' && typeof window.print === 'function') {
+            window.print();
+          }
         }
       } finally {
         isPrintingRef.current = false;
@@ -480,7 +513,21 @@ export default function PreviewResult({
     }
   };
 
-  const handlePrintButtonClick = () => {
+  const handleCancelPrint = () => {
+    printCancelRef.current = true;
+    setPrintStatus('Pencetakan dibatalkan.');
+    isPrintingRef.current = false;
+    setIsPrinting(false);
+    if (printTimerRef.current) {
+      clearTimeout(printTimerRef.current);
+      printTimerRef.current = null;
+    }
+    setTimeout(() => {
+      setPrintStatus(null);
+    }, 2000);
+  };
+
+    const handlePrintButtonClick = () => {
     if (Array.isArray(photos) && photos.length > 0) {
       setIsPrintChoiceOpen(true);
     } else {
@@ -818,6 +865,17 @@ export default function PreviewResult({
           </div>
         </div>
       )}
+
+      {/* Print Progress Modal with Animation & Cancel CTA */}
+      <PrintProgressModal
+        isOpen={isPrinting}
+        status={printStatus || 'Sedang memproses antrean cetak...'}
+        currentSheet={printProgressInfoRef.current?.currentSheet || 1}
+        totalSheets={printProgressInfoRef.current?.totalSheets || 1}
+        onCancel={handleCancelPrint}
+        isFinished={printStatus?.toLowerCase()?.includes('berhasil') || printStatus?.toLowerCase()?.includes('terkirim')}
+        isError={printStatus?.toLowerCase()?.includes('error') || printStatus?.toLowerCase()?.includes('gagal')}
+      />
     </div>
   );
 }

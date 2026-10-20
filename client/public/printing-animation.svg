@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="slotGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#020617" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="50%" stop-color="#A855F7" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+    <clipPath id="outputClip">
+      <rect x="40" y="110" width="120" height="80" />
+    </clipPath>
+  </defs>
+
+  <style>
+    @keyframes feedPaper {
+      0% { transform: translateY(0px); opacity: 0; }
+      15% { opacity: 1; }
+      75% { transform: translateY(32px); opacity: 1; }
+      90% { transform: translateY(36px); opacity: 0.9; }
+      100% { transform: translateY(0px); opacity: 0; }
+    }
+    @keyframes feedTop {
+      0% { transform: translateY(0px); }
+      75% { transform: translateY(14px); }
+      100% { transform: translateY(0px); }
+    }
+    @keyframes blinkLed {
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px #10B981); }
+      50% { opacity: 0.3; filter: none; }
+    }
+    @keyframes scanBar {
+      0% { transform: translateX(0px); opacity: 0.8; }
+      50% { transform: translateX(45px); opacity: 1; }
+      100% { transform: translateX(0px); opacity: 0.8; }
+    }
+    .paper-printing {
+      animation: feedPaper 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .paper-top {
+      animation: feedTop 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .led-blink {
+      animation: blinkLed 1s ease-in-out infinite;
+    }
+    .scanner-line {
+      animation: scanBar 1.2s ease-in-out infinite;
+    }
+  </style>
+
+  <!-- Top Feed Paper Stack -->
+  <g class="paper-top">
+    <rect x="60" y="22" width="80" height="40" rx="5" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2" />
+    <line x1="70" y1="32" x2="130" y2="32" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="70" y1="40" x2="115" y2="40" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- Ejected Output Paper (Behind / Emerging from bottom slot) -->
+  <g clip-path="url(#outputClip)">
+    <g class="paper-printing">
+      <rect x="55" y="88" width="90" height="75" rx="6" fill="#FFFFFF" stroke="#94A3B8" stroke-width="2.5" filter="drop-shadow(0 4px 6px rgba(0,0,0,0.15))" />
+      
+      <!-- Photo Thumbnail Content on Paper -->
+      <rect x="63" y="98" width="74" height="38" rx="4" fill="#F1F5F9" />
+      <!-- Sun/Moon icon in photo -->
+      <circle cx="75" cy="110" r="5" fill="#F59E0B" />
+      <!-- Mountains in photo -->
+      <polygon points="65,132 80,116 95,132" fill="#64748B" />
+      <polygon points="88,132 104,112 128,132" fill="#475569" />
+      
+      <!-- Aesthetic Photobooth Footer Bar -->
+      <rect x="63" y="141" width="74" height="4" rx="2" fill="url(#accentGrad)" />
+      <line x1="63" y1="150" x2="100" y2="150" stroke="#94A3B8" stroke-width="2" stroke-linecap="round" />
+      <line x1="106" y1="150" x2="130" y2="150" stroke="#CBD5E1" stroke-width="1.5" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- Printer Main Body -->
+  <rect x="30" y="52" width="140" height="68" rx="16" fill="url(#bodyGrad)" stroke="#1E293B" stroke-width="2.5" />
+  
+  <!-- Subtle Front Bezel Texture -->
+  <rect x="36" y="58" width="128" height="56" rx="12" fill="none" stroke="#475569" stroke-width="1" opacity="0.5" />
+
+  <!-- Printer Output Slot Mouth -->
+  <rect x="44" y="98" width="112" height="12" rx="5" fill="url(#slotGrad)" stroke="#0F172A" stroke-width="1.5" />
+
+  <!-- Laser / Printhead Thermal Glow inside slot -->
+  <line x1="50" y1="104" x2="100" y2="104" stroke="#818CF8" stroke-width="3" stroke-linecap="round" class="scanner-line" />
+
+  <!-- Front Control Panel -->
+  <rect x="46" y="68" width="108" height="20" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1.5" />
+
+  <!-- Status Indicator LED -->
+  <circle cx="58" cy="78" r="4.5" fill="#10B981" class="led-blink" />
+
+  <!-- LCD Screen / Waveform Status -->
+  <rect x="70" y="72" width="55" height="12" rx="3" fill="#020617" />
+  <line x1="74" y1="78" x2="82" y2="78" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="85" y1="75" x2="92" y2="81" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="95" y1="78" x2="105" y2="78" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="108" y1="76" x2="120" y2="76" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Power / Feed Push Button -->
+  <circle cx="140" cy="78" r="4" fill="#475569" stroke="#64748B" stroke-width="1.5" />
+</svg>
