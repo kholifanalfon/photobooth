@@ -121,6 +121,20 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Redirect to /live after splash if booth is already in Live mode
+  useEffect(() => {
+    if (showSplash || typeof window === 'undefined') return;
+
+    const pathname = window.location.pathname;
+    if (pathname !== '/' && pathname !== '') return;
+    if (!landingConfig || !landingConfig.isLive) return;
+
+    setIsLiveMode(true);
+    try {
+      window.history.replaceState(null, '', '/live');
+    } catch (_) {}
+  }, [showSplash, landingConfig]);
+
   // Keyboard shortcut: Shift + Escape to trigger lock screen when in live mode
   useEffect(() => {
     const handleKeyDown = (e) => {

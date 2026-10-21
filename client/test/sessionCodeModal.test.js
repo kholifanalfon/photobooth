@@ -104,5 +104,6 @@ test('LandingPage - Mode Live vs Mode Konfigurasi Separation', async (t) => {
     );
 
     assert.ok(!html.includes('aria-label="Buka Pengaturan Landing"'), 'Live mode MUST NOT have settings button');
+    assert.ok(html.includes('aria-label="Kelola Sesi Foto"'), 'Live mode MUST keep the session management button');
   });
 });

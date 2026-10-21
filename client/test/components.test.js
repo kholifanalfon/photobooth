@@ -206,6 +206,7 @@ test('LandingPage Component Rendering & Markup Structure', async (t) => {
       false, // isOpen
       false, // isDrawerOpen
       false, // isSessionCodeModalOpen
+      false, // isExitModalOpen
       false, // isFullscreen
       null,  // elementDetectedRatio
       null,  // exactNumericRatio

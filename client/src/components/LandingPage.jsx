@@ -50,7 +50,8 @@ import {
   DownloadCloud,
   CheckCircle2,
   FolderArchive,
-  Layers
+  Layers,
+  Lock
 } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
@@ -58,6 +59,7 @@ import SessionCodeModal from './SessionCodeModal.jsx';
 import SessionManagerModal from './SessionManagerModal.jsx';
 import FrameManagerModal from './FrameManagerModal.jsx';
 import PrinterConfigModal from './PrinterConfigModal.jsx';
+import AdminExitModal from './AdminExitModal.jsx';
 import {
   getFastVideoUrl,
   preloadAndCacheVideo,
@@ -116,6 +118,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSessionCodeModalOpen, setIsSessionCodeModalOpen] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elementDetectedRatio, setElementDetectedRatio] = useState(null);
   const [exactNumericRatio, setExactNumericRatio] = useState(null);
@@ -225,6 +228,9 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
           body: JSON.stringify(payload)
         }).catch((err) => console.warn('Failed to sync landing config to server:', err));
       }
+      if (typeof onConfigChange === 'function') {
+        onConfigChange(next);
+      }
       return next;
     });
   };
@@ -234,6 +240,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
       e.preventDefault();
       e.stopPropagation();
     }
+    handleUpdateConfig({ isLive: true });
     if (typeof onEnterLiveMode === 'function') {
       if (typeof window !== 'undefined') {
         try {
@@ -245,6 +252,18 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
     }
     if (typeof window !== 'undefined') {
       window.location.assign('/live');
+    }
+  };
+
+  const handleExitLive = () => {
+    setIsExitModalOpen(false);
+    handleUpdateConfig({ isLive: false });
+    if (typeof onExitLiveMode === 'function') {
+      onExitLiveMode();
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.location.assign('/');
     }
   };
 
@@ -606,36 +625,38 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         </div>
       )}
       {/* Top Left Navigation: Settings & Session Management Buttons */}
-      {!isLiveMode && (
-        <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 flex items-center gap-2">
-          <button
-            onClick={() => setIsDrawerOpen(true)}
-            aria-label="Buka Pengaturan Landing"
-            title="Buka Pengaturan Landing"
-            className="p-2.5 sm:p-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center justify-center"
-          >
-            <SlidersHorizontal size={18} className="text-rose-500 sm:w-5 sm:h-5" />
-          </button>
-          <button
-            onClick={() => setIsFrameManagerOpen(true)}
-            aria-label="Kelola Frame Photobooth"
-            title="Kelola Frame Photobooth (Desain, Slot Foto, Ukuran Kertas & Upload)"
-            className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
-          >
-            <Layers size={17} className="text-rose-500" />
-            <span className="hidden sm:inline">Kelola Frame</span>
-          </button>
-          <button
-            onClick={() => setIsSessionsModalOpen(true)}
-            aria-label="Kelola Sesi Foto"
-            title="Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
-            className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
-          >
-            <FolderArchive size={17} className="text-rose-500" />
-            <span className="hidden sm:inline">Kelola Sesi</span>
-          </button>
-        </div>
-      )}
+      <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 flex items-center gap-2">
+        {!isLiveMode && (
+          <>
+            <button
+              onClick={() => setIsDrawerOpen(true)}
+              aria-label="Buka Pengaturan Landing"
+              title="Buka Pengaturan Landing"
+              className="p-2.5 sm:p-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-slate-900 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center justify-center"
+            >
+              <SlidersHorizontal size={18} className="text-rose-500 sm:w-5 sm:h-5" />
+            </button>
+            <button
+              onClick={() => setIsFrameManagerOpen(true)}
+              aria-label="Kelola Frame Photobooth"
+              title="Kelola Frame Photobooth (Desain, Slot Foto, Ukuran Kertas & Upload)"
+              className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
+            >
+              <Layers size={17} className="text-rose-500" />
+              <span className="hidden sm:inline">Kelola Frame</span>
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => setIsSessionsModalOpen(true)}
+          aria-label="Kelola Sesi Foto"
+          title="Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
+          className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
+        >
+          <FolderArchive size={17} className="text-rose-500" />
+          <span className="hidden sm:inline">Kelola Sesi</span>
+        </button>
+      </div>
 
       {/* Floating Bottom-Right: Background Video Pause / Resume Control Button */}
       {hasActiveVideo && !isImageMedia && (
@@ -655,17 +676,28 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         </button>
       )}
 
-      {/* Top-Right Fullscreen Toggle in Live Mode */}
+      {/* Top-Right Lock & Fullscreen Controls in Live Mode */}
       {isLiveMode && (
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          aria-label={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
-          title={isFullscreen ? 'Keluar Layar Penuh' : 'Masuk Mode Layar Penuh (Kiosk)'}
-          className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 p-2 sm:p-2.5 rounded-xl bg-white/40 hover:bg-white/80 border border-slate-200/50 text-slate-500 hover:text-slate-800 shadow-2xs transition-colors cursor-pointer backdrop-blur-xs"
-        >
-          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
+        <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setIsExitModalOpen(true)}
+            aria-label="Buka Kunci Mode Live"
+            title="Buka Kunci & Keluar Mode Live"
+            className="p-2 sm:p-2.5 rounded-xl bg-white/40 hover:bg-white/80 border border-slate-200/50 text-slate-500 hover:text-rose-600 shadow-2xs transition-colors cursor-pointer backdrop-blur-xs"
+          >
+            <Lock size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
+            title={isFullscreen ? 'Keluar Layar Penuh' : 'Masuk Mode Layar Penuh (Kiosk)'}
+            className="p-2 sm:p-2.5 rounded-xl bg-white/40 hover:bg-white/80 border border-slate-200/50 text-slate-500 hover:text-slate-800 shadow-2xs transition-colors cursor-pointer backdrop-blur-xs"
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
       )}
 
       {/* Decorative accent icons (Dynamic based on theme) */}
@@ -1166,6 +1198,17 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         onSuccess={proceedSessionLaunch}
         expectedCode={config.sessionCode || '1234'}
         theme={config.theme}
+      />
+
+      {/* Admin Exit Modal (Open lock & exit Live Mode) */}
+      <AdminExitModal
+        isOpen={isExitModalOpen}
+        onClose={() => setIsExitModalOpen(false)}
+        onSuccess={handleExitLive}
+        expectedCode={config.adminExitCode || config.adminCode || '9999'}
+        title="Buka Kunci Mode Live"
+        description="Masukkan Kode Admin untuk membuka kunci dan keluar dari Mode Live Kiosk."
+        actionLabel="Buka Kunci"
       />
     </div>
   );
