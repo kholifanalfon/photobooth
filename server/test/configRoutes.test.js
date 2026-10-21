@@ -6,8 +6,13 @@ const path = require("path");
 const { app, uploadsDir, framesDir } = require("../src/app");
 const { teardownTestEnvironment } = require("./testHelper");
 
-const dataDir = path.resolve(__dirname, "../../data");
+const dataDir = path.resolve(__dirname, "../data_test");
 const configFile = path.join(dataDir, "landing_config.json");
+const framesConfigFile = path.join(dataDir, "frames_config.json");
+
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
 test("GET /api/config/landing returns landing config with success", async () => {
   const res = await request(app).get("/api/config/landing");
@@ -51,6 +56,57 @@ test("POST /api/config/landing updates config and sanitizes blob URLs", async ()
       } catch (_) {}
     }
   }
+});
+
+test("GET /api/config/frames returns frame config from its own store", async () => {
+  const res = await request(app).get("/api/config/frames");
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.ok(Array.isArray(res.body.customFrames));
+  assert.ok(res.body.customFrames.length > 0);
+  assert.ok(res.body.customFrame);
+});
+
+test("POST /api/config/landing keeps frame data in a separate config store", async () => {
+  const testFrames = [
+    {
+      id: "frame-separated-test",
+      name: "Frame Separated Test",
+      enabled: true,
+      orientation: "portrait",
+      width: 1200,
+      height: 1800,
+      slots: [{ id: 1, x: 0, y: 0, width: 1200, height: 1800 }]
+    }
+  ];
+
+  const res = await request(app)
+    .post("/api/config/landing")
+    .send({
+      title: "Separated Frame Store Test",
+      customFrames: testFrames,
+      customFrame: testFrames[0]
+    });
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(res.body.config.customFrames, undefined);
+  assert.strictEqual(res.body.config.customFrame, undefined);
+
+  const framesRes = await request(app).get("/api/config/frames");
+  assert.strictEqual(framesRes.status, 200);
+  assert.ok(framesRes.body.customFrames.some((f) => f.id === "frame-separated-test"));
+
+  const landingRes = await request(app).get("/api/config/landing");
+  assert.strictEqual(landingRes.status, 200);
+  assert.strictEqual(landingRes.body.config.customFrames, undefined);
+  assert.strictEqual(landingRes.body.config.customFrame, undefined);
+
+  const persisted = fs.existsSync(framesConfigFile)
+    ? JSON.parse(fs.readFileSync(framesConfigFile, "utf8"))
+    : null;
+  assert.ok(persisted && Array.isArray(persisted.customFrames));
+  assert.ok(persisted.customFrames.some((f) => f.id === "frame-separated-test"));
 });
 
 test("GET /api/config/media returns files array", async () => {

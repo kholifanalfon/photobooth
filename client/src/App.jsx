@@ -234,15 +234,13 @@ export default function App() {
       )}
 
       {/* Smooth Page Transitions without Stuck Freezing */}
-      <AnimatePresence>
-        <motion.div
-          key={currentStep}
-          initial={false}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12, ease: 'easeOut' }}
-          className={`w-full h-full flex flex-col justify-center bg-slate-50 ${currentStep === "DOWNLOAD" ? "overflow-y-auto" : "overflow-hidden"}`}
-        >
+      <motion.div
+        key={currentStep}
+        initial={false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.12, ease: 'easeOut' }}
+        className={`absolute inset-0 w-full h-full flex flex-col justify-center bg-slate-50 ${currentStep === "DOWNLOAD" ? "overflow-y-auto" : "overflow-hidden"}`}
+      >
           {currentStep === 'DOWNLOAD' && (
             <DownloadPage filename={downloadFilename} />
           )}
@@ -296,8 +294,7 @@ export default function App() {
               printerConfig={landingConfig}
             />
           )}
-        </motion.div>
-      </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

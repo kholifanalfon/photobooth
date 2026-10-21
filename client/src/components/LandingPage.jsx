@@ -199,6 +199,46 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
     };
   }, []);
 
+  // Frame data lives in its own config store, separate from the landing config
+  useEffect(() => {
+    let isMounted = true;
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      fetch(`/api/config/frames?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!isMounted || !data) return;
+          const remoteFrames = Array.isArray(data.customFrames)
+            ? data.customFrames
+            : (Array.isArray(data.frames) ? data.frames : null);
+          if (!Array.isArray(remoteFrames) || remoteFrames.length === 0) return;
+
+          setConfig((prev) => {
+            const next = {
+              ...prev,
+              customFrames: remoteFrames,
+              customFrame: data.customFrame || remoteFrames.find((f) => f && f.enabled) || remoteFrames[0]
+            };
+            if (typeof window !== 'undefined' && window.localStorage) {
+              try {
+                window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+              } catch (_) {}
+            }
+            return next;
+          });
+        })
+        .catch((err) => console.warn('Failed to load frame config from server:', err));
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Sync fullscreen state
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -216,9 +256,26 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
           window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
         } catch (_) {}
       }
-      // Persist directly to server (exclude volatile blob: URLs)
+      // Persist frame updates to the dedicated frames config store
       if (typeof window !== 'undefined' && typeof fetch === 'function') {
+        const hasFrameUpdates = Object.prototype.hasOwnProperty.call(updates || {}, 'customFrames') ||
+          Object.prototype.hasOwnProperty.call(updates || {}, 'customFrame');
+
+        if (hasFrameUpdates) {
+          fetch('/api/config/frames', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customFrames: next.customFrames,
+              customFrame: next.customFrame
+            })
+          }).catch((err) => console.warn('Failed to sync frame config to server:', err));
+        }
+
+        // Persist landing config without frame data (exclude volatile blob: URLs)
         const payload = { ...next };
+        delete payload.customFrames;
+        delete payload.customFrame;
         if (payload.videoUrl && payload.videoUrl.startsWith('blob:')) {
           delete payload.videoUrl;
         }
@@ -303,8 +360,6 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   };
 
   const handleStart = () => {
-    if (isOpen) return;
-
     // In live mode, request fullscreen on user interaction
     if (isLiveMode && typeof document !== 'undefined' && !document.fullscreenElement) {
       if (document.documentElement.requestFullscreen) {

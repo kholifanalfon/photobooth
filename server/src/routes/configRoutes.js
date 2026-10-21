@@ -8,7 +8,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
-const configFile = path.resolve(__dirname, "../../data/landing_config.json");
+const configDataDir = process.env.NODE_ENV === "test"
+  ? path.resolve(__dirname, "../../data_test")
+  : path.resolve(__dirname, "../../data");
+const configFile = path.join(configDataDir, "landing_config.json");
+const framesConfigFile = path.join(configDataDir, "frames_config.json");
+const LANDING_CONFIG_KEY = "landing_config";
+const FRAMES_CONFIG_KEY = "frames_config";
 const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
 const uploadsDir = process.env.UPLOADS_DIR
   ? (path.isAbsolute(process.env.UPLOADS_DIR)
@@ -68,6 +74,206 @@ function getLatestLandingMedia() {
   }
 }
 
+const defaultModern4RFrames = [
+  {
+    id: "frame-4r-1photo",
+    name: "Bingkai 1 Foto",
+    enabled: true,
+    orientation: "portrait",
+    width: 1200,
+    height: 1800,
+    imageUrl: "/frames/frame_4r_1photo.png",
+    layerMode: "background",
+    photoCount: 1,
+    slots: [
+      { id: 1, x: 100, y: 240, width: 1000, height: 1300, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
+    ]
+  },
+  {
+    id: "frame-4r-2photos",
+    name: "Bingkai 2 Foto",
+    enabled: true,
+    orientation: "portrait",
+    width: 1200,
+    height: 1800,
+    imageUrl: "/frames/frame_4r_2photos.png",
+    layerMode: "background",
+    photoCount: 2,
+    slots: [
+      { id: 1, x: 100, y: 240, width: 1000, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 2, x: 100, y: 910, width: 1000, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
+    ]
+  },
+  {
+    id: "frame-4r-3photos",
+    name: "Bingkai 3 Foto",
+    enabled: true,
+    orientation: "portrait",
+    width: 1200,
+    height: 1800,
+    imageUrl: "/frames/frame_4r_3photos.png",
+    layerMode: "background",
+    photoCount: 3,
+    slots: [
+      { id: 1, x: 80, y: 240, width: 500, height: 640, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 2, x: 620, y: 240, width: 500, height: 640, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 3, x: 80, y: 920, width: 1040, height: 620, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
+    ]
+  },
+  {
+    id: "frame-4r-4photos",
+    name: "Bingkai 4 Foto",
+    enabled: true,
+    orientation: "portrait",
+    width: 1200,
+    height: 1800,
+    imageUrl: "/frames/frame_4r_4photos.png",
+    layerMode: "background",
+    photoCount: 4,
+    slots: [
+      { id: 1, x: 80, y: 240, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 2, x: 620, y: 240, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 3, x: 80, y: 910, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
+      { id: 4, x: 620, y: 910, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
+    ]
+  }
+];
+
+function cloneJson(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_) {
+    return value;
+  }
+}
+
+async function readStoredConfig(key, filePath) {
+  if (process.env.DATABASE_URL) {
+    try {
+      const record = await prisma.appConfig.findUnique({ where: { key } });
+      if (record && record.value != null) {
+        return typeof record.value === "string" ? JSON.parse(record.value) : record.value;
+      }
+    } catch (_) {}
+  }
+  if (filePath && fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function writeStoredConfig(key, filePath, value) {
+  if (process.env.DATABASE_URL) {
+    try {
+      await prisma.appConfig.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value }
+      });
+    } catch (_) {}
+  }
+  try {
+    const dataDir = path.dirname(filePath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function normalizeFramesStore(value) {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return {
+      customFrames: value,
+      customFrame: value.find((f) => f && f.enabled) || value[0]
+    };
+  }
+
+  const frames = Array.isArray(value.customFrames) && value.customFrames.length > 0
+    ? value.customFrames
+    : (value.customFrame
+        ? [value.customFrame]
+        : (Array.isArray(value.frames) && value.frames.length > 0 ? value.frames : null));
+
+  if (!frames) return null;
+
+  return {
+    customFrames: frames,
+    customFrame: value.customFrame || frames.find((f) => f && f.enabled) || frames[0]
+  };
+}
+
+function extractFramesPayload(config = {}) {
+  return normalizeFramesStore({
+    customFrames: config.customFrames,
+    customFrame: config.customFrame
+  });
+}
+
+function stripFrameFields(config = {}) {
+  const next = { ...config };
+  delete next.customFrames;
+  delete next.customFrame;
+  return next;
+}
+
+async function ensureFramesConfig() {
+  const stored = normalizeFramesStore(
+    await readStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile)
+  );
+  if (stored) return stored;
+
+  const legacy = await readStoredConfig(LANDING_CONFIG_KEY, configFile);
+  const migrated = extractFramesPayload(legacy || {});
+  if (migrated) {
+    await writeStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile, migrated);
+    await writeStoredConfig(LANDING_CONFIG_KEY, configFile, stripFrameFields(legacy));
+    return migrated;
+  }
+
+  const defaults = {
+    customFrames: cloneJson(defaultModern4RFrames),
+    customFrame: cloneJson(defaultModern4RFrames[0])
+  };
+  await writeStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile, defaults);
+  return defaults;
+}
+
+// GET /api/config/frames
+router.get("/frames", async (req, res) => {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0"
+  });
+  try {
+    const frames = await ensureFramesConfig();
+    return res.json({ success: true, ...frames });
+  } catch (err) {
+    return res.status(500).json({ error: "Gagal membaca konfigurasi frame" });
+  }
+});
+
+// POST /api/config/frames
+router.post("/frames", async (req, res) => {
+  try {
+    const frames = normalizeFramesStore(req.body);
+    if (!frames) {
+      return res.status(400).json({ error: "Data frame tidak valid" });
+    }
+
+    await writeStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile, frames);
+    return res.json({ success: true, ...frames });
+  } catch (err) {
+    return res.status(500).json({ error: "Gagal menyimpan konfigurasi frame" });
+  }
+});
+
 // GET /api/config/landing
 router.get("/landing", async (req, res) => {
   res.set({
@@ -95,71 +301,6 @@ router.get("/landing", async (req, res) => {
         config = JSON.parse(raw);
       } catch (fsErr) {}
     }
-
-    const defaultModern4RFrames = [
-      {
-        id: "frame-4r-1photo",
-        name: "Bingkai 1 Foto",
-        enabled: true,
-        orientation: "portrait",
-        width: 1200,
-        height: 1800,
-        imageUrl: "/frames/frame_4r_1photo.png",
-        layerMode: "background",
-        photoCount: 1,
-        slots: [
-          { id: 1, x: 100, y: 240, width: 1000, height: 1300, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
-        ]
-      },
-      {
-        id: "frame-4r-2photos",
-        name: "Bingkai 2 Foto",
-        enabled: true,
-        orientation: "portrait",
-        width: 1200,
-        height: 1800,
-        imageUrl: "/frames/frame_4r_2photos.png",
-        layerMode: "background",
-        photoCount: 2,
-        slots: [
-          { id: 1, x: 100, y: 240, width: 1000, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 2, x: 100, y: 910, width: 1000, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
-        ]
-      },
-      {
-        id: "frame-4r-3photos",
-        name: "Bingkai 3 Foto",
-        enabled: true,
-        orientation: "portrait",
-        width: 1200,
-        height: 1800,
-        imageUrl: "/frames/frame_4r_3photos.png",
-        layerMode: "background",
-        photoCount: 3,
-        slots: [
-          { id: 1, x: 80, y: 240, width: 500, height: 640, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 2, x: 620, y: 240, width: 500, height: 640, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 3, x: 80, y: 920, width: 1040, height: 620, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
-        ]
-      },
-      {
-        id: "frame-4r-4photos",
-        name: "Bingkai 4 Foto",
-        enabled: true,
-        orientation: "portrait",
-        width: 1200,
-        height: 1800,
-        imageUrl: "/frames/frame_4r_4photos.png",
-        layerMode: "background",
-        photoCount: 4,
-        slots: [
-          { id: 1, x: 80, y: 240, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 2, x: 620, y: 240, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 3, x: 80, y: 910, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" },
-          { id: 4, x: 620, y: 910, width: 500, height: 630, radius: 8, borderWidth: 3, borderColor: "#1E293B" }
-        ]
-      }
-    ];
 
     const defaultBase = {
       theme: "wedding",
@@ -196,14 +337,17 @@ router.get("/landing", async (req, res) => {
       bluetoothDither: "atkinson",
       bluetoothSharpen: true,
       videoDisplayMode: "background",
-      countdownDuration: 3,
-      customFrame: defaultModern4RFrames[0],
-      customFrames: defaultModern4RFrames
+      countdownDuration: 3
     };
 
     if (!config) {
       config = {};
     }
+
+    // Frame data is stored separately in its own config row/file.
+    await ensureFramesConfig();
+    config = stripFrameFields(config);
+
     if (!config.videoUrl) {
       const latestMedia = getLatestLandingMedia();
       if (latestMedia) {
@@ -224,13 +368,6 @@ router.get("/landing", async (req, res) => {
     } catch (_) {}
 
     const mergedConfig = { ...defaultBase, ...config };
-    if (!Array.isArray(mergedConfig.customFrames) || mergedConfig.customFrames.length === 0) {
-      if (mergedConfig.customFrame) {
-        mergedConfig.customFrames = [{ id: 'frame-1', name: 'Frame 1', ...mergedConfig.customFrame }];
-      } else {
-        mergedConfig.customFrames = defaultModern4RFrames;
-      }
-    }
     return res.json({ success: true, config: mergedConfig });
   } catch (err) {
     return res.status(500).json({ error: "Gagal membaca konfigurasi landing page" });
@@ -245,30 +382,22 @@ router.post("/landing", async (req, res) => {
       return res.status(400).json({ error: "Data konfigurasi tidak valid" });
     }
 
+    // Frame data has its own config row/file and must not be stored here.
+    const framesPayload = extractFramesPayload(newConfig);
+    if (framesPayload) {
+      await writeStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile, framesPayload);
+    }
+
+    const landingConfig = stripFrameFields(newConfig);
+
     // Sanitize any transient blob URLs
-    if (newConfig.videoUrl && newConfig.videoUrl.startsWith("blob:")) {
-      newConfig.videoUrl = "";
+    if (landingConfig.videoUrl && landingConfig.videoUrl.startsWith("blob:")) {
+      landingConfig.videoUrl = "";
     }
 
-    if (process.env.DATABASE_URL) {
-      try {
-        await prisma.appConfig.upsert({
-          where: { key: "landing_config" },
-          create: { key: "landing_config", value: newConfig },
-          update: { value: newConfig }
-        });
-      } catch (dbErr) {}
-    }
+    await writeStoredConfig(LANDING_CONFIG_KEY, configFile, landingConfig);
 
-    try {
-      const dataDir = path.dirname(configFile);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      fs.writeFileSync(configFile, JSON.stringify(newConfig, null, 2), "utf8");
-    } catch (fsErr) {}
-
-    return res.json({ success: true, config: newConfig });
+    return res.json({ success: true, config: landingConfig });
   } catch (err) {
     return res.status(500).json({ error: "Gagal menyimpan konfigurasi landing page" });
   }
@@ -398,39 +527,27 @@ router.delete("/frame", async (req, res) => {
       }
     }
 
-    // Update config store: remove from customFrames & reset customFrame if needed
-    let updatedConfig = null;
-    try {
-      let cfg = null;
-      if (fs.existsSync(configFile)) {
-        cfg = JSON.parse(fs.readFileSync(configFile, "utf8"));
-      }
-      if (cfg && Array.isArray(cfg.customFrames)) {
-        cfg.customFrames = cfg.customFrames.filter((f) => {
-          if (frameId && f.id === frameId) return false;
-          if (targetName && f.imageUrl && f.imageUrl.includes(targetName)) return false;
-          return true;
-        });
+    // Update the dedicated frames config store (never the landing config)
+    const currentFrames = await ensureFramesConfig();
+    const remainingFrames = currentFrames.customFrames.filter((f) => {
+      if (frameId && f.id === frameId) return false;
+      if (targetName && f.imageUrl && f.imageUrl.includes(targetName)) return false;
+      return true;
+    });
 
-        // If active frame was the deleted one, reset to first available frame
-        if (cfg.customFrame && (
-          (frameId && cfg.customFrame.id === frameId) ||
-          (targetName && cfg.customFrame.imageUrl && cfg.customFrame.imageUrl.includes(targetName))
-        )) {
-          cfg.customFrame = cfg.customFrames[0] || null;
-        }
+    const activeWasDeleted = currentFrames.customFrame && (
+      (frameId && currentFrames.customFrame.id === frameId) ||
+      (targetName && currentFrames.customFrame.imageUrl && currentFrames.customFrame.imageUrl.includes(targetName))
+    );
 
-        fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), "utf8");
-        if (process.env.DATABASE_URL) {
-          await prisma.appConfig.upsert({
-            where: { key: "landing_config" },
-            create: { key: "landing_config", value: cfg },
-            update: { value: cfg }
-          }).catch(() => {});
-        }
-        updatedConfig = cfg;
-      }
-    } catch (_) {}
+    const updatedFrames = {
+      customFrames: remainingFrames,
+      customFrame: activeWasDeleted
+        ? (remainingFrames.find((f) => f && f.enabled) || remainingFrames[0] || null)
+        : currentFrames.customFrame
+    };
+
+    await writeStoredConfig(FRAMES_CONFIG_KEY, framesConfigFile, updatedFrames);
 
     return res.json({
       success: true,
@@ -438,7 +555,9 @@ router.delete("/frame", async (req, res) => {
       fileDeleted,
       frameId,
       filename: targetName,
-      config: updatedConfig
+      customFrames: updatedFrames.customFrames,
+      customFrame: updatedFrames.customFrame,
+      config: updatedFrames
     });
   } catch (err) {
     return res.status(500).json({ error: "Gagal menghapus file frame dan konfigurasi" });
