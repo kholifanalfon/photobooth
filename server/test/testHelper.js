@@ -14,6 +14,7 @@ async function cleanDatabase() {
       await prisma.printJob.deleteMany({}).catch(() => {});
       await prisma.capturedPhoto.deleteMany({}).catch(() => {});
       await prisma.boothSession.deleteMany({}).catch(() => {});
+      await prisma.event.deleteMany({}).catch(() => {});
     } catch (err) {
       // In case database table is temporarily unavailable or reset
     }
