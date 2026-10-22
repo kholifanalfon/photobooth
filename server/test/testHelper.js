@@ -19,6 +19,14 @@ async function cleanDatabase() {
       // In case database table is temporarily unavailable or reset
     }
   }
+
+  // Also clean test fallback events file if present
+  const testEventsFile = path.resolve(__dirname, '../data_test/events.json');
+  if (fs.existsSync(testEventsFile)) {
+    try {
+      fs.unlinkSync(testEventsFile);
+    } catch (_) {}
+  }
 }
 
 /**
