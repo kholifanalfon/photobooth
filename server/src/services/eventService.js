@@ -15,8 +15,8 @@ const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' :
 const uploadsDir = process.env.UPLOADS_DIR
   ? (path.isAbsolute(process.env.UPLOADS_DIR)
       ? process.env.UPLOADS_DIR
-      : path.resolve(__dirname, '../../..', process.env.UPLOADS_DIR))
-  : path.resolve(__dirname, '../../..', defaultUploadsDirName);
+      : path.resolve(__dirname, '../..', process.env.UPLOADS_DIR))
+  : path.resolve(__dirname, '../..', defaultUploadsDirName);
 
 const mediaDir = path.join(uploadsDir, 'media');
 
@@ -310,7 +310,12 @@ async function listEvents(filter = {}) {
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }]
     });
 
-    writeEventsToFile(events);
+    // CRITICAL: Avoid overwriting events.json with a filtered subset!
+    if (!status) {
+      writeEventsToFile(events);
+    } else {
+      await syncToFile();
+    }
     return events;
   } catch (err) {
     // Database offline: fallback to file
@@ -347,7 +352,11 @@ async function getEventByIdOrSlug(idOrSlug) {
 
     return event;
   } catch (err) {
-    const fileEvents = readEventsFromFile();
+    let fileEvents = readEventsFromFile();
+    if (fileEvents.length === 0) {
+      const def = await ensureDefaultEvent();
+      fileEvents = [def];
+    }
     return fileEvents.find(e => e.id === trimmed || e.slug === trimmed) || null;
   }
 }
@@ -361,7 +370,8 @@ async function createEvent(payload = {}) {
   const baseSlug = slugify(payload.slug || name);
   const eventStatus = status || 'ACTIVE';
   const eventIsDefault = Boolean(isDefault);
-  const eventConfig = config || defaultBaseConfig;
+  // Merge payload config with defaultBaseConfig so all default fields are preserved
+  const eventConfig = { ...defaultBaseConfig, ...(config || {}) };
 
   try {
     // Ensure slug uniqueness in database
@@ -437,7 +447,12 @@ async function updateEvent(id, payload = {}) {
     if (payload.name !== undefined) updateData.name = String(payload.name).trim();
     if (payload.description !== undefined) updateData.description = payload.description;
     if (payload.status !== undefined) updateData.status = payload.status;
-    if (payload.config !== undefined) updateData.config = payload.config;
+
+    if (payload.config !== undefined) {
+      const existing = await prisma.event.findUnique({ where: { id } });
+      const existingConfig = existing && existing.config && typeof existing.config === 'object' ? existing.config : {};
+      updateData.config = { ...defaultBaseConfig, ...existingConfig, ...payload.config };
+    }
 
     if (payload.slug !== undefined) {
       const baseSlug = slugify(payload.slug);
@@ -483,7 +498,11 @@ async function updateEvent(id, payload = {}) {
     if (payload.name !== undefined) existing.name = String(payload.name).trim();
     if (payload.description !== undefined) existing.description = payload.description;
     if (payload.status !== undefined) existing.status = payload.status;
-    if (payload.config !== undefined) existing.config = payload.config;
+
+    if (payload.config !== undefined) {
+      const existingConfig = existing && existing.config && typeof existing.config === 'object' ? existing.config : {};
+      existing.config = { ...defaultBaseConfig, ...existingConfig, ...payload.config };
+    }
 
     if (payload.slug !== undefined) {
       const baseSlug = slugify(payload.slug);

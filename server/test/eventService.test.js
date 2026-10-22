@@ -123,7 +123,7 @@ test('eventService supports status filtering in listEvents', async () => {
   assert.strictEqual(archivedOnly.some(e => e.id === activeEv.id), false);
 });
 
-test('eventService supports deleteEvent', async () => {
+test('eventService deleteEvent removes event from DB and fallback', async () => {
   const ev = await eventService.createEvent({
     name: 'To Delete Event'
   });
@@ -132,6 +132,45 @@ test('eventService supports deleteEvent', async () => {
 
   const found = await eventService.getEventByIdOrSlug(ev.id);
   assert.strictEqual(found, null);
+});
+
+test('listEvents with status filter does not wipe out active events from events.json', async () => {
+  const activeEv = await eventService.createEvent({
+    name: 'Active Gala',
+    status: 'ACTIVE'
+  });
+  const archivedEv = await eventService.createEvent({
+    name: 'Old Gala',
+    status: 'ARCHIVED'
+  });
+
+  // Query only ARCHIVED
+  const archivedList = await eventService.listEvents({ status: 'ARCHIVED' });
+  assert.strictEqual(archivedList.length, 1);
+  assert.strictEqual(archivedList[0].id, archivedEv.id);
+
+  // Verify events.json still contains the active event
+  const eventsInFile = eventService.readEventsFromFile();
+  assert.ok(eventsInFile.some(e => e.id === activeEv.id), 'Active event must NOT be wiped out from events.json');
+  assert.ok(eventsInFile.some(e => e.id === archivedEv.id), 'Archived event must also be in events.json');
+});
+
+test('createEvent merges partial config with defaultBaseConfig', async () => {
+  const ev = await eventService.createEvent({
+    name: 'Custom Theme Event',
+    config: {
+      theme: 'neon_cyber',
+      title: 'Neon Cyber Night'
+    }
+  });
+
+  assert.strictEqual(ev.config.theme, 'neon_cyber');
+  assert.strictEqual(ev.config.title, 'Neon Cyber Night');
+  // Check defaultBaseConfig fields are preserved
+  assert.strictEqual(ev.config.paperSize, '4R');
+  assert.strictEqual(ev.config.countdownDuration, 3);
+  assert.strictEqual(ev.config.printerName, 'Niimbot 4R Photo Printer');
+  assert.strictEqual(ev.config.adminExitCode, '9999');
 });
 
 test('eventService falls back to reading and writing events.json when DB query fails', async () => {
@@ -166,6 +205,29 @@ test('eventService falls back to reading and writing events.json when DB query f
     assert.strictEqual(offlineEvents[0].slug, 'offline-event');
   } finally {
     prisma.event.findMany = origFindMany;
+  }
+});
+
+test('getEventByIdOrSlug offline auto-seeds default event when zero events exist in file', async () => {
+  const origFindUnique = prisma.event.findUnique;
+  const origFindFirst = prisma.event.findFirst;
+  const origCount = prisma.event.count;
+
+  try {
+    // Database throws
+    prisma.event.findUnique = async () => { throw new Error('DB Offline'); };
+    prisma.event.findFirst = async () => { throw new Error('DB Offline'); };
+    prisma.event.count = async () => { throw new Error('DB Offline'); };
+
+    // Query default-event when file is also empty
+    const found = await eventService.getEventByIdOrSlug('default-event');
+    assert.ok(found, 'Should auto-seed and return default event when offline');
+    assert.strictEqual(found.slug, 'default-event');
+    assert.strictEqual(found.isDefault, true);
+  } finally {
+    prisma.event.findUnique = origFindUnique;
+    prisma.event.findFirst = origFindFirst;
+    prisma.event.count = origCount;
   }
 });
 
