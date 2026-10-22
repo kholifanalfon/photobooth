@@ -4,6 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { generateQrDataUri } = require('../services/qrService');
 const { prisma } = require('../db');
+const eventService = require('../services/eventService');
 
 const router = express.Router();
 const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
@@ -195,6 +196,26 @@ router.post('/merge-chunks', async (req, res) => {
     const relativeUrl = `/uploads/${subfolder}/${finalFilename}`;
     const stats = await fs.promises.stat(finalFilepath);
 
+    const eventId = req.query.eventId || (req.body && req.body.eventId);
+    if (eventId) {
+      try {
+        const ev = await eventService.getEventByIdOrSlug(eventId);
+        if (ev) {
+          const currentConfig = ev.config && typeof ev.config === 'object' ? ev.config : {};
+          await eventService.updateEvent(ev.id, {
+            config: {
+              ...currentConfig,
+              videoUrl: relativeUrl
+            }
+          });
+        }
+      } catch (eventErr) {
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('Failed to update event videoUrl in merge-chunks:', eventErr.message);
+        }
+      }
+    }
+
     return res.json({
       success: true,
       filename: finalFilename,
@@ -232,6 +253,26 @@ router.post('/upload-video', (req, res) => {
 
     const relativeUrl = `/uploads/${subfolder}/${filename}`;
     const fullUrl = `${host}${relativeUrl}`;
+
+    const eventId = req.query.eventId || (req.body && req.body.eventId);
+    if (eventId) {
+      try {
+        const ev = await eventService.getEventByIdOrSlug(eventId);
+        if (ev) {
+          const currentConfig = ev.config && typeof ev.config === 'object' ? ev.config : {};
+          await eventService.updateEvent(ev.id, {
+            config: {
+              ...currentConfig,
+              videoUrl: relativeUrl
+            }
+          });
+        }
+      } catch (eventErr) {
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('Failed to update event videoUrl:', eventErr.message);
+        }
+      }
+    }
 
     return res.json({
       success: true,

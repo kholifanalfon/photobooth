@@ -248,12 +248,22 @@ async function ensureFramesConfig() {
 router.get("/frames", async (req, res) => {
   res.set({
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-    "Pragma": "no-cache",
-    "Expires": "0"
+    "Pragma": "no-cache",    "Expires": "0"
   });
   try {
     const frames = await ensureFramesConfig();
-    return res.json({ success: true, ...frames });
+    const { eventId } = req.query;
+    let customFrames = frames.customFrames;
+    if (Array.isArray(customFrames)) {
+      customFrames = customFrames.filter((f) => {
+        return f.isGlobal !== false || (eventId && Array.isArray(f.assignedEventIds) && f.assignedEventIds.includes(eventId));
+      });
+    }
+    const customFrame = (customFrames && customFrames.length > 0)
+      ? (customFrames.find((f) => f && f.enabled) || customFrames[0])
+      : null;
+
+    return res.json({ success: true, ...frames, customFrames, customFrame });
   } catch (err) {
     return res.status(500).json({ error: "Gagal membaca konfigurasi frame" });
   }
