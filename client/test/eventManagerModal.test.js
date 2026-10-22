@@ -54,13 +54,13 @@ test('EventManagerModal renders modal header, add event button, and event list',
       description: 'Acara pernikahan Kevin & Sheila di Grand Ballroom',
       status: 'ACTIVE',
       isDefault: true,
-      videoBgUrl: '/uploads/media/wedding-bg.mp4',
       config: {
         title: 'Kevin & Sheila Wedding',
         subtitle: 'Selamat Datang di Resepsi',
         coupleNames: 'Kevin & Sheila',
         eventDate: '24 Oktober 2026',
         theme: 'wedding',
+        videoUrl: '/uploads/media/wedding-bg.mp4',
         printCopies: 2,
         paperSize: '4R',
         autoPrint: true
@@ -85,6 +85,8 @@ test('EventManagerModal renders modal header, add event button, and event list',
   assert.ok(html.includes('ACTIVE'), 'Should display ACTIVE status badge');
   assert.ok(html.includes('Default') || html.includes('Utama'), 'Should display default badge');
   assert.ok(html.includes('Aktif Saat Ini'), 'Should display currently active kiosk event badge');
+  assert.ok(html.includes('Video Background'), 'Should display Video Background badge from config.videoUrl');
+  assert.ok(html.includes('Event default tidak dapat dihapus'), 'Default event delete button should be disabled with warning');
 });
 
 test('EventManagerModal returns empty markup when isOpen is false', async () => {
@@ -118,7 +120,7 @@ test('EventManagerModal renders empty state when events list is empty', async ()
   assert.ok(html.includes('Tambah Event Baru'), 'Should still show Tambah Event button');
 });
 
-test('EventManagerModal renders actions (Edit, Delete, Set Default) for events', async () => {
+test('EventManagerModal renders actions (Edit, Delete, Set Default) for non-default events', async () => {
   const { default: EventManagerModal } = await buildComponent();
 
   const dummyEvents = [
@@ -153,7 +155,7 @@ test('EventManagerModal renders actions (Edit, Delete, Set Default) for events',
   assert.ok(html.includes('Hapus'), 'Should display Hapus button');
 });
 
-test('EventManagerModal renders form controls for editing/adding events', async () => {
+test('EventManagerModal renders form controls, video upload button, and inline preview for editing/adding events', async () => {
   const { default: EventManagerModal } = await buildComponent();
 
   const dummyEvents = [
@@ -169,6 +171,7 @@ test('EventManagerModal renders form controls for editing/adding events', async 
         coupleNames: 'Kevin & Sheila',
         eventDate: '24 Oktober 2026',
         theme: 'wedding',
+        videoUrl: '/uploads/media/wedding-bg.mp4',
         printCopies: 2,
         paperSize: '4R',
         autoPrint: true
@@ -195,6 +198,10 @@ test('EventManagerModal renders form controls for editing/adding events', async 
   assert.ok(html.includes('Tanggal Event'), 'Should render Event date label');
   assert.ok(html.includes('Tema Tampilan'), 'Should render Theme selector label');
   assert.ok(html.includes('Video Background'), 'Should render Video background label');
+  assert.ok(html.includes('Unggah Video'), 'Should render Unggah Video button');
+  assert.ok(html.includes('<video'), 'Should render inline video preview tag');
+  assert.ok(html.includes('/uploads/media/wedding-bg.mp4'), 'Should pass video source to video preview tag');
+  assert.ok(html.includes('Hapus Video'), 'Should render Hapus Video button inside video preview');
   assert.ok(html.includes('Jumlah Cetak (Copies)'), 'Should render Copies label');
   assert.ok(html.includes('Ukuran Kertas'), 'Should render Paper size label');
   assert.ok(html.includes('Cetak Otomatis (Auto-print)'), 'Should render Auto-print label');
