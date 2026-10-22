@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 import { composePhotosToFrame } from '../src/utils/canvasCompositor.js';
+import { ADMIN_SESSION_TIMEOUT_MS, isAdminSessionExpired } from '../src/utils/adminSession.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -269,9 +270,13 @@ test('Printer & Custom Frame Configuration Suite', async (t) => {
     }
   });
 
-  await t.test('Admin Session Lifetime is configured for 3 hours (10800000 ms)', () => {
-    const threeHoursMs = 3 * 60 * 60 * 1000;
-    assert.equal(threeHoursMs, 10800000, '3 hours in ms must be exactly 10,800,000');
+  await t.test('Admin Session Lifetime expires after 1 hour of inactivity', () => {
+    assert.equal(ADMIN_SESSION_TIMEOUT_MS, 60 * 60 * 1000, 'Admin session must expire after 1 hour');
+
+    const now = Date.now();
+    assert.equal(isAdminSessionExpired(now - 59 * 60 * 1000, now), false, 'Session must stay active before 1 hour');
+    assert.equal(isAdminSessionExpired(now - 61 * 60 * 1000, now), true, 'Session must expire after 1 hour');
+    assert.equal(isAdminSessionExpired(0, now), true, 'Missing session timestamp must be treated as expired');
   });
 
   await t.test('composePhotosToFrame correctly maps mirrored slots (6 slots with 3 photos)', async () => {

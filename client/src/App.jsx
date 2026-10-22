@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LandingPage from './components/LandingPage.jsx';
 import FrameSelector from './components/FrameSelector.jsx';
@@ -8,8 +8,12 @@ import DownloadPage from './components/DownloadPage.jsx';
 import AdminLockScreen from './components/AdminLockScreen.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import { SLOT_PRESETS } from './constants/framePresets.js';
-
-const ADMIN_SESSION_KEY = 'photobooth_admin_session_unlocked';
+import {
+  readAdminSessionTimestamp,
+  touchAdminSession,
+  clearAdminSession,
+  isAdminSessionExpired
+} from './utils/adminSession.js';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState('LANDING'); // LANDING | FRAME_PICKER | CAMERA | PREVIEW | DOWNLOAD
@@ -25,6 +29,7 @@ export default function App() {
   const [isBoothUnlocked, setIsBoothUnlocked] = useState(false);
   const [adminExitCode, setAdminExitCode] = useState('1234');
   const [showSplash, setShowSplash] = useState(true);
+  const adminLastActivityRef = useRef(0);
 
   // Check URL on load for /download/:filename route or /live route
   useEffect(() => {
@@ -45,17 +50,65 @@ export default function App() {
     }
   }, []);
 
-  // Check existing session unlock state from localStorage
+  // Check existing session unlock state from localStorage (expires after 1 hour idle)
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const stored = window.localStorage.getItem(ADMIN_SESSION_KEY);
-        if (stored) {
-          setIsBoothUnlocked(true);
-        }
-      } catch (_) {}
+    const storedTimestamp = readAdminSessionTimestamp();
+    if (storedTimestamp) {
+      adminLastActivityRef.current = storedTimestamp;
+      setIsBoothUnlocked(true);
     }
   }, []);
+
+  // Re-lock kiosk after 1 hour without any user activity
+  useEffect(() => {
+    if (!isBoothUnlocked || typeof window === 'undefined') return;
+
+    if (!adminLastActivityRef.current) {
+      adminLastActivityRef.current = readAdminSessionTimestamp() || Date.now();
+      touchAdminSession(adminLastActivityRef.current);
+    }
+
+    let lastPersistedAt = adminLastActivityRef.current;
+
+    const markActivity = () => {
+      const now = Date.now();
+      adminLastActivityRef.current = now;
+      if (now - lastPersistedAt >= 5000) {
+        lastPersistedAt = now;
+        touchAdminSession(now);
+      }
+    };
+
+    const lockIfExpired = () => {
+      if (isAdminSessionExpired(adminLastActivityRef.current)) {
+        adminLastActivityRef.current = 0;
+        clearAdminSession();
+        setIsBoothUnlocked(false);
+      }
+    };
+
+    const activityEvents = ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'scroll', 'wheel'];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+
+    const expiryTimer = window.setInterval(lockIfExpired, 15000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        lockIfExpired();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity);
+      });
+      window.clearInterval(expiryTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isBoothUnlocked]);
 
   // Fetch landing config & admin settings directly on app bootstrap
   useEffect(() => {
@@ -140,12 +193,9 @@ export default function App() {
     const handleKeyDown = (e) => {
       if (e.shiftKey && e.key === 'Escape') {
         if (isLiveMode) {
+          adminLastActivityRef.current = 0;
+          clearAdminSession();
           setIsBoothUnlocked(false);
-          if (typeof window !== 'undefined' && window.localStorage) {
-            try {
-              window.localStorage.removeItem(ADMIN_SESSION_KEY);
-            } catch (_) {}
-          }
         }
       }
     };
@@ -222,12 +272,8 @@ export default function App() {
       {isLiveMode && !isBoothUnlocked && currentStep !== 'DOWNLOAD' && (
         <AdminLockScreen
           onUnlock={() => {
+            adminLastActivityRef.current = touchAdminSession();
             setIsBoothUnlocked(true);
-            if (typeof window !== "undefined" && window.localStorage) {
-              try {
-                window.localStorage.setItem(ADMIN_SESSION_KEY, String(Date.now()));
-              } catch (_) {}
-            }
           }}
           expectedCode={adminExitCode}
         />
@@ -252,6 +298,7 @@ export default function App() {
               onStartSession={handleStartLanding}
               isLiveMode={isLiveMode}
               onEnterLiveMode={() => {
+                adminLastActivityRef.current = touchAdminSession();
                 setIsBoothUnlocked(true);
                 setIsLiveMode(true);
                 if (typeof window !== 'undefined') {
@@ -261,6 +308,9 @@ export default function App() {
                 }
               }}
               onExitLiveMode={() => {
+                adminLastActivityRef.current = 0;
+                clearAdminSession();
+                setIsBoothUnlocked(false);
                 setIsLiveMode(false);
                 if (typeof window !== 'undefined') {
                   window.history.pushState(null, "", "/");
