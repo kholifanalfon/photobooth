@@ -62,13 +62,22 @@ function formatDateIndo(dateStr) {
 export default function SessionManagerModal({
   isOpen,
   onClose,
-  printerConfig = {}
+  printerConfig = {},
+  events = [],
+  activeEventId = null
 }) {
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all'); // 'all' | 'today' | 'week'
+  const [selectedEventFilter, setSelectedEventFilter] = useState(activeEventId || '');
+
+  useEffect(() => {
+    if (activeEventId) {
+      setSelectedEventFilter(activeEventId);
+    }
+  }, [activeEventId]);
   
   // Sub-modal states
   const [previewPhoto, setPreviewPhoto] = useState(null); // active session being previewed
@@ -151,11 +160,15 @@ export default function SessionManagerModal({
     }, duration);
   };
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (targetEventId = selectedEventFilter) => {
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      const url = resolveApiUrl('/api/sessions');
+      let queryUrl = '/api/sessions';
+      if (targetEventId && targetEventId.trim() !== '') {
+        queryUrl += `?eventId=${encodeURIComponent(targetEventId.trim())}`;
+      }
+      const url = resolveApiUrl(queryUrl);
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Gagal memuat sesi (HTTP ${res.status})`);
@@ -176,9 +189,9 @@ export default function SessionManagerModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchSessions();
+      fetchSessions(selectedEventFilter);
     }
-  }, [isOpen]);
+  }, [isOpen, selectedEventFilter]);
 
   // Handle ESC key to close modals
   useEffect(() => {
@@ -659,6 +672,29 @@ export default function SessionManagerModal({
             )}
           </div>
 
+          {/* Event Filter Dropdown */}
+          {Array.isArray(events) && events.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="session-event-filter" className="sr-only">Filter Event</label>
+              <div className="relative">
+                <select
+                  id="session-event-filter"
+                  value={selectedEventFilter}
+                  onChange={(e) => setSelectedEventFilter(e.target.value)}
+                  className="appearance-none pl-8 pr-8 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs font-semibold text-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500 cursor-pointer"
+                >
+                  <option value="">Semua Event</option>
+                  {events.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.name || evt.slug || evt.id}
+                    </option>
+                  ))}
+                </select>
+                <Calendar size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
           {/* Filter Period Tabs */}
           <div className="flex items-center gap-1 p-1 bg-slate-800/70 rounded-xl border border-slate-700/60">
             {[
@@ -715,6 +751,7 @@ export default function SessionManagerModal({
                   onClick={() => {
                     setSearchQuery('');
                     setFilterPeriod('all');
+                    setSelectedEventFilter('');
                   }}
                   className="text-xs text-rose-400 hover:text-rose-300 underline font-semibold"
                 >
@@ -767,6 +804,12 @@ export default function SessionManagerModal({
                           {session.compositeUrl && (
                             <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/80 text-[9px] font-extrabold text-white">
                               Composite
+                            </span>
+                          )}
+                          {session.eventId && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/80 text-[9px] font-bold text-white flex items-center gap-1">
+                              <Calendar size={9} />
+                              <span>{events.find((e) => e.id === session.eventId)?.name || 'Event'}</span>
                             </span>
                           )}
                         </div>

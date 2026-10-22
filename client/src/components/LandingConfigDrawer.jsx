@@ -32,6 +32,7 @@ import {
   Image as ImageIcon,
   Plus,
   FolderArchive,
+  Calendar,
   Move,
   Eye,
   EyeOff
@@ -90,6 +91,8 @@ export default function LandingConfigDrawer({
   onOpenSessions,
   onOpenFrameManager,
   onOpenPrinterConfig,
+  onOpenEventManager,
+  events = [],
   initialTab = 'media_theme'
 }) {
   // Hanya 2 Tab: 'media_theme' (Media & Tema) dan 'printer' (Konfigurasi Printer)
@@ -549,6 +552,17 @@ export default function LandingConfigDrawer({
                       <span>Siap mulai sesi photobooth?</span>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      {onOpenEventManager && (
+                        <button
+                          type="button"
+                          onClick={onOpenEventManager}
+                          title="Buka Kelola Event Photobooth (Multi-Event)"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white border border-rose-200 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Calendar size={12} className="text-rose-500" />
+                          <span>Kelola Event</span>
+                        </button>
+                      )}
                       {onOpenSessions && (
                         <button
                           type="button"

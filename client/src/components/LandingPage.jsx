@@ -60,6 +60,7 @@ import SessionManagerModal from './SessionManagerModal.jsx';
 import FrameManagerModal from './FrameManagerModal.jsx';
 import PrinterConfigModal from './PrinterConfigModal.jsx';
 import AdminExitModal from './AdminExitModal.jsx';
+import EventManagerModal from './EventManagerModal.jsx';
 import {
   getFastVideoUrl,
   preloadAndCacheVideo,
@@ -114,7 +115,21 @@ const DEFAULT_CONFIG = {
   ]
 };
 
-export default function LandingPage({ onStartSession, isLiveMode = false, onEnterLiveMode, onExitLiveMode, initialConfig = null, onConfigChange = null }) {
+export default function LandingPage({
+  onStartSession,
+  isLiveMode = false,
+  onEnterLiveMode,
+  onExitLiveMode,
+  initialConfig = null,
+  onConfigChange = null,
+  hasMultipleEvents = false,
+  activeEventName = "",
+  activeEventId = null,
+  onRequestSwitchEvent = null,
+  events = [],
+  onOpenEventManager = null,
+  onRefreshEvents = null
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSessionCodeModalOpen, setIsSessionCodeModalOpen] = useState(false);
@@ -150,6 +165,19 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
   const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
   const [isFrameManagerOpen, setIsFrameManagerOpen] = useState(false);
   const [isPrinterConfigOpen, setIsPrinterConfigOpen] = useState(false);
+  const [isSwitchEventModalOpen, setIsSwitchEventModalOpen] = useState(false);
+  const [isEventManagerModalOpen, setIsEventManagerModalOpen] = useState(false);
+
+  // Keep config in sync if initialConfig updates from parent (e.g. active event change)
+  useEffect(() => {
+    if (initialConfig && typeof initialConfig === "object") {
+      setConfig((prev) => ({
+        ...prev,
+        ...initialConfig
+      }));
+    }
+  }, [initialConfig]);
+
   const prevVideoUrlRef = useRef(null);
   const isLaunchingRef = useRef(false);
 
@@ -237,7 +265,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeEventId]);
 
   // Sync fullscreen state
   useEffect(() => {
@@ -711,6 +739,21 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
           <FolderArchive size={17} className="text-rose-500" />
           <span className="hidden sm:inline">Kelola Sesi</span>
         </button>
+        {hasMultipleEvents && (
+          <button
+            type="button"
+            onClick={() => setIsSwitchEventModalOpen(true)}
+            aria-label="Ganti Event Photobooth"
+            title={activeEventName ? `Ganti Event (Saat ini: ${activeEventName})` : "Ganti Event Photobooth"}
+            className="px-3 py-2.5 sm:py-3 rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-rose-600 shadow-xs transition-colors cursor-pointer backdrop-blur-xs flex items-center gap-1.5 font-bold text-xs sm:text-sm"
+          >
+            <Calendar size={17} className="text-rose-500" />
+            <span>Ganti Event</span>
+            {activeEventName && (
+              <span className="hidden md:inline font-normal text-slate-500 text-xs">({activeEventName})</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Floating Bottom-Right: Background Video Pause / Resume Control Button */}
@@ -1221,6 +1264,14 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         onOpenSessions={() => setIsSessionsModalOpen(true)}
         onOpenFrameManager={() => setIsFrameManagerOpen(true)}
         onOpenPrinterConfig={() => setIsPrinterConfigOpen(true)}
+        onOpenEventManager={() => {
+          if (typeof onOpenEventManager === "function") {
+            onOpenEventManager();
+          } else {
+            setIsEventManagerModalOpen(true);
+          }
+        }}
+        events={events}
       />
 
       {/* Printer Configuration Modal (Root Level) */}
@@ -1237,6 +1288,7 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         onClose={() => setIsFrameManagerOpen(false)}
         config={config}
         onUpdateConfig={handleUpdateConfig}
+        events={events}
       />
 
       {/* Session Manager Modal */}
@@ -1244,6 +1296,17 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         isOpen={isSessionsModalOpen}
         onClose={() => setIsSessionsModalOpen(false)}
         printerConfig={config}
+        events={events}
+        activeEventId={activeEventId}
+      />
+
+      {/* Event Manager Modal */}
+      <EventManagerModal
+        isOpen={isEventManagerModalOpen}
+        onClose={() => setIsEventManagerModalOpen(false)}
+        events={events}
+        onRefreshEvents={onRefreshEvents}
+        currentEventId={activeEventId}
       />
 
       {/* Session Access Code Modal (Opens if requireSessionCode is active) */}
@@ -1264,6 +1327,22 @@ export default function LandingPage({ onStartSession, isLiveMode = false, onEnte
         title="Buka Kunci Mode Live"
         description="Masukkan Kode Admin untuk membuka kunci dan keluar dari Mode Live Kiosk."
         actionLabel="Buka Kunci"
+      />
+
+      {/* Admin Switch Event PIN Modal */}
+      <AdminExitModal
+        isOpen={isSwitchEventModalOpen}
+        onClose={() => setIsSwitchEventModalOpen(false)}
+        onSuccess={() => {
+          setIsSwitchEventModalOpen(false);
+          if (typeof onRequestSwitchEvent === "function") {
+            onRequestSwitchEvent();
+          }
+        }}
+        expectedCode={config.adminExitCode || config.adminCode || '9999'}
+        title="Ganti Event Photobooth"
+        description="Masukkan Kode PIN Admin untuk beralih atau memilih event photobooth lain."
+        actionLabel="Ganti Event"
       />
     </div>
   );
