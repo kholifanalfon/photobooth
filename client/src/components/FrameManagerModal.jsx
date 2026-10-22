@@ -15,7 +15,9 @@ import {
   Sparkles,
   Edit3,
   FileText,
-  Search
+  Search,
+  Globe,
+  Calendar
 } from 'lucide-react';
 import { PAPER_PRESETS, SLOT_PRESETS } from '../constants/framePresets.js';
 import PrecisionFrameEditorModal from './PrecisionFrameEditorModal.jsx';
@@ -25,7 +27,10 @@ export default function FrameManagerModal({
   isOpen,
   onClose,
   config = {},
-  onUpdateConfig
+  onUpdateConfig,
+  customFrames,
+  events = [],
+  onSaveFrames
 }) {
   const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
   const [isPrecisionModalOpen, setIsPrecisionModalOpen] = useState(false);
@@ -34,30 +39,67 @@ export default function FrameManagerModal({
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef(null);
 
-  const rawFrames = useMemo(() => {
-    if (Array.isArray(config?.customFrames) && config.customFrames.length > 0) {
-      return config.customFrames;
+  const availableEvents = useMemo(() => {
+    if (Array.isArray(events) && events.length > 0) {
+      return events;
     }
+    if (Array.isArray(config?.events) && config.events.length > 0) {
+      return config.events;
+    }
+    return [];
+  }, [events, config?.events]);
+
+  const rawFrames = useMemo(() => {
+    let sourceList = null;
+    if (Array.isArray(customFrames) && customFrames.length > 0) {
+      sourceList = customFrames;
+    } else if (Array.isArray(config?.customFrames) && config.customFrames.length > 0) {
+      sourceList = config.customFrames;
+    }
+
+    if (sourceList && sourceList.length > 0) {
+      return sourceList.map((f) => ({
+        ...f,
+        isGlobal: f.isGlobal !== false,
+        assignedEventIds: Array.isArray(f.assignedEventIds) ? f.assignedEventIds : []
+      }));
+    }
+
+    const fallbackFrame = config?.customFrame || {
+      id: 'frame-1',
+      name: 'Frame 1 (4R)',
+      enabled: true,
+      imageUrl: '',
+      orientation: 'portrait',
+      paperSize: '4R',
+      width: 1200,
+      height: 1800,
+      slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
+    };
+
     return [
-      config?.customFrame || {
-        id: 'frame-1',
-        name: 'Frame 1 (4R)',
-        enabled: true,
-        imageUrl: '',
-        orientation: 'portrait',
-        paperSize: '4R',
-        width: 1200,
-        height: 1800,
-        slots: (SLOT_PRESETS[4]?.portrait || []).map((s) => ({ ...s }))
+      {
+        ...fallbackFrame,
+        isGlobal: fallbackFrame.isGlobal !== false,
+        assignedEventIds: Array.isArray(fallbackFrame.assignedEventIds)
+          ? fallbackFrame.assignedEventIds
+          : []
       }
     ];
-  }, [config?.customFrames, config?.customFrame]);
+  }, [customFrames, config?.customFrames, config?.customFrame]);
 
   const filteredFrames = useMemo(() => {
     if (!searchQuery.trim()) return rawFrames;
     const q = searchQuery.toLowerCase();
-    return rawFrames.filter((f) => (f?.name || '').toLowerCase().includes(q));
-  }, [rawFrames, searchQuery]);
+    return rawFrames.filter((f) => {
+      const matchName = (f?.name || '').toLowerCase().includes(q);
+      const matchEvent = (f?.assignedEventIds || []).some((evId) => {
+        const ev = availableEvents.find((e) => e.id === evId);
+        return ev && (ev.name || '').toLowerCase().includes(q);
+      });
+      return matchName || matchEvent;
+    });
+  }, [rawFrames, searchQuery, availableEvents]);
 
   const activeCount = useMemo(() => {
     return rawFrames.filter((f) => f && f.enabled).length;
@@ -69,13 +111,7 @@ export default function FrameManagerModal({
   );
   const currentEditingFrame = rawFrames[safeFrameIndex] || rawFrames[0];
 
-  const updateFrameAtIndex = (idxToUpdate, patch) => {
-    const updated = rawFrames.map((f, idx) => {
-      if (idx === idxToUpdate) {
-        return { ...f, ...patch };
-      }
-      return f;
-    });
+  const emitChanges = (updated) => {
     const activeFrame = updated.find((f) => f.enabled) || updated[0];
     if (typeof onUpdateConfig === 'function') {
       onUpdateConfig({
@@ -83,6 +119,19 @@ export default function FrameManagerModal({
         customFrame: activeFrame
       });
     }
+    if (typeof onSaveFrames === 'function') {
+      onSaveFrames(updated);
+    }
+  };
+
+  const updateFrameAtIndex = (idxToUpdate, patch) => {
+    const updated = rawFrames.map((f, idx) => {
+      if (idx === idxToUpdate) {
+        return { ...f, ...patch };
+      }
+      return f;
+    });
+    emitChanges(updated);
   };
 
   const handleAddNewFrame = () => {
@@ -92,6 +141,8 @@ export default function FrameManagerModal({
       id: newId,
       name: newName,
       enabled: true,
+      isGlobal: true,
+      assignedEventIds: [],
       imageUrl: '',
       orientation: 'portrait',
       paperSize: '4R',
@@ -101,12 +152,7 @@ export default function FrameManagerModal({
     };
     const updated = [...rawFrames, newFrame];
     setSelectedFrameIndex(rawFrames.length);
-    if (typeof onUpdateConfig === 'function') {
-      onUpdateConfig({
-        customFrames: updated,
-        customFrame: newFrame
-      });
-    }
+    emitChanges(updated);
   };
 
   const handleDuplicateFrame = (indexToDup) => {
@@ -116,16 +162,13 @@ export default function FrameManagerModal({
       ...JSON.parse(JSON.stringify(source)),
       id: newId,
       name: `${source.name || 'Frame'} (Salinan)`,
-      enabled: true
+      enabled: true,
+      isGlobal: source.isGlobal !== false,
+      assignedEventIds: Array.isArray(source.assignedEventIds) ? [...source.assignedEventIds] : []
     };
     const updated = [...rawFrames, newFrame];
     setSelectedFrameIndex(rawFrames.length);
-    if (typeof onUpdateConfig === 'function') {
-      onUpdateConfig({
-        customFrames: updated,
-        customFrame: newFrame
-      });
-    }
+    emitChanges(updated);
   };
 
   const handleConfirmDelete = async () => {
@@ -140,14 +183,8 @@ export default function FrameManagerModal({
     const updated = rawFrames.filter((_, idx) => idx !== indexToRemove);
     const nextIdx = Math.max(0, indexToRemove - 1);
     setSelectedFrameIndex(nextIdx);
-    const activeFrame = updated.find((f) => f.enabled) || updated[0];
 
-    if (typeof onUpdateConfig === 'function') {
-      onUpdateConfig({
-        customFrames: updated,
-        customFrame: activeFrame
-      });
-    }
+    emitChanges(updated);
 
     // Delete frame file from server if it was an uploaded file
     if (
@@ -207,6 +244,8 @@ export default function FrameManagerModal({
             id: newId,
             name: cleanName,
             enabled: true,
+            isGlobal: true,
+            assignedEventIds: [],
             imageUrl: frameUrl,
             orientation: isLand ? 'landscape' : 'portrait',
             paperSize: isStandard4R ? '4R' : 'image',
@@ -217,12 +256,7 @@ export default function FrameManagerModal({
 
           const updated = [...rawFrames, newFrame];
           setSelectedFrameIndex(rawFrames.length);
-          if (typeof onUpdateConfig === 'function') {
-            onUpdateConfig({
-              customFrames: updated,
-              customFrame: newFrame
-            });
-          }
+          emitChanges(updated);
           setIsUploading(false);
           setIsPrecisionModalOpen(true);
         };
@@ -386,7 +420,7 @@ export default function FrameManagerModal({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredFrames.map((f, idx) => {
                 const globalIndex = rawFrames.findIndex((rf) => rf.id === f.id);
                 const isSelected = globalIndex === safeFrameIndex;
@@ -437,6 +471,9 @@ export default function FrameManagerModal({
                   if (f.paperSize === '3x5cm') return `3×5 cm ${isOrientLandscape ? 'Landscape' : 'Portrait'}`;
                   return `4R ${isOrientLandscape ? 'Landscape' : 'Portrait'}`;
                 })();
+
+                const isGlobal = f.isGlobal !== false;
+                const assignedCount = Array.isArray(f.assignedEventIds) ? f.assignedEventIds.length : 0;
 
                 return (
                   <motion.div
@@ -528,8 +565,8 @@ export default function FrameManagerModal({
                     </div>
 
                     {/* Compact Details & Meta Area */}
-                    <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                      <div className="space-y-1.5">
+                    <div className="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
+                      <div className="space-y-2">
                         {/* Editable Name Input */}
                         <div className="flex items-center gap-1.5">
                           <input
@@ -542,7 +579,7 @@ export default function FrameManagerModal({
                           <Edit3 size={12} className="text-slate-500 shrink-0 pointer-events-none" />
                         </div>
 
-                        {/* Badges */}
+                        {/* Badges: Paper size, Slot count, Dimensions, and Global/Event assignment */}
                         <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                           <span className="font-semibold bg-slate-700/60 text-slate-300 px-2 py-0.5 rounded-md flex items-center gap-1">
                             <FileText size={10} className="text-slate-400" />
@@ -554,11 +591,106 @@ export default function FrameManagerModal({
                           <span className="font-mono text-slate-400">
                             {frameW} × {frameH} px
                           </span>
+
+                          {/* Event Assignment Badge */}
+                          {isGlobal ? (
+                            <span
+                              className="font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md flex items-center gap-1"
+                              title="Tersedia untuk Semua Event (Global)"
+                            >
+                              <Globe size={10} className="text-indigo-400" />
+                              <span>Global</span>
+                            </span>
+                          ) : (
+                            <span
+                              className="font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1"
+                              title={`Ditugaskan ke ${assignedCount} Event`}
+                            >
+                              <Calendar size={10} className="text-amber-400" />
+                              <span>{assignedCount} Event</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Penugasan Event / Global Event toggle */}
+                        <div className="pt-2 border-t border-slate-700/50 space-y-2 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <label className="font-medium text-slate-300 flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isGlobal}
+                                onChange={(e) => {
+                                  const nextGlobal = e.target.checked;
+                                  updateFrameAtIndex(globalIndex, {
+                                    isGlobal: nextGlobal,
+                                    assignedEventIds: Array.isArray(f.assignedEventIds) ? f.assignedEventIds : []
+                                  });
+                                }}
+                                className="w-3.5 h-3.5 accent-rose-500 cursor-pointer rounded"
+                              />
+                              <span>Tersedia untuk Semua Event (Global)</span>
+                            </label>
+                            {isGlobal && (
+                              <span className="text-[10px] font-semibold text-indigo-400 flex items-center gap-1 shrink-0">
+                                <Globe size={11} />
+                                <span>Semua Event</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* When not global: show event checklist */}
+                          {!isGlobal && (
+                            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/70 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={11} className="text-amber-400" />
+                                  <span>Penugasan Event:</span>
+                                </span>
+                                <span className="text-amber-300">
+                                  {assignedCount} dipilih
+                                </span>
+                              </div>
+
+                              {availableEvents.length === 0 ? (
+                                <p className="text-[10px] text-slate-500 italic py-1">
+                                  Belum ada event terdaftar. Frame tidak akan muncul di event manapun sampai event ditugaskan.
+                                </p>
+                              ) : (
+                                <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                  {availableEvents.map((ev) => {
+                                    const isAssigned = (f.assignedEventIds || []).includes(ev.id);
+                                    return (
+                                      <label
+                                        key={ev.id}
+                                        className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-slate-800/80 cursor-pointer text-slate-300 hover:text-white transition-colors"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isAssigned}
+                                          onChange={(e) => {
+                                            const currentAssigned = Array.isArray(f.assignedEventIds)
+                                              ? f.assignedEventIds
+                                              : [];
+                                            const nextAssigned = e.target.checked
+                                              ? [...currentAssigned, ev.id]
+                                              : currentAssigned.filter((id) => id !== ev.id);
+                                            updateFrameAtIndex(globalIndex, { assignedEventIds: nextAssigned });
+                                          }}
+                                          className="w-3.5 h-3.5 accent-rose-500 rounded cursor-pointer"
+                                        />
+                                        <span className="truncate text-[11px]">{ev.name || ev.id}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Toggle: Aktif untuk Tamu */}
-                      <div className="pt-1.5 border-t border-slate-700/50 flex items-center justify-between text-[11px]">
+                      <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between text-[11px]">
                         <label className="font-medium text-slate-300 flex items-center gap-1.5 cursor-pointer">
                           <input
                             type="checkbox"
@@ -618,7 +750,7 @@ export default function FrameManagerModal({
         {/* FOOTER: Identik dengan tema gelap SessionManagerModal */}
         <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400 shrink-0">
           <div>
-            Perubahan nama dan status aktif frame tersimpan secara otomatis.
+            Perubahan nama, status aktif, dan penugasan event frame tersimpan secara otomatis.
           </div>
           <button
             type="button"
