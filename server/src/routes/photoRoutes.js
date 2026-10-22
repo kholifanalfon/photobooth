@@ -345,24 +345,32 @@ router.post('/upload', async (req, res) => {
     const relativeUrl = `/uploads/photos/${filename}`;
     const qrCodeDataUri = await generateQrDataUri(downloadPageUrl);
 
-    // Save to DB if safeSessionId and DATABASE_URL are present without bloating DB with multi-MB base64
+    // Save to DB if sessionId is a valid UUID and BoothSession exists in DB
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
     if (isUuid && process.env.DATABASE_URL) {
       try {
-        const truncatedDataUri = imageBase64.length > 256
-          ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
-          : imageBase64;
-
-        await prisma.capturedPhoto.create({
-          data: {
-            sessionId,
-            poseIndex: Number(poseIndex) || 0,
-            filePath: filepath,
-            imageDataUri: truncatedDataUri
-          }
+        const boothSession = await prisma.boothSession.findUnique({
+          where: { id: sessionId }
         });
+
+        if (boothSession) {
+          const truncatedDataUri = imageBase64.length > 256
+            ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
+            : imageBase64;
+
+          await prisma.capturedPhoto.create({
+            data: {
+              sessionId,
+              poseIndex: Number(poseIndex) || 0,
+              filePath: filepath,
+              imageDataUri: truncatedDataUri
+            }
+          });
+        }
       } catch (dbErr) {
-        console.error('Prisma DB error saving photo record:', dbErr.message);
+        if (process.env.NODE_ENV !== 'test') {
+          console.error('Prisma DB error saving photo record:', dbErr.message);
+        }
       }
     }
 

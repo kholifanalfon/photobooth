@@ -24,6 +24,7 @@ const memorySessions = new Map();
 // GET /api/sessions - List all sessions with photos and download links
 router.get('/', async (req, res) => {
   try {
+    const { eventId } = req.query;
     const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `${req.protocol}://${req.headers.host}` : 'http://localhost:5000');
 
     // 1. Gather photo files from uploads/photos and uploads
@@ -63,7 +64,12 @@ router.get('/', async (req, res) => {
     let dbSessions = [];
     if (process.env.DATABASE_URL) {
       try {
+        const where = {};
+        if (eventId) {
+          where.eventId = eventId;
+        }
         dbSessions = await prisma.boothSession.findMany({
+          where,
           orderBy: { createdAt: 'desc' },
           include: { photos: true, printJobs: true },
           take: 100
@@ -81,6 +87,7 @@ router.get('/', async (req, res) => {
     for (const dbs of dbSessions) {
       sessionMap.set(dbs.id, {
         id: dbs.id,
+        eventId: dbs.eventId || null,
         createdAt: dbs.createdAt && dbs.createdAt.toISOString ? dbs.createdAt.toISOString() : String(dbs.createdAt),
         status: dbs.status || 'COMPLETED',
         photoCount: dbs.photoCount || 1,
@@ -94,9 +101,13 @@ router.get('/', async (req, res) => {
 
     // Also include in-memory sessions if any
     for (const [memId, memSession] of memorySessions.entries()) {
+      if (eventId && memSession.eventId !== eventId) {
+        continue;
+      }
       if (!sessionMap.has(memId)) {
         sessionMap.set(memId, {
           id: memId,
+          eventId: memSession.eventId || null,
           createdAt: memSession.createdAt || new Date().toISOString(),
           status: memSession.status || 'ACTIVE',
           photoCount: memSession.photoCount || 1,
@@ -126,8 +137,12 @@ router.get('/', async (req, res) => {
       }
 
       if (!sessionMap.has(sessionId)) {
+        if (eventId) {
+          continue;
+        }
         sessionMap.set(sessionId, {
           id: sessionId,
+          eventId: null,
           createdAt: fileInfo.createdAt,
           status: 'COMPLETED',
           photoCount: 1,
@@ -165,12 +180,15 @@ router.get('/', async (req, res) => {
 // POST /api/sessions
 router.post('/', async (req, res) => {
   try {
-    const { frameTemplate = 'strip-classic', photoCount = 3, frameColor = '#FFFFFF', templateConfig } = req.body || {};
+    const { eventId, frameTemplate = 'strip-classic', photoCount = 3, frameColor = '#FFFFFF', templateConfig } = req.body || {};
+    const cleanEventId = (eventId && typeof eventId === 'string' && eventId.trim() !== '') ? eventId.trim() : null;
+
     let session;
     try {
       if (process.env.DATABASE_URL) {
         session = await prisma.boothSession.create({
           data: {
+            eventId: cleanEventId,
             frameTemplate: String(frameTemplate),
             photoCount: Number(photoCount) || 3,
             frameColor: String(frameColor),
@@ -188,6 +206,7 @@ router.post('/', async (req, res) => {
     if (!session) {
       session = {
         id: crypto.randomUUID(),
+        eventId: cleanEventId,
         frameTemplate: String(frameTemplate),
         photoCount: Number(photoCount) || 3,
         frameColor: String(frameColor),
