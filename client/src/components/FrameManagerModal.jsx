@@ -477,7 +477,7 @@ export default function FrameManagerModal({
 
                 return (
                   <motion.div
-                    key={f.id || idx}
+                    key={`fman-frame-${f.id || 'custom'}-${idx}`}
                     layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -531,7 +531,7 @@ export default function FrameManagerModal({
                             const heightPct = (slot.height / frameH) * 100;
                             return (
                               <div
-                                key={slot.id || sIdx}
+                                key={`fman-slot-${f.id || 'f'}-${slot.id !== undefined && slot.id !== null ? slot.id : sIdx}-${sIdx}`}
                                 style={{
                                   left: `${leftPct}%`,
                                   top: `${topPct}%`,

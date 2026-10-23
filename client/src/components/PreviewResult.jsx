@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Printer, QrCode, RefreshCcw, CheckCircle2, AlertCircle, Loader2, Layers, Image as ImageIcon, Check } from 'lucide-react';
+import { Printer, QrCode, RefreshCcw, CheckCircle2, AlertCircle, Loader2, Layers, Image as ImageIcon, Check, SlidersHorizontal } from 'lucide-react';
 import { composePhotosToFrame, renderPhotoToPaper } from '../utils/canvasCompositor.js';
 import QrModal from './QrModal.jsx';
 import ResetConfirmModal from './ResetConfirmModal.jsx';
@@ -31,22 +31,53 @@ export default function PreviewResult({
 
   // States for Full Frame vs Foto Saja (Raw Photo) printing
   const [printMode, setPrintMode] = useState('frame'); // 'frame' | 'raw'
-  const [selectedPoseIndices, setSelectedPoseIndices] = useState(() =>
-    Array.isArray(photos) && photos.length > 0 ? photos.map((_, idx) => idx) : []
-  );
+  const [selectedPoseIndices, setSelectedPoseIndices] = useState(() => {
+    const total = (initialCompositeUrl ? 1 : 0) + (Array.isArray(photos) ? photos.length : 0);
+    return Array.from({ length: total }, (_, idx) => idx);
+  });
   const [activePreviewPoseIndex, setActivePreviewPoseIndex] = useState(0);
   const [rawPhotoUrls, setRawPhotoUrls] = useState({});
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
+  const [uploadError, setUploadError] = useState(false);
 
   const printTimerRef = useRef(null);
   const isPrintingRef = useRef(false);
   const hasAutoPrintedRef = useRef(false);
+  const hasAutoSavedRef = useRef(false);
+  const isMountedRef = useRef(true);
   const printCancelRef = useRef(false);
   const printProgressInfoRef = useRef({ currentSheet: 1, totalSheets: 1 });
 
-  // Clear print timer on unmount
+  // Choice items for print selection: Full Frame composite + all pose photos
+  const choiceItems = [];
+  if (compositeUrl) {
+    choiceItems.push({
+      id: 'composite',
+      type: 'composite',
+      label: 'Full Frame',
+      url: compositeUrl,
+      isComposite: true
+    });
+  }
+  if (Array.isArray(photos)) {
+    photos.forEach((photo, idx) => {
+      if (!photo) return;
+      choiceItems.push({
+        id: `pose_${idx}`,
+        poseIndex: idx,
+        type: 'pose',
+        label: `Foto #${idx + 1}`,
+        url: rawPhotoUrls[idx] || photo,
+        isComposite: false
+      });
+    });
+  }
+
+  // Track component mounted status across async operations & clear print timer on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (printTimerRef.current) {
         clearTimeout(printTimerRef.current);
         printTimerRef.current = null;
@@ -54,17 +85,12 @@ export default function PreviewResult({
     };
   }, []);
 
-  // Sync selected poses when photos change (default: all photos selected)
+  // Sync selected poses when choice items change (default: all available choices selected by default)
   useEffect(() => {
-    if (Array.isArray(photos) && photos.length > 0) {
-      setSelectedPoseIndices((prev) => {
-        if (!prev || prev.length === 0 || prev.some((idx) => idx >= photos.length)) {
-          return photos.map((_, idx) => idx);
-        }
-        return prev;
-      });
+    if (choiceItems.length > 0) {
+      setSelectedPoseIndices(choiceItems.map((_, idx) => idx));
     }
-  }, [photos]);
+  }, [compositeUrl, Array.isArray(photos) ? photos.length : 0]);
 
   // Handle escape key to dismiss Print Choice modal
   useEffect(() => {
@@ -80,11 +106,11 @@ export default function PreviewResult({
     }
   }, [isPrintChoiceOpen]);
 
-  // Compose Full Frame composite
+  // Compose Full Frame composite locally in canvas for instant preview
   useEffect(() => {
     let isSubscribed = true;
 
-    async function renderFrame() {
+    async function renderComposite() {
       if (!photos || photos.length === 0) return;
 
       try {
@@ -97,50 +123,38 @@ export default function PreviewResult({
 
         if (isSubscribed && res?.dataUrl) {
           setCompositeUrl(res.dataUrl);
+          setUploadError(false);
         }
       } catch (err) {
         if (typeof console !== 'undefined' && console.error) {
           console.error('Failed to compose photo frame:', err);
         }
+        if (isSubscribed) {
+          setUploadError(true);
+        }
       }
     }
 
-    renderFrame();
+    renderComposite();
 
     return () => {
       isSubscribed = false;
     };
   }, [photos, layoutConfig]);
 
-  // Read autoPrint config from localStorage once composite is ready (guarded against re-execution)
-  useEffect(() => {
-    if (!compositeUrl || hasAutoPrintedRef.current) return;
-
-    let printerConfig = {};
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        printerConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
-      } catch (e) {}
-    }
-
-    if (printerConfig.autoPrint) {
-      hasAutoPrintedRef.current = true;
-      handlePrint('frame');
-    }
-  }, [compositeUrl]);
-
-  // Auto-save session results (composite full frame + individual poses) to backend uploads/photos/
-  const hasAutoSavedRef = useRef(false);
+  // Auto-save session results (composite full frame + individual poses) to backend & database
   useEffect(() => {
     if (!compositeUrl || !photos || photos.length === 0 || hasAutoSavedRef.current) return;
     hasAutoSavedRef.current = true;
+
+    setIsUploading(true);
 
     async function autoSaveSession() {
       const activeSessionId = sessionId || `session_${Date.now()}`;
       const uploadEndpoint = resolveApiUrl('/api/photos/upload', apiBaseUrl);
 
-      // 1. Upload composite full frame
       try {
+        // 1. Upload composite full frame
         const compRes = await fetch(uploadEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -150,44 +164,83 @@ export default function PreviewResult({
             isComposite: true
           })
         });
+
         if (compRes.ok) {
           const compData = await compRes.json();
-          if (compData.qrCodeDataUri) setQrCodeDataUri(compData.qrCodeDataUri);
-          if (compData.downloadUrl) setDownloadUrl(compData.downloadUrl);
-        }
-      } catch (e) {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('Failed to auto-save composite frame:', e);
-        }
-      }
-
-      // 2. Upload each pose photo
-      for (let i = 0; i < photos.length; i++) {
-        const poseImg = photos[i];
-        if (!poseImg) continue;
-        try {
-          await fetch(uploadEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageBase64: poseImg,
-              sessionId: activeSessionId,
-              poseIndex: i + 1,
-              isComposite: false
-            })
-          });
-        } catch (e) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn(`Failed to auto-save pose ${i + 1}:`, e);
+          if (isMountedRef.current) {
+            if (compData.qrCodeDataUri) setQrCodeDataUri(compData.qrCodeDataUri);
+            if (compData.downloadUrl) setDownloadUrl(compData.downloadUrl);
           }
         }
+
+        // 2. Upload pose photos to server & database in parallel for optimal speed
+        const uploadedPoseUrls = {};
+        await Promise.all(
+          photos.map(async (poseImg, i) => {
+            if (!poseImg) return;
+            try {
+              const poseRes = await fetch(uploadEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  imageBase64: typeof poseImg === 'string' ? poseImg : (poseImg.url || poseImg.dataUrl || ''),
+                  sessionId: activeSessionId,
+                  poseIndex: i + 1,
+                  isComposite: false
+                })
+              });
+              if (poseRes.ok) {
+                const poseData = await poseRes.json();
+                if (poseData?.rawUrl || poseData?.relativeUrl) {
+                  uploadedPoseUrls[i] = resolveApiUrl(poseData.relativeUrl || poseData.rawUrl, apiBaseUrl);
+                }
+              }
+            } catch (pErr) {
+              if (typeof console !== 'undefined' && console.warn) {
+                console.warn(`Failed to upload pose ${i + 1}:`, pErr);
+              }
+            }
+          })
+        );
+
+        if (isMountedRef.current) {
+          setRawPhotoUrls(uploadedPoseUrls);
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('Failed to auto-save session to backend:', err);
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsUploading(false);
+        }
       }
     }
 
-    if (typeof fetch !== 'undefined') {
-      autoSaveSession();
-    }
+    autoSaveSession();
   }, [compositeUrl, photos, sessionId, apiBaseUrl]);
+
+  // Read autoPrint config from localStorage or prop once composite is ready and upload has finished
+  useEffect(() => {
+    if (!compositeUrl || isUploading || hasAutoPrintedRef.current) return;
+
+    let printerConfig = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        printerConfig = JSON.parse(window.localStorage.getItem('photobooth_landing_config') || '{}');
+      } catch (e) {}
+    }
+
+    const effectiveConfig = {
+      ...(propPrinterConfig || {}),
+      ...printerConfig
+    };
+
+    if (effectiveConfig.autoPrint) {
+      hasAutoPrintedRef.current = true;
+      handlePrint('frame');
+    }
+  }, [compositeUrl, isUploading]);
 
   const handleDownloadQr = async () => {
     const targetUrl = compositeUrl;
@@ -235,37 +288,37 @@ export default function PreviewResult({
     const activeIndices = overrideIndices !== undefined ? overrideIndices : selectedPoseIndices;
 
     if (activeMode === 'frame') {
-      if (!compositeUrl) return;
+      if (!compositeUrl || isUploading) return;
     } else {
-      if (activeIndices.length === 0) return;
+      if (activeIndices.length === 0 || isUploading) return;
     }
 
-    isPrintingRef.current = true;
-    printCancelRef.current = false;
-    printProgressInfoRef.current = { currentSheet: 1, totalSheets: 1 };
-    setIsPrinting(true);
-
     try {
+      isPrintingRef.current = true;
+      printCancelRef.current = false;
+      printProgressInfoRef.current = { currentSheet: 1, totalSheets: 1 };
+      setIsPrinting(true);
+
       // 1. Live server fetch to ensure latest printer configuration is always applied
       let freshServerConfig = null;
       if (typeof window !== 'undefined' && window.location && window.location.host) {
         try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200);
-        const res = await fetch(`/api/config/landing?t=${Date.now()}`, {
-          signal: controller.signal,
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data = await res.json();
-          freshServerConfig = data?.config || data;
-          if (freshServerConfig && typeof window !== 'undefined' && window.localStorage) {
-            try {
-              window.localStorage.setItem('photobooth_landing_config', JSON.stringify(freshServerConfig));
-            } catch (_) {}
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+          const res = await fetch(`/api/config/landing?t=${Date.now()}`, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            freshServerConfig = data?.config || data;
+            if (freshServerConfig && typeof window !== 'undefined' && window.localStorage) {
+              try {
+                window.localStorage.setItem('photobooth_landing_config', JSON.stringify(freshServerConfig));
+              } catch (_) {}
+            }
           }
-        }
         } catch (_) {}
       }
 
@@ -295,25 +348,32 @@ export default function PreviewResult({
         imagesToPrint.push(compositeUrl);
       } else {
         setPrintStatus('Menyiapkan lembar foto...');
-        const targetIndices = activeIndices.length > 0 ? activeIndices : [0];
+        const targetIndices = activeIndices.length > 0 ? activeIndices : choiceItems.map((_, i) => i);
         for (const idx of targetIndices) {
-          if (rawPhotoUrls[idx]) {
-            imagesToPrint.push(rawPhotoUrls[idx]);
-          } else if (photos[idx]) {
-            try {
-              const res = await renderPhotoToPaper(photos[idx], {
-                paperSize: layoutConfig?.customFrame?.paperSize || '4R',
-                orientation: layoutConfig?.customFrame?.orientation || 'portrait',
-                customFrame: layoutConfig?.customFrame
-              });
-              if (res?.dataUrl) {
-                setRawPhotoUrls((prev) => ({ ...prev, [idx]: res.dataUrl }));
-                imagesToPrint.push(res.dataUrl);
-              } else {
-                imagesToPrint.push(photos[idx]);
+          const item = choiceItems[idx];
+          if (!item) continue;
+          if (item.isComposite) {
+            imagesToPrint.push(item.url);
+          } else {
+            const poseIdx = item.poseIndex !== undefined ? item.poseIndex : idx;
+            if (rawPhotoUrls[poseIdx]) {
+              imagesToPrint.push(rawPhotoUrls[poseIdx]);
+            } else if (photos[poseIdx]) {
+              try {
+                const res = await renderPhotoToPaper(photos[poseIdx], {
+                  paperSize: layoutConfig?.customFrame?.paperSize || '4R',
+                  orientation: layoutConfig?.customFrame?.orientation || 'portrait',
+                  customFrame: layoutConfig?.customFrame
+                });
+                if (res?.dataUrl) {
+                  setRawPhotoUrls((prev) => ({ ...prev, [poseIdx]: res.dataUrl }));
+                  imagesToPrint.push(res.dataUrl);
+                } else {
+                  imagesToPrint.push(photos[poseIdx]);
+                }
+              } catch (err) {
+                imagesToPrint.push(photos[poseIdx]);
               }
-            } catch (err) {
-              imagesToPrint.push(photos[idx]);
             }
           }
         }
@@ -327,6 +387,7 @@ export default function PreviewResult({
 
       if (printMethod === 'bluetooth') {
         const totalSheetsToPrint = imagesToPrint.length * copies;
+        printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
         setPrintStatus(`Menghubungkan Bluetooth (${totalSheetsToPrint} lembar)...`);
         try {
           if (typeof bluetoothPrinter !== 'undefined' && bluetoothPrinter.printImage) {
@@ -344,38 +405,21 @@ export default function PreviewResult({
             const btLabelSize = printerConfig.bluetoothLabelSize || '50x50';
             const btLabelWidthMm = Number(printerConfig.bluetoothLabelWidthMm ?? 50);
             const btLabelHeightMm = btLabelSize === 'continuous' ? 0 : Number(printerConfig.bluetoothLabelHeightMm ?? 50);
-            const btLabelType = Number(printerConfig.bluetoothLabelType ?? (btLabelHeightMm <= 0 ? 3 : 1));
             const btMarginMm = Number(printerConfig.bluetoothMarginMm ?? 0);
             const btFitMode = printerConfig.bluetoothFitMode || 'fit';
             const btAutoRotate = printerConfig.bluetoothAutoRotate !== false;
             const btOrientation = printerConfig.printOrientation || 'portrait';
 
-            console.log('🖨️ [Print Execution: PreviewResult] Output Params:', {
-              source: freshServerConfig ? 'Server Live Fetch' : (storedConfig.bluetoothBrightness !== undefined ? 'LocalStorage' : 'Prop/Default'),
-              preset: printerConfig.bluetoothBrightnessPreset,
-              density: btDensity,
-              brightness: btBrightness,
-              contrast: btContrast,
-              gamma: btGamma,
-              dither: btDither,
-              sharpen: btSharpen,
-              labelSize: `${btLabelWidthMm}x${btLabelHeightMm}mm`,
-              orientation: btOrientation
-            });
-
             let sheetCounter = 0;
-            printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
             for (let c = 0; c < copies; c++) {
+              if (printCancelRef.current) break;
               for (let i = 0; i < imagesToPrint.length; i++) {
-                if (printCancelRef.current) {
-                  throw new Error('Pencetakan dibatalkan oleh pengguna.');
-                }
+                if (printCancelRef.current) break;
                 sheetCounter++;
                 printProgressInfoRef.current = { currentSheet: sheetCounter, totalSheets: totalSheetsToPrint };
                 setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
                 await bluetoothPrinter.printImage(imagesToPrint[i], {
-                  printerModelPreset: printerConfig.printerModelPreset || undefined,
-                  labelType: btLabelType,
+                  printerModelPreset: printerConfig.printerModelPreset || 'b1_pro',
                   density: btDensity,
                   brightness: btBrightness,
                   contrast: btContrast,
@@ -389,40 +433,33 @@ export default function PreviewResult({
                   autoRotate: btAutoRotate,
                   orientation: btOrientation,
                   onProgress: (statusMsg) => {
-                    if (!printCancelRef.current) {
-                      setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
-                    }
+                    setPrintStatus(`Lembar ${sheetCounter}/${totalSheetsToPrint}: ${statusMsg}`);
                   }
                 });
-                if (printCancelRef.current) {
-                  throw new Error('Pencetakan dibatalkan oleh pengguna.');
-                }
-                if (sheetCounter < totalSheetsToPrint) {
+                if (sheetCounter < totalSheetsToPrint && !printCancelRef.current) {
                   await new Promise((r) => setTimeout(r, 600));
                 }
               }
             }
           }
-          setPrintStatus('Cetak Bluetooth Berhasil!');
-          if (printTimerRef.current) clearTimeout(printTimerRef.current);
-          printTimerRef.current = setTimeout(() => {
-            setPrintStatus(null);
-            printTimerRef.current = null;
-          }, 3000);
+          if (!printCancelRef.current) {
+            setPrintStatus('Cetak Bluetooth Berhasil!');
+            if (printTimerRef.current) clearTimeout(printTimerRef.current);
+            printTimerRef.current = setTimeout(() => {
+              setPrintStatus(null);
+              printTimerRef.current = null;
+            }, 3000);
+          }
         } catch (btErr) {
           if (typeof console !== 'undefined' && console.warn) {
             console.warn('Bluetooth print error:', btErr);
           }
-          if (printCancelRef.current || btErr?.message?.includes('dibatalkan')) {
-            setPrintStatus('Pencetakan dibatalkan.');
-          } else {
-            setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
-          }
+          setPrintStatus(`Bluetooth Error: ${btErr.message || 'Gagal cetak'}`);
           if (printTimerRef.current) clearTimeout(printTimerRef.current);
           printTimerRef.current = setTimeout(() => {
             setPrintStatus(null);
             printTimerRef.current = null;
-          }, printCancelRef.current ? 2000 : 4000);
+          }, 4000);
         } finally {
           isPrintingRef.current = false;
           setIsPrinting(false);
@@ -446,68 +483,63 @@ export default function PreviewResult({
           : 'Mengirim ke printer...'
       );
 
-      try {
-        const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
-        printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
-        for (let i = 0; i < imagesToPrint.length; i++) {
-          if (printCancelRef.current) {
-            throw new Error('Pencetakan dibatalkan oleh pengguna.');
-          }
-          printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
-          const res = await fetch(printEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              copies,
-              printerName,
-              sessionId: sessionId || undefined,
-              sheetIndex: i,
-              totalSheets: imagesToPrint.length,
-              imageBase64: imagesToPrint[i]
-            })
-          });
-
-          if (!res.ok) {
-            throw new Error(`Print server returned status ${res.status}`);
-          }
+      const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
+      printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
+      for (let i = 0; i < imagesToPrint.length; i++) {
+        if (printCancelRef.current) {
+          throw new Error('Pencetakan dibatalkan oleh pengguna.');
         }
+        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
+        const res = await fetch(printEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            copies,
+            printerName,
+            paperSize: printerConfig.paperSize || layoutConfig?.customFrame?.paperSize || '4R',
+            orientation: printerConfig.printOrientation || layoutConfig?.customFrame?.orientation || 'portrait',
+            sessionId: sessionId || undefined,
+            sheetIndex: i,
+            totalSheets: imagesToPrint.length,
+            imageUrl: imagesToPrint[i],
+            imageBase64: imagesToPrint[i]
+          })
+        });
 
-        setPrintStatus(
-          imagesToPrint.length > 1
-            ? `${imagesToPrint.length} lembar terkirim ke antrean cetak!`
-            : 'Terkirim ke antrean cetak!'
-        );
-
-        if (printTimerRef.current) {
-          clearTimeout(printTimerRef.current);
+        if (!res.ok) {
+          throw new Error(`Print server returned status ${res.status}`);
         }
+      }
+
+      setPrintStatus(
+        imagesToPrint.length > 1
+          ? `${imagesToPrint.length} lembar terkirim ke antrean cetak!`
+          : 'Terkirim ke antrean cetak!'
+      );
+
+      if (printTimerRef.current) {
+        clearTimeout(printTimerRef.current);
+      }
+      printTimerRef.current = setTimeout(() => {
+        setPrintStatus(null);
+        printTimerRef.current = null;
+      }, 3000);
+    } catch (err) {
+      if (printCancelRef.current || err?.message?.includes('dibatalkan')) {
+        setPrintStatus('Pencetakan dibatalkan.');
+        if (printTimerRef.current) clearTimeout(printTimerRef.current);
         printTimerRef.current = setTimeout(() => {
           setPrintStatus(null);
           printTimerRef.current = null;
-        }, 3000);
-      } catch (err) {
-        if (printCancelRef.current || err?.message?.includes('dibatalkan')) {
-          setPrintStatus('Pencetakan dibatalkan.');
-          if (printTimerRef.current) clearTimeout(printTimerRef.current);
-          printTimerRef.current = setTimeout(() => {
-            setPrintStatus(null);
-            printTimerRef.current = null;
-          }, 2000);
-        } else {
-          // Fallback: trigger native browser window print dialog
-          setPrintStatus(null);
-          if (typeof window !== 'undefined' && typeof window.print === 'function') {
-            window.print();
-          }
+        }, 2000);
+      } else {
+        // Fallback: trigger native browser window print dialog
+        setPrintStatus(null);
+        if (typeof window !== 'undefined' && typeof window.print === 'function') {
+          window.print();
         }
-      } finally {
-        isPrintingRef.current = false;
-        setIsPrinting(false);
       }
-    } catch (unexpectedErr) {
-      if (typeof console !== 'undefined' && console.error) {
-        console.error('Unexpected print error:', unexpectedErr);
-      }
+    } finally {
       isPrintingRef.current = false;
       setIsPrinting(false);
     }
@@ -527,8 +559,12 @@ export default function PreviewResult({
     }, 2000);
   };
 
-    const handlePrintButtonClick = () => {
+  const handlePrintButtonClick = () => {
+    if (isUploading) return;
     if (Array.isArray(photos) && photos.length > 0) {
+      if (choiceItems.length > 0) {
+        setSelectedPoseIndices(choiceItems.map((_, i) => i));
+      }
       setIsPrintChoiceOpen(true);
     } else {
       handlePrint('frame');
@@ -543,17 +579,47 @@ export default function PreviewResult({
     setCompositeUrl(null);
     setQrCodeDataUri(null);
     setDownloadUrl(null);
+    setRawPhotoUrls({});
+    hasAutoSavedRef.current = false;
+    hasAutoPrintedRef.current = false;
 
     if (onResetSession) {
       onResetSession();
     }
   };
 
-  const isPrintDisabled = isPrinting || !compositeUrl;
+  // Preview items for 1:1 view with SessionManagerModal (Full Frame + Raw Poses)
+  const previewItems = [];
+  if (compositeUrl) {
+    previewItems.push({
+      type: 'composite',
+      label: 'Full Frame',
+      url: compositeUrl,
+      isComposite: true
+    });
+  }
+  if (Array.isArray(photos)) {
+    photos.forEach((photo, idx) => {
+      if (!photo) return;
+      previewItems.push({
+        type: 'pose',
+        label: `Pose ${idx + 1}`,
+        url: rawPhotoUrls[idx] || photo,
+        isPose: true,
+        photoIndex: idx
+      });
+    });
+  }
+
+  const activePreviewItem = previewItems[activePreviewPoseIndex] || previewItems[0];
+  const activeImageUrl = activePreviewItem?.url || compositeUrl;
+
+  // Print button is strictly disabled while background upload to server is ongoing
+  const isPrintDisabled = isPrinting || isUploading || !compositeUrl;
 
   return (
     <div className="flex flex-col items-center justify-between h-full h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-800 p-2.5 sm:p-4 md:p-6 select-none overflow-hidden">
-      {/* 0: Compact Header without mode switcher tab */}
+      {/* 0: Compact Header */}
       <div className="text-center pt-0.5 pb-1 shrink-0 flex flex-col items-center">
         <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 mb-0.5">Hasil Fotomu Siap! 🎉</h2>
         <p className="text-slate-500 text-xs">
@@ -561,19 +627,67 @@ export default function PreviewResult({
         </p>
       </div>
 
-      {/* 1: Frame Preview (Full frame composite) */}
+      {/* 1: Frame Preview (Full frame composite by default, switchable to raw poses 1:1 with Kelola Sesi) */}
       <div className="h-[66vh] sm:h-[72vh] md:h-[75vh] w-full flex flex-col items-center justify-center my-auto shrink overflow-hidden">
         <div className="flex-1 flex items-center justify-center w-full min-h-0 overflow-hidden">
-          {compositeUrl ? (
+          {activeImageUrl ? (
             <img
-              src={compositeUrl}
-              alt="Composited Result"
+              src={activeImageUrl}
+              alt={activePreviewItem?.label || "Hasil Fotomu Siap!"}
               className="max-h-full w-auto max-w-[94vw] object-contain rounded-2xl shadow-xl border border-slate-200/80"
             />
+          ) : uploadError ? (
+            <div className="flex flex-col items-center justify-center p-6 text-center animate-fade-in bg-rose-50/70 border border-rose-200 rounded-2xl max-w-sm">
+              <AlertCircle size={36} className="text-rose-600 mb-2" />
+              <div className="font-bold text-slate-800 text-sm sm:text-base">Gagal Merender Komposit</div>
+              <div className="text-slate-500 text-xs mt-1">
+                Gagal memproses foto ke dalam frame. Silakan coba lagi.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadError(false);
+                  setCompositeUrl(null);
+                }}
+                className="mt-4 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RefreshCcw size={14} />
+                <span>Coba Lagi</span>
+              </button>
+            </div>
           ) : (
-            <div className="text-slate-400 text-xs sm:text-sm">Merender komposit...</div>
+            <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center animate-fade-in">
+              <Loader2 size={32} className="text-rose-500 animate-spin" />
+              <div className="text-slate-400 text-xs sm:text-sm">
+                Merender komposit...
+              </div>
+            </div>
           )}
         </div>
+
+        {/* Pose switcher tabs if session has multiple items (matching Kelola Sesi 1:1) */}
+        {previewItems.length > 1 && (
+          <div className="flex items-center justify-center gap-1.5 mt-2 overflow-x-auto max-w-full px-2 py-1 shrink-0">
+            {previewItems.map((item, idx) => {
+              const isSelected = (activePreviewPoseIndex === idx) || (!previewItems[activePreviewPoseIndex] && idx === 0);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setActivePreviewPoseIndex(idx)}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-rose-500 text-white shadow-xs'
+                      : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}
+                >
+                  {item.type === 'composite' ? <Layers size={13} /> : <ImageIcon size={13} />}
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 2: printStatus Message */}
@@ -602,26 +716,32 @@ export default function PreviewResult({
           onClick={handlePrintButtonClick}
           disabled={isPrintDisabled}
           type="button"
-          className="flex-1 min-w-[140px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 sm:flex-none min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-semibold rounded-xl shadow-xs flex items-center justify-center gap-1 text-xs sm:text-sm transition-all cursor-pointer disabled:cursor-not-allowed active:scale-98"
         >
-          <Printer size={15} className="shrink-0" />
-          <span>Print Foto</span>
+          {isPrinting ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : isUploading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Printer size={14} />
+          )}
+          <span>{isPrinting ? 'Mencetak...' : isUploading ? 'Menyimpan...' : 'Print Foto'}</span>
         </button>
 
         <button
           onClick={handleDownloadQr}
-          disabled={isUploading || !compositeUrl}
+          disabled={isPrintDisabled}
           type="button"
-          className="flex-1 min-w-[145px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="flex-1 sm:flex-none min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-semibold rounded-xl shadow-xs flex items-center justify-center gap-1 text-xs sm:text-sm transition-all cursor-pointer disabled:cursor-not-allowed active:scale-98"
         >
-          <QrCode size={15} className="shrink-0" />
+          {isUploading && !qrCodeDataUri ? <Loader2 size={14} className="animate-spin" /> : <QrCode size={14} />}
           <span>Download (QR)</span>
         </button>
 
         <button
           onClick={() => setIsResetOpen(true)}
           type="button"
-          className="w-full sm:w-auto min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
+          className="w-full sm:auto min-w-[130px] whitespace-nowrap py-2 sm:py-2.5 px-3 sm:px-4 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1 text-xs sm:text-sm transition-colors cursor-pointer active:scale-98"
         >
           <RefreshCcw size={14} className="text-slate-500 shrink-0" />
           <span>Mulai Sesi Baru</span>
@@ -720,68 +840,71 @@ export default function PreviewResult({
                   </div>
                 </button>
 
-                {/* Mode: Foto Saja */}
+                {/* Mode: Custom (Pilih Lembar) */}
                 <button
                   type="button"
-                  onClick={() => setPrintMode('raw')}
+                  onClick={() => {
+                    setPrintMode('custom');
+                    setSelectedPoseIndices(choiceItems.map((_, i) => i));
+                  }}
                   className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                    printMode === 'raw'
+                    printMode === 'custom' || printMode === 'raw'
                       ? 'border-rose-500 bg-rose-50/70 shadow-sm ring-2 ring-rose-400/30'
                       : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-2">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                      printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
+                      printMode === 'custom' || printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
                     }`}>
-                      <ImageIcon size={16} />
+                      <SlidersHorizontal size={16} />
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
+                      printMode === 'custom' || printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
                     }`}>
-                      {printMode === 'raw' && <Check size={11} strokeWidth={3} />}
+                      {(printMode === 'custom' || printMode === 'raw') && <Check size={11} strokeWidth={3} />}
                     </div>
                   </div>
                   <div>
-                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Foto Saja</div>
+                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Custom (Pilih Lembar)</div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                      Cetak lembar foto asli per pose tanpa bingkai
+                      Pilih bebas cetak foto dengan frame atau foto saja
                     </div>
                   </div>
                   <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
                     <span className="font-semibold text-slate-500">Terpilih:</span>
                     <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">
-                      {selectedPoseIndices.length} Pose
+                      {selectedPoseIndices.length} Lembar
                     </span>
                   </div>
                 </button>
               </div>
 
-              {/* Sub-section: Daftar Foto untuk Foto Saja */}
-              {printMode === 'raw' && Array.isArray(photos) && photos.length > 0 && (
+              {/* Sub-section: Daftar Foto untuk Custom (Menampilkan foto dengan frame & pose foto kamera) */}
+              {(printMode === 'custom' || printMode === 'raw') && choiceItems.length > 0 && (
                 <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 animate-fade-in">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-700">
-                      Pilih Foto ({selectedPoseIndices.length} dari {photos.length} terpilih):
+                      Pilih Lembar Cetak ({selectedPoseIndices.length} dari {choiceItems.length} terpilih):
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        if (selectedPoseIndices.length === photos.length) {
+                        if (selectedPoseIndices.length === choiceItems.length) {
                           setSelectedPoseIndices([]);
                         } else {
-                          setSelectedPoseIndices(photos.map((_, i) => i));
+                          setSelectedPoseIndices(choiceItems.map((_, i) => i));
                         }
                       }}
                       className="text-xs text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer"
                     >
-                      {selectedPoseIndices.length === photos.length ? 'Hapus Pilihan' : 'Pilih Semua'}
+                      {selectedPoseIndices.length === choiceItems.length ? 'Hapus Pilihan' : 'Pilih Semua'}
                     </button>
                   </div>
 
                   {/* Thumbnail grid */}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[32vh] overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200/80 custom-scrollbar">
-                    {photos.map((photo, idx) => {
+                    {choiceItems.map((item, idx) => {
                       const isChecked = selectedPoseIndices.includes(idx);
                       return (
                         <div
@@ -801,8 +924,8 @@ export default function PreviewResult({
                         >
                           <div className="w-full aspect-[3/4] relative overflow-hidden bg-slate-100">
                             <img
-                              src={photo}
-                              alt={`Foto ${idx + 1}`}
+                              src={item.url}
+                              alt={item.label}
                               className="w-full h-full object-cover"
                             />
                             {/* Checkbox badge */}
@@ -811,10 +934,17 @@ export default function PreviewResult({
                             }`}>
                               {isChecked ? <Check size={13} strokeWidth={3} /> : null}
                             </div>
+                            {/* Frame badge if composite */}
+                            {item.isComposite && (
+                              <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white flex items-center gap-0.5">
+                                <Layers size={9} className="text-rose-400" />
+                                <span>Frame</span>
+                              </div>
+                            )}
                           </div>
                           <div className="py-1 px-1.5 w-full text-center bg-white">
                             <span className={`text-[10px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
-                              Foto #{idx + 1}
+                              {item.label}
                             </span>
                           </div>
                         </div>
@@ -843,14 +973,20 @@ export default function PreviewResult({
 
               <button
                 type="button"
-                disabled={isPrinting || (printMode === 'raw' && selectedPoseIndices.length === 0)}
+                disabled={isPrinting || isUploading || ((printMode === 'custom' || printMode === 'raw') && selectedPoseIndices.length === 0)}
                 onClick={() => {
                   setIsPrintChoiceOpen(false);
                   handlePrint(printMode, selectedPoseIndices);
                 }}
                 className="flex-1 py-2.5 px-4 bg-slate-900 hover:bg-black disabled:opacity-40 text-white font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm transition-all cursor-pointer active:scale-98"
               >
-                {isPrinting ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+                {isPrinting ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : isUploading ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Printer size={15} />
+                )}
                 <span>
                   {isPrinting
                     ? 'Sedang Mencetak...'

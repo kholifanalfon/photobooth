@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -24,6 +25,21 @@ const tempChunksDir = path.resolve(uploadsDir, 'temp_chunks');
     fs.mkdirSync(dir, { recursive: true });
   }
 });
+
+function stringToUuid(str) {
+  if (!str) return crypto.randomUUID();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+    return str.toLowerCase();
+  }
+  const hash = crypto.createHash('md5').update(String(str)).digest('hex');
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    '4' + hash.substring(13, 16),
+    ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16) + hash.substring(18, 20),
+    hash.substring(20, 32)
+  ].join('-');
+}
 
 /**
  * Determine upload category/folder based on request metadata
@@ -345,28 +361,60 @@ router.post('/upload', async (req, res) => {
     const relativeUrl = `/uploads/photos/${filename}`;
     const qrCodeDataUri = await generateQrDataUri(downloadPageUrl);
 
-    // Save to DB if sessionId is a valid UUID and BoothSession exists in DB
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
-    if (isUuid && process.env.DATABASE_URL) {
+    // Save to DB and guarantee persistence in PostgreSQL
+    let savedToDb = false;
+    if (process.env.DATABASE_URL) {
       try {
-        const boothSession = await prisma.boothSession.findUnique({
-          where: { id: sessionId }
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+        const validSessionId = isUuid ? sessionId.toLowerCase() : stringToUuid(sessionId);
+
+        let boothSession = await prisma.boothSession.findUnique({
+          where: { id: validSessionId }
         });
 
-        if (boothSession) {
-          const truncatedDataUri = imageBase64.length > 256
-            ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
-            : imageBase64;
+        if (!boothSession) {
+          const defaultEvent = await prisma.event.findFirst({
+            where: { isDefault: true, status: 'ACTIVE' }
+          }) || await prisma.event.findFirst({
+            where: { status: 'ACTIVE' }
+          }) || await prisma.event.findFirst();
 
-          await prisma.capturedPhoto.create({
+          boothSession = await prisma.boothSession.create({
             data: {
-              sessionId,
-              poseIndex: Number(poseIndex) || 0,
-              filePath: filepath,
-              imageDataUri: truncatedDataUri
+              id: validSessionId,
+              eventId: defaultEvent?.id || null,
+              frameTemplate: 'custom',
+              photoCount: 1,
+              frameColor: '#FFFFFF',
+              templateConfig: !isUuid ? { legacySessionId: sessionId } : null,
+              storageUrl: sessionId,
+              status: isComposite ? 'COMPLETED' : 'ACTIVE',
+              completedAt: isComposite ? new Date() : null
             }
           });
+        } else if (isComposite) {
+          await prisma.boothSession.update({
+            where: { id: validSessionId },
+            data: {
+              status: 'COMPLETED',
+              completedAt: new Date()
+            }
+          }).catch(() => {});
         }
+
+        const truncatedDataUri = imageBase64.length > 256
+          ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
+          : imageBase64;
+
+        await prisma.capturedPhoto.create({
+          data: {
+            sessionId: validSessionId,
+            poseIndex: Number(poseIndex) || (isComposite ? 0 : 1),
+            filePath: filepath,
+            imageDataUri: truncatedDataUri
+          }
+        });
+        savedToDb = true;
       } catch (dbErr) {
         if (process.env.NODE_ENV !== 'test') {
           console.error('Prisma DB error saving photo record:', dbErr.message);
@@ -376,6 +424,7 @@ router.post('/upload', async (req, res) => {
 
     return res.json({
       success: true,
+      savedToDb,
       downloadUrl: downloadPageUrl,
       rawUrl: rawFileUrl,
       relativeUrl,

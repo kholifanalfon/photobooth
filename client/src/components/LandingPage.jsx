@@ -168,13 +168,19 @@ export default function LandingPage({
   const [isSwitchEventModalOpen, setIsSwitchEventModalOpen] = useState(false);
   const [isEventManagerModalOpen, setIsEventManagerModalOpen] = useState(false);
 
+  const lastInitialConfigRef = useRef(null);
+
   // Keep config in sync if initialConfig updates from parent (e.g. active event change)
   useEffect(() => {
     if (initialConfig && typeof initialConfig === "object") {
-      setConfig((prev) => ({
-        ...prev,
-        ...initialConfig
-      }));
+      const serialized = JSON.stringify(initialConfig);
+      if (serialized !== lastInitialConfigRef.current) {
+        lastInitialConfigRef.current = serialized;
+        setConfig((prev) => ({
+          ...prev,
+          ...initialConfig
+        }));
+      }
     }
   }, [initialConfig]);
 
@@ -195,8 +201,9 @@ export default function LandingPage({
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (isMounted && data && data.config) {
+            let nextConfig = null;
             setConfig((prev) => {
-              const next = {
+              nextConfig = {
                 ...prev,
                 ...data.config,
                 coupleNames: data.config.coupleNames || prev.coupleNames || 'Kevin & Sheila',
@@ -208,16 +215,19 @@ export default function LandingPage({
                     : prev.customFrames,
                 customFrame: data.config.customFrame || prev.customFrame
               };
+              return nextConfig;
+            });
+            if (nextConfig) {
+              lastInitialConfigRef.current = JSON.stringify(nextConfig);
               if (typeof window !== 'undefined' && window.localStorage) {
                 try {
-                  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+                  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextConfig));
                 } catch (_) {}
               }
               if (typeof onConfigChange === 'function') {
-                onConfigChange(next);
+                onConfigChange(nextConfig);
               }
-              return next;
-            });
+            }
           }
         })
         .catch((err) => console.warn('Failed to load landing config from server:', err));
@@ -277,47 +287,49 @@ export default function LandingPage({
   }, []);
 
   const handleUpdateConfig = (updates) => {
-    setConfig((prev) => {
-      const next = { ...prev, ...updates };
-      if (typeof window !== 'undefined' && window.localStorage) {
-        try {
-          window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
-        } catch (_) {}
-      }
-      // Persist frame updates to the dedicated frames config store
-      if (typeof window !== 'undefined' && typeof fetch === 'function') {
-        const hasFrameUpdates = Object.prototype.hasOwnProperty.call(updates || {}, 'customFrames') ||
-          Object.prototype.hasOwnProperty.call(updates || {}, 'customFrame');
+    const next = { ...config, ...updates };
+    setConfig(next);
+    lastInitialConfigRef.current = JSON.stringify(next);
 
-        if (hasFrameUpdates) {
-          fetch('/api/config/frames', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customFrames: next.customFrames,
-              customFrame: next.customFrame
-            })
-          }).catch((err) => console.warn('Failed to sync frame config to server:', err));
-        }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+      } catch (_) {}
+    }
 
-        // Persist landing config without frame data (exclude volatile blob: URLs)
-        const payload = { ...next };
-        delete payload.customFrames;
-        delete payload.customFrame;
-        if (payload.videoUrl && payload.videoUrl.startsWith('blob:')) {
-          delete payload.videoUrl;
-        }
-        fetch('/api/config/landing', {
+    // Persist frame updates to the dedicated frames config store
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      const hasFrameUpdates = Object.prototype.hasOwnProperty.call(updates || {}, 'customFrames') ||
+        Object.prototype.hasOwnProperty.call(updates || {}, 'customFrame');
+
+      if (hasFrameUpdates) {
+        fetch('/api/config/frames', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch((err) => console.warn('Failed to sync landing config to server:', err));
+          body: JSON.stringify({
+            customFrames: next.customFrames,
+            customFrame: next.customFrame
+          })
+        }).catch((err) => console.warn('Failed to sync frame config to server:', err));
       }
-      if (typeof onConfigChange === 'function') {
-        onConfigChange(next);
+
+      // Persist landing config without frame data (exclude volatile blob: URLs)
+      const payload = { ...next };
+      delete payload.customFrames;
+      delete payload.customFrame;
+      if (payload.videoUrl && payload.videoUrl.startsWith('blob:')) {
+        delete payload.videoUrl;
       }
-      return next;
-    });
+      fetch('/api/config/landing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch((err) => console.warn('Failed to sync landing config to server:', err));
+    }
+
+    if (typeof onConfigChange === 'function') {
+      onConfigChange(next);
+    }
   };
 
   const handleGoLive = (e) => {
@@ -659,6 +671,7 @@ export default function LandingPage({
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
           {isImageMedia ? (
             <img
+              key={`bg-img-${config.videoUrl}`}
               src={resolveMediaUrl(config.videoUrl)}
               alt="Ambient Background"
               className="w-full h-full object-cover scale-105 filter blur-[2px] opacity-85 transition-opacity duration-700"

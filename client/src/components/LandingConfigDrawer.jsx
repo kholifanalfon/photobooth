@@ -528,61 +528,71 @@ export default function LandingConfigDrawer({
               </div>
 
               {/* Quick Go Live Action Banner */}
-              <div className="px-4 py-2.5 bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-amber-500/10 border-b border-rose-100 flex items-center justify-between">
+              <div className="px-4 py-3 bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-amber-500/10 border-b border-rose-100 flex flex-col gap-2.5">
                 {config.isLive ? (
-                  <>
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-800 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-emerald-800 font-semibold">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      </span>
                       <span>Mode Live Kiosk Aktif</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => onUpdateConfig({ isLive: false })}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs shadow-2xs transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-600 font-bold text-xs shadow-2xs transition-all cursor-pointer whitespace-nowrap"
                       title="Matikan Mode Live dan kembali ke mode normal"
                     >
-                      <Lock size={11} className="text-rose-500" />
+                      <Lock size={12} className="text-rose-500" />
                       <span>Matikan Live</span>
                     </button>
-                  </>
+                  </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-1.5 text-xs text-rose-950 font-medium">
-                      <Play size={13} className="text-rose-500 fill-rose-500" />
-                      <span>Siap mulai sesi photobooth?</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {onOpenEventManager && (
-                        <button
-                          type="button"
-                          onClick={onOpenEventManager}
-                          title="Buka Kelola Event Photobooth (Multi-Event)"
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white border border-rose-200 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs transition-all cursor-pointer"
-                        >
-                          <Calendar size={12} className="text-rose-500" />
-                          <span>Kelola Event</span>
-                        </button>
-                      )}
-                      {onOpenSessions && (
-                        <button
-                          type="button"
-                          onClick={onOpenSessions}
-                          title="Buka Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white border border-rose-200 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs transition-all cursor-pointer"
-                        >
-                          <FolderArchive size={12} className="text-rose-500" />
-                          <span>Kelola Sesi</span>
-                        </button>
-                      )}
+                    {/* Top Row: Status prompt & Primary CTA */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs text-rose-950 font-semibold min-w-0">
+                        <Play size={13} className="text-rose-500 fill-rose-500 shrink-0" />
+                        <span className="truncate">Siap mulai sesi photobooth?</span>
+                      </div>
                       <button
                         type="button"
                         onClick={onGoLive}
-                        className="flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-[0.98]"
                       >
                         <span>Go Live</span>
-                        <Play size={11} className="fill-white" />
+                        <Play size={11} className="fill-white shrink-0" />
                       </button>
                     </div>
+
+                    {/* Bottom Row: Management Quick Access */}
+                    {(onOpenEventManager || onOpenSessions) && (
+                      <div className={`grid ${onOpenEventManager && onOpenSessions ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-0.5`}>
+                        {onOpenEventManager && (
+                          <button
+                            type="button"
+                            onClick={onOpenEventManager}
+                            title="Buka Kelola Event Photobooth (Multi-Event)"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white border border-rose-200/90 hover:border-rose-300 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-[0.98]"
+                          >
+                            <Calendar size={13} className="text-rose-500 shrink-0" />
+                            <span>Kelola Event</span>
+                          </button>
+                        )}
+                        {onOpenSessions && (
+                          <button
+                            type="button"
+                            onClick={onOpenSessions}
+                            title="Buka Kelola Sesi Foto (Preview, Print, Download, QR, Hapus)"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white border border-rose-200/90 hover:border-rose-300 text-rose-700 hover:text-rose-800 font-bold text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-[0.98]"
+                          >
+                            <FolderArchive size={13} className="text-rose-500 shrink-0" />
+                            <span>Kelola Sesi</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

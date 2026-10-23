@@ -19,6 +19,22 @@ import {
   isAdminSessionExpired
 } from './utils/adminSession.js';
 
+const DEFAULT_LANDING_CONFIG = {
+  title: 'Capture The Magic! ✨',
+  subtitle: 'Sentuh tombol untuk membuka kotak hadiah dan memulai sesi fotomu.',
+  eventDate: 'Saturday, 17 October 2026',
+  coupleNames: 'Kevin & Sheila',
+  footerText: 'Scan QR di hasil cetak untuk mengunduh fotomu • Free high-res download',
+  videoUrl: '',
+  enableVideo: false,
+  videoRatio: 'auto',
+  videoDisplayMode: 'both',
+  theme: 'general',
+  printCopies: 1,
+  paperSize: '4R',
+  autoPrint: false
+};
+
 export default function App() {
   const [currentStep, setCurrentStep] = useState('LANDING'); // EVENT_SELECT | LANDING | FRAME_PICKER | CAMERA | PREVIEW | DOWNLOAD
   const [eventsList, setEventsList] = useState([]);
@@ -307,29 +323,48 @@ export default function App() {
 
   const effectiveLandingConfig = useMemo(() => {
     if (!landingConfig && !activeEvent) return null;
+    const eventCfg = activeEvent?.config || {};
     const base = landingConfig || {};
-    if (!activeEvent) return base;
-
-    const eventCfg = activeEvent.config || {};
     return {
-      ...base,
+      ...DEFAULT_LANDING_CONFIG,
       ...eventCfg,
-      title: eventCfg.title || eventCfg.eventTitle || base.title,
-      subtitle: eventCfg.subtitle || eventCfg.eventSubtitle || base.subtitle,
-      coupleNames: eventCfg.coupleNames || base.coupleNames,
-      eventDate: eventCfg.eventDate || base.eventDate,
-      footerText: eventCfg.footerText || base.footerText,
-      theme: eventCfg.theme || base.theme || 'general',
-      videoUrl: eventCfg.videoUrl || eventCfg.videoBgUrl || base.videoUrl || '',
-      enableVideo: Boolean(eventCfg.videoUrl || eventCfg.videoBgUrl || base.enableVideo),
-      printCopies: eventCfg.printCopies !== undefined ? eventCfg.printCopies : base.printCopies,
-      paperSize: eventCfg.paperSize || base.paperSize || '4R',
-      autoPrint: eventCfg.autoPrint !== undefined ? eventCfg.autoPrint : base.autoPrint
+      ...base,
+      title: base.title || eventCfg.title || eventCfg.eventTitle || DEFAULT_LANDING_CONFIG.title,
+      subtitle: base.subtitle || eventCfg.subtitle || eventCfg.eventSubtitle || DEFAULT_LANDING_CONFIG.subtitle,
+      coupleNames: base.coupleNames || eventCfg.coupleNames || DEFAULT_LANDING_CONFIG.coupleNames,
+      eventDate: base.eventDate || eventCfg.eventDate || DEFAULT_LANDING_CONFIG.eventDate,
+      footerText: base.footerText || eventCfg.footerText || DEFAULT_LANDING_CONFIG.footerText,
+      theme: base.theme || eventCfg.theme || DEFAULT_LANDING_CONFIG.theme || 'general',
+      videoUrl: base.videoUrl !== undefined ? base.videoUrl : (eventCfg.videoUrl || eventCfg.videoBgUrl || ''),
+      enableVideo: base.enableVideo !== undefined ? Boolean(base.enableVideo) : Boolean(eventCfg.videoUrl || eventCfg.videoBgUrl || eventCfg.enableVideo),
+      printCopies: base.printCopies !== undefined ? base.printCopies : (eventCfg.printCopies !== undefined ? eventCfg.printCopies : DEFAULT_LANDING_CONFIG.printCopies),
+      paperSize: base.paperSize || eventCfg.paperSize || DEFAULT_LANDING_CONFIG.paperSize || '4R',
+      autoPrint: base.autoPrint !== undefined ? base.autoPrint : (eventCfg.autoPrint !== undefined ? eventCfg.autoPrint : DEFAULT_LANDING_CONFIG.autoPrint)
     };
   }, [landingConfig, activeEvent]);
 
+  const handleConfigChange = (newCfg) => {
+    setLandingConfig(newCfg);
+    if (activeEvent?.id) {
+      const updatedConfig = {
+        ...(activeEvent.config || {}),
+        ...newCfg
+      };
+      setActiveEvent((prev) => (prev ? { ...prev, config: updatedConfig } : null));
+
+      fetch(resolveApiUrl(`/api/events/${activeEvent.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: updatedConfig })
+      }).catch((err) => console.warn('Failed to sync event config to backend:', err));
+    }
+  };
+
   const handleSelectEvent = async (event) => {
     setActiveEvent(event);
+    if (event?.config) {
+      setLandingConfig(event.config);
+    }
     if (typeof window !== 'undefined' && window.localStorage && event?.id) {
       try {
         window.localStorage.setItem('photobooth_active_event_id', event.id);
@@ -482,7 +517,7 @@ export default function App() {
           {currentStep === 'LANDING' && (
             <LandingPage
               initialConfig={effectiveLandingConfig}
-              onConfigChange={(newCfg) => setLandingConfig(newCfg)}
+              onConfigChange={handleConfigChange}
               onStartSession={handleStartLanding}
               isLiveMode={isLiveMode}
               hasMultipleEvents={eventsList.filter((e) => e && e.status !== 'INACTIVE').length > 1}

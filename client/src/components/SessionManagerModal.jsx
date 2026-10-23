@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
+  SlidersHorizontal,
   Search,
   RefreshCw,
   Printer,
@@ -111,34 +112,104 @@ export default function SessionManagerModal({
     }, 2000);
   };
 
-    const handleOpenPreview = (session, initialIndex = 0) => {
+  // Helper to resolve composite frame URL from session
+  const getCompositeUrl = (session) => {
+    if (!session) return null;
+    if (session.compositeUrl) return session.compositeUrl;
+    if (Array.isArray(session.photos)) {
+      const comp = session.photos.find(
+        (p) =>
+          p &&
+          (p.isComposite ||
+            (p.filename && p.filename.includes("_composite_")) ||
+            (p.url && p.url.includes("_composite_")))
+      );
+      if (comp?.url) return comp.url;
+    }
+    return null;
+  };
+
+  // Helper to filter out composite frame images from raw pose photos
+  const getRawPoses = (session) => {
+    if (!session || !Array.isArray(session.photos)) return [];
+    const compUrl = getCompositeUrl(session);
+    return session.photos.filter((p) => {
+      if (!p) return false;
+      const isComp =
+        p.isComposite ||
+        (p.filename && p.filename.includes("_composite_")) ||
+        (p.url && p.url.includes("_composite_")) ||
+        (compUrl && p.url === compUrl);
+      return !isComp;
+    });
+  };
+
+  // Choice items for print selection: Full Frame composite + all raw pose photos
+  const getSessionChoiceItems = (session) => {
+    if (!session) return [];
+    const items = [];
+    const compUrl = getCompositeUrl(session);
+    if (compUrl) {
+      items.push({
+        id: 'composite',
+        type: 'composite',
+        label: 'Full Frame',
+        url: compUrl,
+        filename: `composite_${session.id ? String(session.id).slice(0, 8) : 'session'}.jpg`,
+        isComposite: true
+      });
+    }
+    const rawPoses = getRawPoses(session);
+    rawPoses.forEach((p, idx) => {
+      const pUrl = p?.url || (typeof p === 'string' ? p : null);
+      if (pUrl) {
+        items.push({
+          id: `pose_${idx}`,
+          poseIndex: idx,
+          type: 'pose',
+          label: `Foto #${idx + 1}`,
+          url: pUrl,
+          filename: p.filename || `pose_${idx + 1}.jpg`,
+          size: p.size,
+          isComposite: false,
+          photoObj: p
+        });
+      }
+    });
+    return items;
+  };
+
+  const handleOpenPreview = (session, initialIndex = 0) => {
     setPreviewPhoto(session);
     setPreviewActiveIndex(initialIndex);
     setPrintStatus(null);
-    setPrintMode('frame');
-    const poses = Array.isArray(session?.photos) ? session.photos : [];
-    setSelectedPoseIndices(poses.length > 0 ? poses.map((_, i) => i) : [0]);
+    setPrintMode("frame");
+    const choices = getSessionChoiceItems(session);
+    setSelectedPoseIndices(choices.length > 0 ? choices.map((_, i) => i) : [0]);
   };
 
   const previewItems = useMemo(() => {
     if (!previewPhoto) return [];
     const items = [];
-    if (previewPhoto.compositeUrl) {
+    const compUrl = getCompositeUrl(previewPhoto);
+    if (compUrl) {
       items.push({
         type: 'composite',
         label: 'Full Frame',
-        url: previewPhoto.compositeUrl,
+        url: compUrl,
         filename: `composite_${previewPhoto.id ? String(previewPhoto.id).slice(0, 8) : 'session'}.jpg`,
         isComposite: true
       });
     }
     if (Array.isArray(previewPhoto.photos)) {
-      previewPhoto.photos.forEach((p, idx) => {
-        if (p?.url) {
+      const rawPoses = getRawPoses(previewPhoto);
+      rawPoses.forEach((p, idx) => {
+        const pUrl = p?.url || (typeof p === 'string' ? p : null);
+        if (pUrl) {
           items.push({
             type: 'pose',
             label: `Pose ${idx + 1}`,
-            url: p.url,
+            url: pUrl,
             filename: p.filename || `pose_${idx + 1}.jpg`,
             size: p.size,
             isPose: true,
@@ -262,16 +333,16 @@ export default function SessionManagerModal({
     if (forcedPhotoUrl) {
       imagesToPrint.push(resolveApiUrl(forcedPhotoUrl));
     } else if (mode === 'frame') {
-      const composite = targetSession.compositeUrl || targetSession.photos?.[0]?.url;
+      const composite = getCompositeUrl(targetSession) || targetSession.photos?.[0]?.url;
       if (composite) {
         imagesToPrint.push(resolveApiUrl(composite));
       }
     } else {
-      const poses = Array.isArray(targetSession.photos) ? targetSession.photos : [];
-      const targetIndices = activeIndices.length > 0 ? activeIndices : poses.map((_, i) => i);
+      const choiceItems = getSessionChoiceItems(targetSession);
+      const targetIndices = activeIndices.length > 0 ? activeIndices : choiceItems.map((_, i) => i);
       targetIndices.forEach((idx) => {
-        const photo = poses[idx];
-        const pUrl = photo?.url || photo;
+        const item = choiceItems[idx];
+        const pUrl = item?.url;
         if (pUrl) {
           imagesToPrint.push(resolveApiUrl(pUrl));
         }
@@ -493,10 +564,10 @@ export default function SessionManagerModal({
     if (specificPhotoUrl) {
       return handleExecutePrint(session, 'raw', [0], specificPhotoUrl);
     }
-    const poses = Array.isArray(session?.photos) ? session.photos : [];
+    const choices = getSessionChoiceItems(session);
     setPrintChoiceSession(session);
     setPrintMode('frame');
-    setSelectedPoseIndices(poses.length > 0 ? poses.map((_, i) => i) : [0]);
+    setSelectedPoseIndices(choices.length > 0 ? choices.map((_, i) => i) : [0]);
     setIsPrintChoiceOpen(true);
   };
 
@@ -1053,8 +1124,8 @@ export default function SessionManagerModal({
               <button
                 onClick={() => {
                   setPrintMode('frame');
-                  const count = Array.isArray(previewPhoto.photos) ? previewPhoto.photos.length : 0;
-                  setSelectedPoseIndices(count > 0 ? Array.from({ length: count }, (_, i) => i) : [0]);
+                  const rawPoses = getRawPoses(previewPhoto);
+                  setSelectedPoseIndices(rawPoses.length > 0 ? rawPoses.map((_, i) => i) : [0]);
                   setIsPrintChoiceOpen(true);
                 }}
                 disabled={isPrinting || (!previewPhoto.compositeUrl && (!previewPhoto.photos || previewPhoto.photos.length === 0))}
@@ -1165,76 +1236,81 @@ export default function SessionManagerModal({
                   </div>
                 </button>
 
-                {/* Mode: Foto Saja */}
+                {/* Mode: Custom (Pilih Lembar) */}
                 <button
                   type="button"
-                  onClick={() => setPrintMode('raw')}
+                  onClick={() => {
+                    setPrintMode('custom');
+                    const currentSess = previewPhoto || printChoiceSession;
+                    const choiceItems = getSessionChoiceItems(currentSess);
+                    setSelectedPoseIndices(choiceItems.map((_, i) => i));
+                  }}
                   className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                    printMode === 'raw'
+                    printMode === 'custom' || printMode === 'raw'
                       ? 'border-rose-500 bg-rose-50/70 shadow-sm ring-2 ring-rose-400/30'
                       : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-2">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                      printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
+                      printMode === 'custom' || printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
                     }`}>
-                      <ImageIcon size={16} />
+                      <SlidersHorizontal size={16} />
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
+                      printMode === 'custom' || printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
                     }`}>
-                      {printMode === 'raw' && <Check size={11} strokeWidth={3} />}
+                      {(printMode === 'custom' || printMode === 'raw') && <Check size={11} strokeWidth={3} />}
                     </div>
                   </div>
                   <div>
-                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Foto Saja</div>
+                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Custom (Pilih Lembar)</div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                      Cetak lembar foto asli per pose tanpa bingkai
+                      Pilih bebas cetak foto dengan frame atau foto saja
                     </div>
                   </div>
                   <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
                     <span className="font-semibold text-slate-500">Terpilih:</span>
                     <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">
-                      {selectedPoseIndices.length} Pose
+                      {selectedPoseIndices.length} Lembar
                     </span>
                   </div>
                 </button>
               </div>
 
-              {/* Sub-section: Daftar Foto untuk Foto Saja */}
-              {printMode === 'raw' && (
+              {/* Sub-section: Daftar Lembar untuk Pilihan Custom */}
+              {(printMode === 'custom' || printMode === 'raw') && (
                 (() => {
                   const currentSess = previewPhoto || printChoiceSession;
-                  const poses = Array.isArray(currentSess?.photos) ? currentSess.photos : [];
-                  if (poses.length === 0) return null;
+                  const choiceItems = getSessionChoiceItems(currentSess);
+                  if (choiceItems.length === 0) return null;
 
                   return (
                     <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 animate-fade-in">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-slate-700">
-                          Pilih Foto ({selectedPoseIndices.length} dari {poses.length} terpilih):
+                          Pilih Lembar Cetak ({selectedPoseIndices.length} dari {choiceItems.length} terpilih):
                         </span>
                         <button
                           type="button"
                           onClick={() => {
-                            if (selectedPoseIndices.length === poses.length) {
+                            if (selectedPoseIndices.length === choiceItems.length) {
                               setSelectedPoseIndices([]);
                             } else {
-                              setSelectedPoseIndices(poses.map((_, i) => i));
+                              setSelectedPoseIndices(choiceItems.map((_, i) => i));
                             }
                           }}
                           className="text-xs text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer"
                         >
-                          {selectedPoseIndices.length === poses.length ? 'Hapus Pilihan' : 'Pilih Semua'}
+                          {selectedPoseIndices.length === choiceItems.length ? 'Hapus Pilihan' : 'Pilih Semua'}
                         </button>
                       </div>
 
                       {/* Thumbnail grid */}
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[32vh] overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200/80 custom-scrollbar">
-                        {poses.map((photo, idx) => {
+                        {choiceItems.map((item, idx) => {
                           const isChecked = selectedPoseIndices.includes(idx);
-                          const photoUrl = photo?.url || photo;
+                          const photoUrl = item?.url;
                           return (
                             <div
                               key={idx}
@@ -1254,7 +1330,7 @@ export default function SessionManagerModal({
                               <div className="w-full aspect-[3/4] relative overflow-hidden bg-slate-100">
                                 <img
                                   src={resolveApiUrl(photoUrl)}
-                                  alt={`Pose ${idx + 1}`}
+                                  alt={item.label}
                                   className="w-full h-full object-cover"
                                 />
                                 {/* Checkbox badge */}
@@ -1263,10 +1339,17 @@ export default function SessionManagerModal({
                                 }`}>
                                   {isChecked ? <Check size={13} strokeWidth={3} /> : null}
                                 </div>
+                                {/* Frame badge if composite */}
+                                {item.isComposite && (
+                                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white flex items-center gap-0.5">
+                                    <Layers size={9} className="text-rose-400" />
+                                    <span>Frame</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="py-1 px-1.5 w-full text-center bg-white">
                                 <span className={`text-[10px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
-                                  Pose #{idx + 1}
+                                  {item.label}
                                 </span>
                               </div>
                             </div>
