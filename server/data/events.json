@@ -466,7 +466,7 @@
       "bluetoothSharpen": true,
       "isSubtitleCustom": false,
       "printOrientation": "landscape",
-      "videoDisplayMode": "both",
+      "videoDisplayMode": "background",
       "bluetoothContrast": 1.1,
       "bluetoothMarginMm": 0,
       "countdownDuration": 3,
@@ -482,6 +482,6 @@
       "bluetoothBrightnessPreset": "seimbang"
     },
     "createdAt": "2026-10-22T05:16:30.834Z",
-    "updatedAt": "2026-10-23T03:38:20.057Z"
+    "updatedAt": "2026-10-23T03:51:39.693Z"
   }
 ]

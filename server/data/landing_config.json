@@ -27,7 +27,7 @@
   "bluetoothSharpen": true,
   "isSubtitleCustom": false,
   "printOrientation": "landscape",
-  "videoDisplayMode": "both",
+  "videoDisplayMode": "background",
   "bluetoothContrast": 1.1,
   "bluetoothMarginMm": 0,
   "countdownDuration": 3,

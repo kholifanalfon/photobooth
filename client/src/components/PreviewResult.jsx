@@ -39,6 +39,8 @@ export default function PreviewResult({
   const [rawPhotoUrls, setRawPhotoUrls] = useState({});
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [uploadError, setUploadError] = useState(false);
+  const [fullFrameCopies, setFullFrameCopies] = useState(1);
+  const [itemCopies, setItemCopies] = useState({});
 
   const printTimerRef = useRef(null);
   const isPrintingRef = useRef(false);
@@ -275,7 +277,7 @@ export default function PreviewResult({
     }
   };
 
-  const handlePrint = async (overrideMode, overrideIndices) => {
+  const handlePrint = async (overrideMode, overrideIndices, overrideCopies) => {
     // Concurrency guard: ignore duplicate triggers while active print job is running
     if (isPrintingRef.current) {
       if (typeof console !== 'undefined' && console.warn) {
@@ -342,22 +344,24 @@ export default function PreviewResult({
       const copies = Math.min(Math.max(1, Number(printerConfig.printCopies) || 1), 3);
       const printerName = printerConfig.printerName || 'Default System Printer';
 
-      const imagesToPrint = [];
+      const printJobs = [];
 
       if (activeMode === 'frame') {
-        imagesToPrint.push(compositeUrl);
+        const frameCopies = overrideCopies !== undefined ? overrideCopies : fullFrameCopies;
+        printJobs.push({ url: compositeUrl, copies: frameCopies });
       } else {
         setPrintStatus('Menyiapkan lembar foto...');
         const targetIndices = activeIndices.length > 0 ? activeIndices : choiceItems.map((_, i) => i);
         for (const idx of targetIndices) {
           const item = choiceItems[idx];
           if (!item) continue;
+          const copiesForThisItem = itemCopies[idx] || 1;
           if (item.isComposite) {
-            imagesToPrint.push(item.url);
+            printJobs.push({ url: item.url, copies: copiesForThisItem });
           } else {
             const poseIdx = item.poseIndex !== undefined ? item.poseIndex : idx;
             if (rawPhotoUrls[poseIdx]) {
-              imagesToPrint.push(rawPhotoUrls[poseIdx]);
+              printJobs.push({ url: rawPhotoUrls[poseIdx], copies: copiesForThisItem });
             } else if (photos[poseIdx]) {
               try {
                 const res = await renderPhotoToPaper(photos[poseIdx], {
@@ -367,26 +371,27 @@ export default function PreviewResult({
                 });
                 if (res?.dataUrl) {
                   setRawPhotoUrls((prev) => ({ ...prev, [poseIdx]: res.dataUrl }));
-                  imagesToPrint.push(res.dataUrl);
+                  printJobs.push({ url: res.dataUrl, copies: copiesForThisItem });
                 } else {
-                  imagesToPrint.push(photos[poseIdx]);
+                  printJobs.push({ url: photos[poseIdx], copies: copiesForThisItem });
                 }
               } catch (err) {
-                imagesToPrint.push(photos[poseIdx]);
+                printJobs.push({ url: photos[poseIdx], copies: copiesForThisItem });
               }
             }
           }
         }
       }
 
-      if (imagesToPrint.length === 0) {
+      if (printJobs.length === 0) {
         isPrintingRef.current = false;
         setIsPrinting(false);
         return;
       }
 
+      const totalSheetsToPrint = printJobs.reduce((sum, job) => sum + job.copies, 0);
+
       if (printMethod === 'bluetooth') {
-        const totalSheetsToPrint = imagesToPrint.length * copies;
         printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
         setPrintStatus(`Menghubungkan Bluetooth (${totalSheetsToPrint} lembar)...`);
         try {
@@ -411,14 +416,15 @@ export default function PreviewResult({
             const btOrientation = printerConfig.printOrientation || 'portrait';
 
             let sheetCounter = 0;
-            for (let c = 0; c < copies; c++) {
+            for (let i = 0; i < printJobs.length; i++) {
               if (printCancelRef.current) break;
-              for (let i = 0; i < imagesToPrint.length; i++) {
+              const job = printJobs[i];
+              for (let c = 0; c < job.copies; c++) {
                 if (printCancelRef.current) break;
                 sheetCounter++;
                 printProgressInfoRef.current = { currentSheet: sheetCounter, totalSheets: totalSheetsToPrint };
                 setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
-                await bluetoothPrinter.printImage(imagesToPrint[i], {
+                await bluetoothPrinter.printImage(job.url, {
                   printerModelPreset: printerConfig.printerModelPreset || 'b1_pro',
                   density: btDensity,
                   brightness: btBrightness,
@@ -478,31 +484,32 @@ export default function PreviewResult({
 
       // Kiosk Server API Print
       setPrintStatus(
-        imagesToPrint.length > 1
-          ? `Mengirim ${imagesToPrint.length} lembar ke printer...`
+        printJobs.length > 1 || totalSheetsToPrint > 1
+          ? `Mengirim ${totalSheetsToPrint} lembar ke printer...`
           : 'Mengirim ke printer...'
       );
 
       const printEndpoint = resolveApiUrl('/api/print', apiBaseUrl);
-      printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
-      for (let i = 0; i < imagesToPrint.length; i++) {
+      printProgressInfoRef.current = { currentSheet: 1, totalSheets: printJobs.length };
+      for (let i = 0; i < printJobs.length; i++) {
         if (printCancelRef.current) {
           throw new Error('Pencetakan dibatalkan oleh pengguna.');
         }
-        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
+        const job = printJobs[i];
+        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: printJobs.length };
         const res = await fetch(printEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            copies,
+            copies: job.copies,
             printerName,
             paperSize: printerConfig.paperSize || layoutConfig?.customFrame?.paperSize || '4R',
             orientation: printerConfig.printOrientation || layoutConfig?.customFrame?.orientation || 'portrait',
             sessionId: sessionId || undefined,
             sheetIndex: i,
-            totalSheets: imagesToPrint.length,
-            imageUrl: imagesToPrint[i],
-            imageBase64: imagesToPrint[i]
+            totalSheets: printJobs.length,
+            imageUrl: job.url,
+            imageBase64: job.url
           })
         });
 
@@ -512,8 +519,8 @@ export default function PreviewResult({
       }
 
       setPrintStatus(
-        imagesToPrint.length > 1
-          ? `${imagesToPrint.length} lembar terkirim ke antrean cetak!`
+        totalSheetsToPrint > 1
+          ? `${totalSheetsToPrint} lembar terkirim ke antrean cetak!`
           : 'Terkirim ke antrean cetak!'
       );
 
@@ -565,9 +572,11 @@ export default function PreviewResult({
       if (choiceItems.length > 0) {
         setSelectedPoseIndices(choiceItems.map((_, i) => i));
       }
+      setFullFrameCopies(1);
+      setItemCopies({});
       setIsPrintChoiceOpen(true);
     } else {
-      handlePrint('frame');
+      return handlePrint('frame');
     }
   };
 
@@ -580,6 +589,8 @@ export default function PreviewResult({
     setQrCodeDataUri(null);
     setDownloadUrl(null);
     setRawPhotoUrls({});
+    setFullFrameCopies(1);
+    setItemCopies({});
     hasAutoSavedRef.current = false;
     hasAutoPrintedRef.current = false;
 
@@ -834,9 +845,47 @@ export default function PreviewResult({
                       Cetak lengkap desain frame, dekorasi & teks
                     </div>
                   </div>
-                  <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
-                    <span className="font-semibold text-slate-500">Jumlah cetak:</span>
-                    <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">1 Lembar</span>
+                  <div
+                    className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="font-semibold text-slate-500">Salinan (Copies):</span>
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullFrameCopies((prev) => Math.max(1, prev - 1));
+                        }}
+                        className="w-6 h-6 rounded flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-95 transition-all"
+                        title="Kurangi lembar"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={fullFrameCopies}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const val = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1));
+                          setFullFrameCopies(val);
+                        }}
+                        className="w-7 text-center text-xs sm:text-sm font-extrabold text-slate-800 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullFrameCopies((prev) => Math.min(10, prev + 1));
+                        }}
+                        className="w-6 h-6 rounded flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-95 transition-all"
+                        title="Tambah lembar"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </button>
 
@@ -874,7 +923,7 @@ export default function PreviewResult({
                   <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
                     <span className="font-semibold text-slate-500">Terpilih:</span>
                     <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">
-                      {selectedPoseIndices.length} Lembar
+                      {selectedPoseIndices.reduce((sum, idx) => sum + (itemCopies[idx] || 1), 0)} Lembar
                     </span>
                   </div>
                 </button>
@@ -942,10 +991,49 @@ export default function PreviewResult({
                               </div>
                             )}
                           </div>
-                          <div className="py-1 px-1.5 w-full text-center bg-white">
-                            <span className={`text-[10px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
+                          <div className="py-1.5 px-1.5 w-full text-center bg-white flex flex-col items-center">
+                            <span className={`text-[11px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
                               {item.label}
                             </span>
+                            {/* Copies stepper per checked photo: borderless & larger touch targets */}
+                            {isChecked && (
+                              <div
+                                className="mt-1 flex items-center justify-center gap-1.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setItemCopies((prev) => ({
+                                      ...prev,
+                                      [idx]: Math.max(1, (prev[idx] || 1) - 1)
+                                    }));
+                                  }}
+                                  className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 hover:bg-rose-100 hover:text-rose-600 active:bg-rose-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-90 transition-all select-none"
+                                  title="Kurangi lembar"
+                                >
+                                  -
+                                </button>
+                                <span className="min-w-[18px] text-center text-xs font-black text-slate-800 select-none">
+                                  {itemCopies[idx] || 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setItemCopies((prev) => ({
+                                      ...prev,
+                                      [idx]: Math.min(10, (prev[idx] || 1) + 1)
+                                    }));
+                                  }}
+                                  className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 hover:bg-rose-100 hover:text-rose-600 active:bg-rose-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-90 transition-all select-none"
+                                  title="Tambah lembar"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -991,9 +1079,9 @@ export default function PreviewResult({
                   {isPrinting
                     ? 'Sedang Mencetak...'
                     : printMode === 'frame'
-                    ? 'Cetak Full Frame (1 Lembar)'
+                    ? `Cetak Full Frame (${fullFrameCopies} Lembar)`
                     : selectedPoseIndices.length > 0
-                    ? `Cetak Foto (${selectedPoseIndices.length} Lembar)`
+                    ? `Cetak Foto (${selectedPoseIndices.reduce((sum, idx) => sum + (itemCopies[idx] || 1), 0)} Lembar)`
                     : 'Pilih Foto Terlebih Dahulu'}
                 </span>
               </button>
