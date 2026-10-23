@@ -999,7 +999,17 @@ export default function PrecisionFrameEditorModal({
     setTimeout(() => setToastMessage(''), 2500);
   };
 
+  const getNextSlotId = (slots) => {
+    if (!Array.isArray(slots) || slots.length === 0) return 1;
+    const max = slots.reduce((m, s) => {
+      const num = Number(s?.id);
+      return Number.isFinite(num) ? Math.max(m, num) : m;
+    }, 0);
+    return Math.max(max, slots.length) + 1;
+  };
+
   const pasteSlot = () => {
+
     if (activeSlots.length >= 12) return;
     const template = clipboardSlot || selectedSlot || {
       width: 400,
@@ -1021,7 +1031,7 @@ export default function PrecisionFrameEditorModal({
       y = Math.min(canvasH - targetH, Math.max(0, Number(selectedSlot.y) + 24));
     }
 
-    const newId = activeSlots.length + 1;
+    const newId = getNextSlotId(activeSlots);
     const newSlot = {
       id: newId,
       x,
@@ -1055,7 +1065,7 @@ export default function PrecisionFrameEditorModal({
 
   const addSlot = () => {
     if (activeSlots.length >= 12) return;
-    const newId = activeSlots.length + 1;
+    const newId = getNextSlotId(activeSlots);
     const defaultW = selectedSlot ? Number(selectedSlot.width) || 400 : 400;
     const defaultH = selectedSlot ? Number(selectedSlot.height) || 400 : 400;
     const defaultRadius = selectedSlot ? (selectedSlot.radius ?? 16) : 16;
@@ -1090,7 +1100,7 @@ export default function PrecisionFrameEditorModal({
   const addMirrorSlot = (sourceSlotIdx = safeSelectedIdx) => {
     if (activeSlots.length >= 12) return;
     const src = activeSlots[sourceSlotIdx] || activeSlots[0];
-    const newId = activeSlots.length + 1;
+    const newId = getNextSlotId(activeSlots);
 
     const srcX = Number(src.x) || 0;
     const srcY = Number(src.y) || 0;
@@ -1565,7 +1575,7 @@ export default function PrecisionFrameEditorModal({
                   <div className="absolute inset-0 pointer-events-none z-10">
                     {activeSlots.map((s, idx) => (
                       <div
-                        key={`under-photo-${s.id || idx}`}
+                        key={`under-photo-${s.id !== undefined && s.id !== null ? s.id : idx}-${idx}`}
                         style={{
                           left: `${(Number(s.x) / canvasW) * 100}%`,
                           top: `${(Number(s.y) / canvasH) * 100}%`,
@@ -1708,7 +1718,7 @@ export default function PrecisionFrameEditorModal({
                   <div className="absolute inset-0 pointer-events-none z-20">
                     {activeSlots.map((s, idx) => (
                       <div
-                        key={`over-photo-${s.id || idx}`}
+                        key={`over-photo-${s.id !== undefined && s.id !== null ? s.id : idx}-${idx}`}
                         style={{
                           left: `${(Number(s.x) / canvasW) * 100}%`,
                           top: `${(Number(s.y) / canvasH) * 100}%`,
@@ -1753,7 +1763,7 @@ export default function PrecisionFrameEditorModal({
 
                     return (
                       <div
-                        key={s.id || idx}
+                        key={`editor-slot-${s.id !== undefined && s.id !== null ? s.id : idx}-${idx}`}
                         onMouseDown={(e) => handleSlotMouseDown(e, idx)}
                         onTouchStart={(e) => {
                           e.stopPropagation();
@@ -2745,7 +2755,7 @@ export default function PrecisionFrameEditorModal({
                   const isSelected = idx === safeSelectedIdx;
                   return (
                     <button
-                      key={s.id || idx}
+                      key={`slot-card-${s.id !== undefined && s.id !== null ? s.id : idx}-${idx}`}
                       type="button"
                       onClick={() => setSelectedSlotIndex(idx)}
                       className={`relative py-1.5 px-1.5 rounded-lg border text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold select-none ${

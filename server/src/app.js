@@ -7,6 +7,7 @@ import photoRoutes from './routes/photoRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import printRoutes from './routes/printRoutes.js';
 import configRoutes from './routes/configRoutes.js';
+import eventRoutes from './routes/eventRoutes.js';
 import { prisma } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -155,6 +156,7 @@ app.use('/api/photos', photoRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/events', eventRoutes);
 
 // Client production bundle integration (SPA static serving)
 const clientDistDir = path.join(__dirname, '../../client/dist');

@@ -132,17 +132,33 @@ export function drawRoundRect(ctx, x, y, width, height, radius = 0) {
  * Loads an image from a URL or data URI into an HTMLImageElement.
  *
  * @param {string} src
- * @returns {Promise<HTMLImageElement>}\n */
-export function loadImage(src) {
+ * @param {number} [timeoutMs=10000]
+ * @returns {Promise<HTMLImageElement>}
+ */
+export function loadImage(src, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') {
       reject(new Error('Image constructor is not available in current environment'));
       return;
     }
     const img = new Image();
+    let timer = null;
+    if (timeoutMs > 0 && typeof setTimeout !== 'undefined') {
+      timer = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        reject(new Error(`Timeout loading image after ${timeoutMs}ms: ${src}`));
+      }, timeoutMs);
+    }
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (err) => reject(new Error(`Failed to load image: ${err?.message || 'unknown error'}`));
+    img.onload = () => {
+      if (timer) clearTimeout(timer);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      if (timer) clearTimeout(timer);
+      reject(new Error(`Failed to load image: ${err?.message || 'unknown error'}`));
+    };
     img.src = src;
   });
 }
@@ -158,7 +174,8 @@ export function loadImage(src) {
  * @param {string} [options.eventTitle='PHOTOBOOTH MEMORY'] - Main branding header
  * @param {string} [options.dateText] - Date subtitle
  * @param {HTMLCanvasElement} [options.customCanvas] - Optional pre-existing canvas element
- * @returns {Promise<{ dataUrl: string, width: number, height: number }>}\n */
+ * @returns {Promise<{ dataUrl: string, width: number, height: number }>}
+ */
 export async function composePhotosToFrame(photos = [], options = {}) {
   const {
     layoutType = 'STRIP_3',
@@ -461,7 +478,7 @@ export async function renderPhotoToPaper(photoSource, options = {}) {
       const srcW = img.naturalWidth || img.width;
       const srcH = img.naturalHeight || img.height;
       const crop = calculateCenterCrop(srcW, srcH, canvas.width, canvas.height);
-      ctx.drawImage(img, crop.sx, crop.sy, crop.sWidth, crop.sHeight, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, crop.cropX, crop.cropY, crop.cropW, crop.cropH, 0, 0, canvas.width, canvas.height);
     }
   }
 

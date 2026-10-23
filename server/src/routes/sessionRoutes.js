@@ -5,6 +5,21 @@ const fs = require('fs');
 const { prisma } = require('../db');
 
 const router = express.Router();
+function stringToUuid(str) {
+  if (!str) return crypto.randomUUID();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+    return str.toLowerCase();
+  }
+  const hash = crypto.createHash('md5').update(String(str)).digest('hex');
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    '4' + hash.substring(13, 16),
+    ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16) + hash.substring(18, 20),
+    hash.substring(20, 32)
+  ].join('-');
+}
+
 const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
 const uploadsDir = process.env.UPLOADS_DIR
   ? (path.isAbsolute(process.env.UPLOADS_DIR)
@@ -24,6 +39,7 @@ const memorySessions = new Map();
 // GET /api/sessions - List all sessions with photos and download links
 router.get('/', async (req, res) => {
   try {
+    const { eventId } = req.query;
     const host = process.env.PUBLIC_HOST_URL || (req.headers.host ? `${req.protocol}://${req.headers.host}` : 'http://localhost:5000');
 
     // 1. Gather photo files from uploads/photos and uploads
@@ -63,7 +79,12 @@ router.get('/', async (req, res) => {
     let dbSessions = [];
     if (process.env.DATABASE_URL) {
       try {
+        const where = {};
+        if (eventId) {
+          where.eventId = eventId;
+        }
         dbSessions = await prisma.boothSession.findMany({
+          where,
           orderBy: { createdAt: 'desc' },
           include: { photos: true, printJobs: true },
           take: 100
@@ -77,10 +98,17 @@ router.get('/', async (req, res) => {
 
     // 3. Group by session
     const sessionMap = new Map();
+    const aliasMap = new Map();
 
     for (const dbs of dbSessions) {
-      sessionMap.set(dbs.id, {
-        id: dbs.id,
+      const displayId = (dbs.templateConfig && typeof dbs.templateConfig === 'object' && dbs.templateConfig.legacySessionId)
+        ? dbs.templateConfig.legacySessionId
+        : (dbs.storageUrl && dbs.storageUrl.startsWith('sess_') ? dbs.storageUrl : dbs.id);
+
+      const sessionObj = {
+        id: displayId,
+        uuid: dbs.id,
+        eventId: dbs.eventId || null,
         createdAt: dbs.createdAt && dbs.createdAt.toISOString ? dbs.createdAt.toISOString() : String(dbs.createdAt),
         status: dbs.status || 'COMPLETED',
         photoCount: dbs.photoCount || 1,
@@ -89,14 +117,27 @@ router.get('/', async (req, res) => {
         photos: [],
         compositeUrl: null,
         printJobs: dbs.printJobs || []
-      });
+      };
+      sessionMap.set(dbs.id, sessionObj);
+      sessionMap.set(displayId, sessionObj);
+
+      if (dbs.templateConfig && typeof dbs.templateConfig === 'object' && dbs.templateConfig.legacySessionId) {
+        aliasMap.set(dbs.templateConfig.legacySessionId, dbs.id);
+      }
+      if (dbs.storageUrl) {
+        aliasMap.set(dbs.storageUrl, dbs.id);
+      }
     }
 
     // Also include in-memory sessions if any
     for (const [memId, memSession] of memorySessions.entries()) {
+      if (eventId && memSession.eventId !== eventId) {
+        continue;
+      }
       if (!sessionMap.has(memId)) {
         sessionMap.set(memId, {
           id: memId,
+          eventId: memSession.eventId || null,
           createdAt: memSession.createdAt || new Date().toISOString(),
           status: memSession.status || 'ACTIVE',
           photoCount: memSession.photoCount || 1,
@@ -125,9 +166,18 @@ router.get('/', async (req, res) => {
         sessionId = parts.length > 1 ? parts.slice(0, parts.length - 1).join('_') : parts[0];
       }
 
-      if (!sessionMap.has(sessionId)) {
-        sessionMap.set(sessionId, {
-          id: sessionId,
+      let targetId = sessionId;
+      if (aliasMap.has(sessionId)) {
+        targetId = aliasMap.get(sessionId);
+      }
+
+      if (!sessionMap.has(targetId)) {
+        if (eventId) {
+          continue;
+        }
+        sessionMap.set(targetId, {
+          id: targetId,
+          eventId: null,
           createdAt: fileInfo.createdAt,
           status: 'COMPLETED',
           photoCount: 1,
@@ -138,7 +188,7 @@ router.get('/', async (req, res) => {
         });
       }
 
-      const s = sessionMap.get(sessionId);
+      const s = sessionMap.get(targetId);
       s.photos.push(fileInfo);
       if (isCompositeFile || !s.compositeUrl) {
         s.compositeUrl = fileInfo.url;
@@ -146,7 +196,7 @@ router.get('/', async (req, res) => {
     }
 
     // Sort sessions by date descending
-    const sessions = Array.from(sessionMap.values()).sort((a, b) => {
+    const sessions = Array.from(new Set(sessionMap.values())).sort((a, b) => {
       const timeA = new Date(a.createdAt).getTime() || 0;
       const timeB = new Date(b.createdAt).getTime() || 0;
       return timeB - timeA;
@@ -165,12 +215,15 @@ router.get('/', async (req, res) => {
 // POST /api/sessions
 router.post('/', async (req, res) => {
   try {
-    const { frameTemplate = 'strip-classic', photoCount = 3, frameColor = '#FFFFFF', templateConfig } = req.body || {};
+    const { eventId, frameTemplate = 'strip-classic', photoCount = 3, frameColor = '#FFFFFF', templateConfig } = req.body || {};
+    const cleanEventId = (eventId && typeof eventId === 'string' && eventId.trim() !== '') ? eventId.trim() : null;
+
     let session;
     try {
       if (process.env.DATABASE_URL) {
         session = await prisma.boothSession.create({
           data: {
+            eventId: cleanEventId,
             frameTemplate: String(frameTemplate),
             photoCount: Number(photoCount) || 3,
             frameColor: String(frameColor),
@@ -188,6 +241,7 @@ router.post('/', async (req, res) => {
     if (!session) {
       session = {
         id: crypto.randomUUID(),
+        eventId: cleanEventId,
         frameTemplate: String(frameTemplate),
         photoCount: Number(photoCount) || 3,
         frameColor: String(frameColor),
@@ -242,21 +296,22 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     let session;
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUuid && process.env.DATABASE_URL) {
+      if (process.env.DATABASE_URL) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        const targetDbId = isUuid ? id.toLowerCase() : stringToUuid(id);
         // Cascade delete records from PostgreSQL store
-        await prisma.printJob.deleteMany({ where: { sessionId: id } }).catch(() => {});
-        await prisma.capturedPhoto.deleteMany({ where: { sessionId: id } }).catch(() => {});
+        await prisma.printJob.deleteMany({ where: { sessionId: targetDbId } }).catch(() => {});
+        await prisma.capturedPhoto.deleteMany({ where: { sessionId: targetDbId } }).catch(() => {});
         session = await prisma.boothSession.delete({
-          where: { id }
+          where: { id: targetDbId }
         }).catch(async () => {
           return await prisma.boothSession.update({
-            where: { id },
+            where: { id: targetDbId },
             data: {
               status: 'PURGED',
               purgedAt: new Date()
             }
-          });
+          }).catch(() => null);
         });
       }
     } catch (dbErr) {

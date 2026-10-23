@@ -1,4 +1,4 @@
-# 📸 Photobooth Web Application
+# 📷 Photobooth Web Application
 
 Aplikasi web photobooth interaktif modern dengan dukungan WebRTC camera feed mirror realtime, Web Audio synthesizer tanpa file eksternal, compositing canvas cetak beresolusi tinggi (300 DPI), generate QR Code untuk download smartphone, serta spooler antrean cetak foto.
 
@@ -19,24 +19,75 @@ Aplikasi web photobooth interaktif modern dengan dukungan WebRTC camera feed mir
 
 ---
 
-## 🛠️ Prasyarat Sistem
+## ⚙️ Konfigurasi Environment (`.env`)
 
+Aplikasi menggunakan file root `.env` (template tersedia di `.env.example`) yang telah dikelompokkan menjadi **dua mode konfigurasi**:
+
+1. **Konfigurasi Server Dev (Lokal Native Node.js)**:
+   - Digunakan ketika menjalankan secara langsung di mesin host tanpa Docker (`npm run dev`).
+   - Variabel: `PORT`, `VITE_PORT`, `DATABASE_URL`, `CLIENT_URL`, `PUBLIC_HOST_URL`, `VITE_API_BASE_URL`.
+2. **Konfigurasi Server Docker (Production / Container)**:
+   - Dibaca otomatis oleh `docker-compose.yml`.
+   - Variabel: `DOCKER_NODE_ENV`, `DOCKER_DB_USER`, `DOCKER_DB_PASSWORD`, `DOCKER_DB_NAME`, `DOCKER_DATABASE_URL`, `DOCKER_SERVER_HOST_PORT`, `DOCKER_SERVER_PORT`, `DOCKER_PUBLIC_HOST_URL`, `DOCKER_CLIENT_HOST_PORT`, `DOCKER_CLIENT_PORT`, `DOCKER_CLIENT_URL`, `DOCKER_BACKEND_PROXY_TARGET`, dll.
+   - **Keamanan Database**: Port database PostgreSQL (5432) **hanya diekspos di jaringan internal docker** dan **tidak diekspor/dipublish ke host**, sehingga data tetap aman dan terisolasi.
+
+Untuk menyalin template:
+```bash
+cp .env.example .env
+```
+
+---
+
+## ☁️ Menjalankan dengan GitHub Codespaces (Rekomendasi Cloud)
+
+Project ini telah dilengkapi konfigurasi **GitHub Dev Container** (`.devcontainer`) sehingga dapat langsung dijalankan di cloud tanpa instalasi lokal:
+
+1. Buka repositori ini di GitHub.
+2. Klik tombol hijau **Code** -> pilih tab **Codespaces** -> klik **Create codespace on main**.
+3. Codespace akan otomatis menyiapkan container Linux, Node.js 20, dan database PostgreSQL internal, serta menjalankan instalasi dependensi & Prisma push secara otomatis.
+4. Di terminal Codespaces, jalankan:
+   ```bash
+   npm run dev
+   ```
+5. Codespace otomatis mem-forward port frontend `5173` dan menampilkan pop-up browser preview aplikasi Photobooth.
+
+---
+
+## 🐳 Menjalankan dengan Docker Compose (Production / Staging / Lokal)
+
+Docker Compose secara otomatis membaca konfigurasi dari file root `.env`.
+
+### 1. Jalankan Seluruh Service
+```bash
+docker compose up --build
+```
+Atau melalui NPM script:
+```bash
+npm run docker:up
+```
+
+- **Client Frontend**: [http://localhost:5173](http://localhost:5173) *(atau sesuai `DOCKER_CLIENT_HOST_PORT`)*
+- **Server API Backend**: [http://localhost:5025](http://localhost:5025) *(atau sesuai `DOCKER_SERVER_HOST_PORT`)*
+- **Database PostgreSQL**: Berjalan di dalam jaringan internal Docker (`photobooth-net`). Port `5432` sengaja **tidak diekspor ke host** demi keamanan isolasi database.
+
+### 2. Menghentikan Docker
+```bash
+docker compose down
+# Atau: npm run docker:down
+```
+
+---
+
+## 🛠️ Menjalankan Secara Manual (Node.js & Local Dev)
+
+### Prasyarat Sistem
 Sebelum menjalankan aplikasi, pastikan sistem Anda telah terpasang:
 - **Node.js**: Versi `18.x` atau lebih baru (`node -v`)
 - **NPM**: Versi `9.x` atau lebih baru (`npm -v`)
 - **PostgreSQL** *(Opsional untuk mode persistence penuh)*: Versi `14.x` ke atas.
   > *Catatan: Server dilengkapi dengan fallback memory-session otomatis sehingga Anda tetap dapat menjalankan dan menguji aplikasi secara offline tanpa setup database PostgreSQL.*
 
----
-
-## 🚀 Panduan Instalasi & Menjalankan Aplikasi
-
-### 1. Clone atau Buka Direktori Project
-```bash
-cd /home/kholifan/html/photobooth
-```
-
-### 2. Install Dependensi
+### 1. Install Dependensi
 Jalankan instalasi dependensi pada root project serta sub-package client & server:
 
 ```bash
@@ -50,39 +101,16 @@ npm --prefix server install
 npm --prefix client install
 ```
 
-### 3. Konfigurasi Environment Variable
-
-#### A. Konfigurasi Server (`server/.env`)
-Salin template konfigurasi dari `server/.env.example`:
+### 2. Konfigurasi Environment Variable
+Salin template konfigurasi root `.env`:
 ```bash
-cp server/.env.example server/.env
+cp .env.example .env
 ```
-Contoh isi file `server/.env`:
-```env
-PORT=5025
-DATABASE_URL="postgresql://postgres:P%40ssw0rd@localhost:5432/photobooth?schema=public"
-CLIENT_URL="http://localhost:5173"
-PUBLIC_HOST_URL="http://localhost:5025"
-```
-
-#### B. Konfigurasi Client (`client/.env`)
-Salin template konfigurasi dari `client/.env.example`:
-```bash
-cp client/.env.example client/.env
-```
-Contoh isi file `client/.env`:
-```env
-# Port dev server Vite (bisa diubah sesuai keinginan)
-PORT=5173
-VITE_PORT=5173
-
-# URL API Server backend Express
-VITE_API_BASE_URL=http://localhost:5025
-```
+Anda juga dapat menyesuaikan `server/.env` atau `client/.env` jika ingin mengisolasi per folder.
 
 ---
 
-### 4. Setup Prisma Database (Jika Menggunakan PostgreSQL)
+### 3. Setup Prisma Database (Jika Menggunakan PostgreSQL)
 Jika database PostgreSQL aktif, generate Prisma Client dan sinkronkan schema:
 
 ```bash
@@ -95,7 +123,7 @@ npm --prefix server run prisma:push
 
 ---
 
-## ▶️ Menjalankan Aplikasi
+## ▶️ Opsi Menjalankan Manual
 
 ### Opsi A: Menjalankan Mode Development (Client & Server Bersamaan)
 Gunakan perintah satu langkah pada root:
@@ -104,8 +132,8 @@ Gunakan perintah satu langkah pada root:
 npm run dev
 ```
 
-- **Client Vite (Frontend)**: [http://localhost:5173](http://localhost:5173) *(atau sesuai port di `client/.env`)*
-- **Express Backend (API)**: [http://localhost:5025](http://localhost:5025) *(atau sesuai port di `server/.env`)*
+- **Client Vite (Frontend)**: [http://localhost:5125](http://localhost:5125) *(atau sesuai port di `.env`)*
+- **Express Backend (API)**: [http://localhost:5025](http://localhost:5025) *(atau sesuai port di `.env`)*
 - **Health Check**: [http://localhost:5025/health](http://localhost:5025/health)
 
 *(Perintah ini menjalankan server nodemon dan client Vite secara paralel via `concurrently`)*.
@@ -165,31 +193,30 @@ npm run test:client
 
 ```text
 photobooth/
-├── package.json              # Monorepo task runner (scripts dev, build, test)
-├── client/                   # Frontend React + Tailwind CSS + Vite
-│   ├── .env                  # Konfigurasi client (PORT & VITE_API_BASE_URL)
-│   ├── .env.example          # Template konfigurasi client
-│   ├── vite.config.js        # Konfigurasi Vite dinamis berbasis .env
-│   ├── src/
-│   │   ├── components/       # LandingPage, FrameSelector, CameraSession, PreviewResult, QrModal, ResetConfirmModal
-│   │   ├── utils/            # canvasCompositor.js, audioEffects.js
-│   │   ├── App.jsx           # State machine coordinator (LANDING -> FRAME -> CAMERA -> PREVIEW)
-│   │   ├── index.css         # Tailwind & styling global
-│   │   └── main.jsx          # React entrypoint
-│   └── test/                 # Test suites unit & integrasi frontend
-├── server/                   # Backend Express + Prisma ORM
-│   ├── .env                  # Konfigurasi backend (PORT, DATABASE_URL, dll.)
-│   ├── .env.example          # Template konfigurasi backend
-│   ├── prisma/               # schema.prisma (BoothSession, CapturedPhoto, PrintJob)
-│   ├── src/
-│   │   ├── routes/           # sessionRoutes.js, photoRoutes.js, printRoutes.js
-│   │   ├── services/         # qrService.js
-│   │   ├── app.js            # Express app configuration & middlewares
-│   │   ├── db.js             # Prisma client connection singleton
-│   │   └── index.js          # Server listener entrypoint
-│   ├── uploads/              # Direktori penyimpanan sementara hasil foto & QR
-│   └── test/                 # Test suites API REST, DB & health check
-└── docs/                     # Dokumentasi arsitektur, PRD & implementation plans
+├── .devcontainer/              # Konfigurasi GitHub Codespaces dev container
+│   ├── devcontainer.json       # Definisi workspace, port forwarding & extensions
+│   └── docker-compose.yml      # Service PostgreSQL internal & workspace dev
+├── .env                        # File env aktif (Server Dev & Server Docker)
+├── .env.example                # Template konfigurasi environment
+├── docker-compose.yml          # Docker Compose membaca konfigurasi .env
+├── package.json                # Monorepo task runner (scripts dev, build, test, docker)
+├── client/                     # Frontend React + Tailwind CSS + Vite
+│   ├── Dockerfile              # Dockerfile client Vite
+│   ├── .env                    # Konfigurasi client (PORT & VITE_API_BASE_URL)
+│   ├── .env.example            # Template konfigurasi client
+│   ├── vite.config.js          # Konfigurasi Vite dinamis berbasis .env & proxy
+│   ├── src/                    # Components, utils, App.jsx & main.jsx
+│   └── test/                   # Test suites unit & integrasi frontend
+├── server/                     # Backend Express + Prisma ORM
+│   ├── Dockerfile              # Dockerfile backend server
+│   ├── docker-entrypoint.sh    # Entrypoint script untuk auto prisma db push
+│   ├── .env                    # Konfigurasi backend
+│   ├── .env.example            # Template konfigurasi backend
+│   ├── prisma/                 # schema.prisma (BoothSession, CapturedPhoto, PrintJob)
+│   ├── src/                    # Routes, services, Express app & db singleton
+│   ├── uploads/                # Direktori penyimpanan sementara foto & QR
+│   └── test/                   # Test suites API REST, DB & health check
+└── docs/                       # Dokumentasi arsitektur, PRD & implementation plans
 ```
 
 ---

@@ -20,8 +20,31 @@ enum PrintStatus {
   FAILED
 }
 
+enum EventStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+model Event {
+  id            String         @id @default(uuid()) @db.Uuid
+  slug          String         @unique @db.VarChar(64)
+  name          String         @db.VarChar(128)
+  description   String?        @db.Text
+  status        EventStatus    @default(ACTIVE)
+  isDefault     Boolean        @default(false) @map("is_default")
+  config        Json
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  sessions      BoothSession[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("events")
+}
+
 model BoothSession {
   id             String          @id @default(uuid()) @db.Uuid
+  eventId        String?         @map("event_id") @db.Uuid
   frameTemplate  String          @map("frame_template") @db.VarChar(32)
   photoCount     Int             @default(3) @map("photo_count") @db.SmallInt
   frameColor     String          @default("#FFFFFF") @map("frame_color") @db.VarChar(16)
@@ -32,9 +55,11 @@ model BoothSession {
   createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
   completedAt    DateTime?       @map("completed_at") @db.Timestamptz
   purgedAt       DateTime?       @map("purged_at") @db.Timestamptz
+  event          Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
   photos         CapturedPhoto[]
   printJobs      PrintJob[]
 
+  @@index([eventId, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
   @@map("booth_sessions")
 }

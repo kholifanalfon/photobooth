@@ -108,11 +108,13 @@ test('SessionManagerModal - Lifecycle, UI Markup & 5 Core Admin Actions', async 
     // 1:1 Print Choice Modal
     assert.ok(fileContent.includes('Pilihan Cetak Foto'), 'Must include Print Choice modal');
     assert.ok(fileContent.includes('Full Frame'), 'Must offer Full Frame print mode');
-    assert.ok(fileContent.includes('Foto Saja'), 'Must offer Foto Saja print mode');
+    assert.ok(fileContent.includes('Custom'), 'Must offer Custom print mode');
     assert.ok(fileContent.includes('selectedPoseIndices'), 'Must manage selected pose indices for raw printing');
     assert.ok(fileContent.includes('Pilih Semua'), 'Must provide select all option for poses');
     assert.ok(fileContent.includes('Hapus Pilihan'), 'Must provide deselect option for poses');
-    assert.ok(fileContent.includes('Cetak Full Frame (1 Lembar)'), 'Must have full frame print button label');
-    assert.ok(fileContent.includes('Cetak Foto (${selectedPoseIndices.length} Lembar)'), 'Must have dynamic raw pose print counter');
+    assert.ok(fileContent.includes('Cetak Full Frame (${fullFrameCopies} Lembar)'), 'Must have full frame print button label');
+    assert.ok(fileContent.includes('Cetak Foto (${selectedPoseIndices.reduce((sum, idx) => sum + (itemCopies[idx] || 1), 0)} Lembar)'), 'Must have dynamic raw pose print counter');
+    assert.ok(fileContent.includes('fullFrameCopies'), 'Must manage full frame copies');
+    assert.ok(fileContent.includes('itemCopies'), 'Must manage copies per item for custom mode');
   });
 });

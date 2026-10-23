@@ -529,7 +529,7 @@ test('PreviewResult - Markup and Structure', async (t) => {
     assert.strictEqual(downloadQrBtn.props.disabled, false, 'Download (QR) button must be enabled when composite is ready');
   });
 
-  await t.test('clicking Print Foto opens Print Choice dialog with Full Frame and Foto Saja options', () => {
+  await t.test('clicking Print Foto opens Print Choice dialog with Full Frame and Custom options', () => {
     const samplePhotos = ['data:image/jpeg;base64,pose1', 'data:image/jpeg;base64,pose2', 'data:image/jpeg;base64,pose3'];
     const harness = createTestHarness(PreviewResult, {
       photos: samplePhotos,
@@ -552,10 +552,10 @@ test('PreviewResult - Markup and Structure', async (t) => {
     const modalMarkup = renderToStaticMarkup(modal);
     assert.ok(modalMarkup.includes('Pilihan Cetak Foto'), 'Must render dialog title');
     assert.ok(modalMarkup.includes('Full Frame'), 'Must render Full Frame choice');
-    assert.ok(modalMarkup.includes('Foto Saja'), 'Must render Foto Saja choice');
+    assert.ok(modalMarkup.includes('Custom'), 'Must render Custom choice');
   });
 
-  await t.test('Foto Saja mode in Print Choice dialog defaults to selecting all poses with checkboxes', () => {
+  await t.test('Custom mode in Print Choice dialog defaults to selecting all choices with checkboxes', () => {
     const samplePhotos = ['data:image/jpeg;base64,pose1', 'data:image/jpeg;base64,pose2', 'data:image/jpeg;base64,pose3'];
     const harness = createTestHarness(PreviewResult, {
       photos: samplePhotos,
@@ -574,11 +574,11 @@ test('PreviewResult - Markup and Structure', async (t) => {
     const card = choiceModal.props.children;
     const modalBody = card.props.children[1];
     const modeCards = modalBody.props.children[0];
-    const rawModeCard = modeCards.props.children[1];
-    assert.strictEqual(typeof rawModeCard.props.onClick, 'function');
+    const customModeCard = modeCards.props.children[1];
+    assert.strictEqual(typeof customModeCard.props.onClick, 'function');
 
-    // Switch to Foto Saja
-    rawModeCard.props.onClick();
+    // Switch to Custom
+    customModeCard.props.onClick();
 
     modalVdom = harness.render();
     choiceModal = modalVdom.props.children[6];
@@ -587,10 +587,11 @@ test('PreviewResult - Markup and Structure', async (t) => {
     const executeBtn = footer.props.children[1];
     const executeBtnText = executeBtn.props.children[1].props.children;
 
-    // Must default to all 3 poses selected
-    assert.strictEqual(executeBtnText, 'Cetak Foto (3 Lembar)', 'Dialog print CTA must default to all 3 selected poses');
+    // Must default to all choices selected (Full Frame + 3 poses)
+    assert.strictEqual(executeBtnText, 'Cetak Foto (4 Lembar)', 'Dialog print CTA must default to all choices (Full Frame + 3 poses)');
 
     const updatedMarkup = renderToStaticMarkup(choiceModal);
+    assert.ok(updatedMarkup.includes('Full Frame'), 'Must render thumbnail for Full Frame');
     assert.ok(updatedMarkup.includes('Foto #1'), 'Must render thumbnail for pose 1');
     assert.ok(updatedMarkup.includes('Foto #2'), 'Must render thumbnail for pose 2');
     assert.ok(updatedMarkup.includes('Foto #3'), 'Must render thumbnail for pose 3');

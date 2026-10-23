@@ -1,0 +1,88 @@
+services:
+  # Database PostgreSQL (Port 5432 tidak diekspor ke host / publik, hanya dapat diakses dalam jaringan internal docker)
+  db:
+    image: postgres:16-alpine
+    container_name: photobooth-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DOCKER_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DOCKER_DB_PASSWORD:-photobooth_secret}
+      POSTGRES_DB: ${DOCKER_DB_NAME:-photobooth}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - photobooth-net
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DOCKER_DB_USER:-postgres} -d ${DOCKER_DB_NAME:-photobooth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Server API Backend (Express + Prisma)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: photobooth-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${DOCKER_NODE_ENV:-production}
+      PORT: ${DOCKER_SERVER_PORT:-5025}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://${DOCKER_DB_USER:-postgres}:${DOCKER_DB_PASSWORD:-photobooth_secret}@db:5432/${DOCKER_DB_NAME:-photobooth}?schema=public}
+      CLIENT_URL: ${DOCKER_CLIENT_URL:-http://localhost:5173}
+      PUBLIC_HOST_URL: ${DOCKER_PUBLIC_HOST_URL:-http://localhost:5025}
+      UPLOADS_DIR: ${DOCKER_UPLOADS_DIR:-uploads}
+    command: ${DOCKER_SERVER_CMD:-npm start}
+    ports:
+      - "${DOCKER_SERVER_HOST_PORT:-5025}:${DOCKER_SERVER_PORT:-5025}"
+    volumes:
+      - ./server/src:/app/src
+      - ./server/prisma:/app/prisma
+      - ./server/data:/app/data
+      - uploads_data:/app/uploads
+    networks:
+      - photobooth-net
+
+  # Client Frontend (Vite + React)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: photobooth-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    env_file:
+      - .env
+    environment:
+      PORT: ${DOCKER_CLIENT_PORT:-5173}
+      VITE_PORT: ${DOCKER_CLIENT_PORT:-5173}
+      BACKEND_HOST: ${DOCKER_BACKEND_HOST:-server}
+      BACKEND_PROXY_TARGET: ${DOCKER_BACKEND_PROXY_TARGET:-http://server:5025}
+      VITE_API_BASE_URL: ${DOCKER_VITE_API_BASE_URL:-}
+    command: ${DOCKER_CLIENT_CMD:-npm run dev -- --host 0.0.0.0 --port 5173}
+    ports:
+      - "${DOCKER_CLIENT_HOST_PORT:-5173}:${DOCKER_CLIENT_PORT:-5173}"
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+      - ./client/index.html:/app/index.html
+    networks:
+      - photobooth-net
+
+volumes:
+  pgdata:
+  uploads_data:
+
+networks:
+  photobooth-net:
+    driver: bridge

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
+  SlidersHorizontal,
   Search,
   RefreshCw,
   Printer,
@@ -62,13 +63,22 @@ function formatDateIndo(dateStr) {
 export default function SessionManagerModal({
   isOpen,
   onClose,
-  printerConfig = {}
+  printerConfig = {},
+  events = [],
+  activeEventId = null
 }) {
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all'); // 'all' | 'today' | 'week'
+  const [selectedEventFilter, setSelectedEventFilter] = useState(activeEventId || '');
+
+  useEffect(() => {
+    if (activeEventId) {
+      setSelectedEventFilter(activeEventId);
+    }
+  }, [activeEventId]);
   
   // Sub-modal states
   const [previewPhoto, setPreviewPhoto] = useState(null); // active session being previewed
@@ -85,6 +95,8 @@ export default function SessionManagerModal({
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [printMode, setPrintMode] = useState('frame'); // 'frame' | 'raw'
   const [selectedPoseIndices, setSelectedPoseIndices] = useState([]);
+  const [fullFrameCopies, setFullFrameCopies] = useState(1);
+  const [itemCopies, setItemCopies] = useState({});
   const [printStatus, setPrintStatus] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
@@ -102,34 +114,106 @@ export default function SessionManagerModal({
     }, 2000);
   };
 
-    const handleOpenPreview = (session, initialIndex = 0) => {
+  // Helper to resolve composite frame URL from session
+  const getCompositeUrl = (session) => {
+    if (!session) return null;
+    if (session.compositeUrl) return session.compositeUrl;
+    if (Array.isArray(session.photos)) {
+      const comp = session.photos.find(
+        (p) =>
+          p &&
+          (p.isComposite ||
+            (p.filename && p.filename.includes("_composite_")) ||
+            (p.url && p.url.includes("_composite_")))
+      );
+      if (comp?.url) return comp.url;
+    }
+    return null;
+  };
+
+  // Helper to filter out composite frame images from raw pose photos
+  const getRawPoses = (session) => {
+    if (!session || !Array.isArray(session.photos)) return [];
+    const compUrl = getCompositeUrl(session);
+    return session.photos.filter((p) => {
+      if (!p) return false;
+      const isComp =
+        p.isComposite ||
+        (p.filename && p.filename.includes("_composite_")) ||
+        (p.url && p.url.includes("_composite_")) ||
+        (compUrl && p.url === compUrl);
+      return !isComp;
+    });
+  };
+
+  // Choice items for print selection: Full Frame composite + all raw pose photos
+  const getSessionChoiceItems = (session) => {
+    if (!session) return [];
+    const items = [];
+    const compUrl = getCompositeUrl(session);
+    if (compUrl) {
+      items.push({
+        id: 'composite',
+        type: 'composite',
+        label: 'Full Frame',
+        url: compUrl,
+        filename: `composite_${session.id ? String(session.id).slice(0, 8) : 'session'}.jpg`,
+        isComposite: true
+      });
+    }
+    const rawPoses = getRawPoses(session);
+    rawPoses.forEach((p, idx) => {
+      const pUrl = p?.url || (typeof p === 'string' ? p : null);
+      if (pUrl) {
+        items.push({
+          id: `pose_${idx}`,
+          poseIndex: idx,
+          type: 'pose',
+          label: `Foto #${idx + 1}`,
+          url: pUrl,
+          filename: p.filename || `pose_${idx + 1}.jpg`,
+          size: p.size,
+          isComposite: false,
+          photoObj: p
+        });
+      }
+    });
+    return items;
+  };
+
+  const handleOpenPreview = (session, initialIndex = 0) => {
     setPreviewPhoto(session);
     setPreviewActiveIndex(initialIndex);
     setPrintStatus(null);
-    setPrintMode('frame');
-    const poses = Array.isArray(session?.photos) ? session.photos : [];
-    setSelectedPoseIndices(poses.length > 0 ? poses.map((_, i) => i) : [0]);
+    setPrintMode("frame");
+    setFullFrameCopies(1);
+    setItemCopies({});
+    const choices = getSessionChoiceItems(session);
+    setSelectedPoseIndices(choices.length > 0 ? choices.map((_, i) => i) : [0]);
   };
 
   const previewItems = useMemo(() => {
     if (!previewPhoto) return [];
     const items = [];
-    if (previewPhoto.compositeUrl) {
+    const compUrl = getCompositeUrl(previewPhoto);
+    if (compUrl) {
       items.push({
         type: 'composite',
         label: 'Full Frame',
-        url: previewPhoto.compositeUrl,
+        url: compUrl,
         filename: `composite_${previewPhoto.id ? String(previewPhoto.id).slice(0, 8) : 'session'}.jpg`,
         isComposite: true
       });
     }
     if (Array.isArray(previewPhoto.photos)) {
-      previewPhoto.photos.forEach((p, idx) => {
-        if (p?.url) {
+      const rawPoses = getRawPoses(previewPhoto);
+      rawPoses.forEach((p, idx) => {
+        const pUrl = p?.url || (typeof p === 'string' ? p : null);
+        if (pUrl) {
           items.push({
             type: 'pose',
             label: `Pose ${idx + 1}`,
-            url: p.url,
+            url: pUrl,
             filename: p.filename || `pose_${idx + 1}.jpg`,
             size: p.size,
             isPose: true,
@@ -151,11 +235,15 @@ export default function SessionManagerModal({
     }, duration);
   };
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (targetEventId = selectedEventFilter) => {
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      const url = resolveApiUrl('/api/sessions');
+      let queryUrl = '/api/sessions';
+      if (targetEventId && targetEventId.trim() !== '') {
+        queryUrl += `?eventId=${encodeURIComponent(targetEventId.trim())}`;
+      }
+      const url = resolveApiUrl(queryUrl);
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Gagal memuat sesi (HTTP ${res.status})`);
@@ -176,9 +264,9 @@ export default function SessionManagerModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchSessions();
+      fetchSessions(selectedEventFilter);
     }
-  }, [isOpen]);
+  }, [isOpen, selectedEventFilter]);
 
   // Handle ESC key to close modals
   useEffect(() => {
@@ -245,30 +333,32 @@ export default function SessionManagerModal({
     const sessId = targetSession.id;
     const activeIndices = overrideIndices !== null ? overrideIndices : selectedPoseIndices;
 
-    const imagesToPrint = [];
+    const printJobs = [];
     if (forcedPhotoUrl) {
-      imagesToPrint.push(resolveApiUrl(forcedPhotoUrl));
+      printJobs.push({ url: resolveApiUrl(forcedPhotoUrl), copies: 1 });
     } else if (mode === 'frame') {
-      const composite = targetSession.compositeUrl || targetSession.photos?.[0]?.url;
+      const composite = getCompositeUrl(targetSession) || targetSession.photos?.[0]?.url;
       if (composite) {
-        imagesToPrint.push(resolveApiUrl(composite));
+        printJobs.push({ url: resolveApiUrl(composite), copies: fullFrameCopies });
       }
     } else {
-      const poses = Array.isArray(targetSession.photos) ? targetSession.photos : [];
-      const targetIndices = activeIndices.length > 0 ? activeIndices : poses.map((_, i) => i);
+      const choiceItems = getSessionChoiceItems(targetSession);
+      const targetIndices = activeIndices.length > 0 ? activeIndices : choiceItems.map((_, i) => i);
       targetIndices.forEach((idx) => {
-        const photo = poses[idx];
-        const pUrl = photo?.url || photo;
+        const item = choiceItems[idx];
+        const pUrl = item?.url;
         if (pUrl) {
-          imagesToPrint.push(resolveApiUrl(pUrl));
+          printJobs.push({ url: resolveApiUrl(pUrl), copies: itemCopies[idx] || 1 });
         }
       });
     }
 
-    if (imagesToPrint.length === 0) {
+    if (printJobs.length === 0) {
       showToast('⚠️ URL foto tidak tersedia untuk dicetak');
       return;
     }
+
+    const totalSheetsToPrint = printJobs.reduce((sum, job) => sum + job.copies, 0);
 
     isPrintingRef.current = true;
     printCancelRef.current = false;
@@ -353,19 +443,19 @@ export default function SessionManagerModal({
           orientation: btOrientation
         });
 
-        const totalSheetsToPrint = imagesToPrint.length * copies;
         printProgressInfoRef.current = { currentSheet: 1, totalSheets: totalSheetsToPrint };
         setPrintStatus(`Mencetak via Bluetooth (${totalSheetsToPrint} lembar)...`);
         let sheetCounter = 0;
-        for (let c = 0; c < copies; c++) {
-          for (let i = 0; i < imagesToPrint.length; i++) {
+        for (let i = 0; i < printJobs.length; i++) {
+          const job = printJobs[i];
+          for (let c = 0; c < job.copies; c++) {
             if (printCancelRef.current) {
               throw new Error('Pencetakan dibatalkan oleh pengguna.');
             }
             sheetCounter++;
             printProgressInfoRef.current = { currentSheet: sheetCounter, totalSheets: totalSheetsToPrint };
             setPrintStatus(`Mencetak lembar ${sheetCounter} dari ${totalSheetsToPrint}...`);
-            await bluetoothPrinter.printImage(imagesToPrint[i], {
+            await bluetoothPrinter.printImage(job.url, {
               printerModelPreset: effectiveConfig.printerModelPreset || undefined,
               labelType: btLabelType,
               density: btDensity,
@@ -419,22 +509,26 @@ export default function SessionManagerModal({
       }
 
       // 3. Server Kiosk /api/print endpoint
-      setPrintStatus(`Mengirim perintah cetak (${imagesToPrint.length} lembar)...`);
-      printProgressInfoRef.current = { currentSheet: 1, totalSheets: imagesToPrint.length };
+      setPrintStatus(
+        printJobs.length > 1 || totalSheetsToPrint > 1
+          ? `Mengirim perintah cetak (${totalSheetsToPrint} lembar)...`
+          : 'Mengirim perintah cetak...'
+      );
+      printProgressInfoRef.current = { currentSheet: 1, totalSheets: printJobs.length };
       const printEndpoint = resolveApiUrl('/api/print');
-      for (let i = 0; i < imagesToPrint.length; i++) {
-        const imgUrl = imagesToPrint[i];
+      for (let i = 0; i < printJobs.length; i++) {
+        const job = printJobs[i];
         if (printCancelRef.current) {
           throw new Error('Pencetakan dibatalkan oleh pengguna.');
         }
-        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: imagesToPrint.length };
+        printProgressInfoRef.current = { currentSheet: i + 1, totalSheets: printJobs.length };
         const res = await fetch(printEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sessionId: targetSession.id,
-            copies,
-            imageUrl: imgUrl,
+            copies: job.copies,
+            imageUrl: job.url,
             printerName
           })
         });
@@ -480,10 +574,12 @@ export default function SessionManagerModal({
     if (specificPhotoUrl) {
       return handleExecutePrint(session, 'raw', [0], specificPhotoUrl);
     }
-    const poses = Array.isArray(session?.photos) ? session.photos : [];
+    const choices = getSessionChoiceItems(session);
     setPrintChoiceSession(session);
     setPrintMode('frame');
-    setSelectedPoseIndices(poses.length > 0 ? poses.map((_, i) => i) : [0]);
+    setFullFrameCopies(1);
+    setItemCopies({});
+    setSelectedPoseIndices(choices.length > 0 ? choices.map((_, i) => i) : [0]);
     setIsPrintChoiceOpen(true);
   };
 
@@ -659,6 +755,29 @@ export default function SessionManagerModal({
             )}
           </div>
 
+          {/* Event Filter Dropdown */}
+          {Array.isArray(events) && events.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="session-event-filter" className="sr-only">Filter Event</label>
+              <div className="relative">
+                <select
+                  id="session-event-filter"
+                  value={selectedEventFilter}
+                  onChange={(e) => setSelectedEventFilter(e.target.value)}
+                  className="appearance-none pl-8 pr-8 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs font-semibold text-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500 cursor-pointer"
+                >
+                  <option value="">Semua Event</option>
+                  {events.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.name || evt.slug || evt.id}
+                    </option>
+                  ))}
+                </select>
+                <Calendar size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
           {/* Filter Period Tabs */}
           <div className="flex items-center gap-1 p-1 bg-slate-800/70 rounded-xl border border-slate-700/60">
             {[
@@ -715,6 +834,7 @@ export default function SessionManagerModal({
                   onClick={() => {
                     setSearchQuery('');
                     setFilterPeriod('all');
+                    setSelectedEventFilter('');
                   }}
                   className="text-xs text-rose-400 hover:text-rose-300 underline font-semibold"
                 >
@@ -767,6 +887,12 @@ export default function SessionManagerModal({
                           {session.compositeUrl && (
                             <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/80 text-[9px] font-extrabold text-white">
                               Composite
+                            </span>
+                          )}
+                          {session.eventId && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/80 text-[9px] font-bold text-white flex items-center gap-1">
+                              <Calendar size={9} />
+                              <span>{events.find((e) => e.id === session.eventId)?.name || 'Event'}</span>
                             </span>
                           )}
                         </div>
@@ -1010,8 +1136,8 @@ export default function SessionManagerModal({
               <button
                 onClick={() => {
                   setPrintMode('frame');
-                  const count = Array.isArray(previewPhoto.photos) ? previewPhoto.photos.length : 0;
-                  setSelectedPoseIndices(count > 0 ? Array.from({ length: count }, (_, i) => i) : [0]);
+                  const rawPoses = getRawPoses(previewPhoto);
+                  setSelectedPoseIndices(rawPoses.length > 0 ? rawPoses.map((_, i) => i) : [0]);
                   setIsPrintChoiceOpen(true);
                 }}
                 disabled={isPrinting || (!previewPhoto.compositeUrl && (!previewPhoto.photos || previewPhoto.photos.length === 0))}
@@ -1116,82 +1242,125 @@ export default function SessionManagerModal({
                       Cetak lengkap desain frame, dekorasi & teks
                     </div>
                   </div>
-                  <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
-                    <span className="font-semibold text-slate-500">Jumlah cetak:</span>
-                    <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">1 Lembar</span>
+                  <div
+                    className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="font-semibold text-slate-500">Salinan (Copies):</span>
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullFrameCopies((prev) => Math.max(1, prev - 1));
+                        }}
+                        className="w-6 h-6 rounded flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-95 transition-all"
+                        title="Kurangi lembar"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={fullFrameCopies}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const val = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1));
+                          setFullFrameCopies(val);
+                        }}
+                        className="w-7 text-center text-xs sm:text-sm font-extrabold text-slate-800 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullFrameCopies((prev) => Math.min(10, prev + 1));
+                        }}
+                        className="w-6 h-6 rounded flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-95 transition-all"
+                        title="Tambah lembar"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </button>
 
-                {/* Mode: Foto Saja */}
+                {/* Mode: Custom (Pilih Lembar) */}
                 <button
                   type="button"
-                  onClick={() => setPrintMode('raw')}
+                  onClick={() => {
+                    setPrintMode('custom');
+                    const currentSess = previewPhoto || printChoiceSession;
+                    const choiceItems = getSessionChoiceItems(currentSess);
+                    setSelectedPoseIndices(choiceItems.map((_, i) => i));
+                  }}
                   className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                    printMode === 'raw'
+                    printMode === 'custom' || printMode === 'raw'
                       ? 'border-rose-500 bg-rose-50/70 shadow-sm ring-2 ring-rose-400/30'
                       : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-2">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                      printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
+                      printMode === 'custom' || printMode === 'raw' ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-600'
                     }`}>
-                      <ImageIcon size={16} />
+                      <SlidersHorizontal size={16} />
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
+                      printMode === 'custom' || printMode === 'raw' ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'
                     }`}>
-                      {printMode === 'raw' && <Check size={11} strokeWidth={3} />}
+                      {(printMode === 'custom' || printMode === 'raw') && <Check size={11} strokeWidth={3} />}
                     </div>
                   </div>
                   <div>
-                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Foto Saja</div>
+                    <div className="font-extrabold text-xs sm:text-sm text-slate-900">Custom (Pilih Lembar)</div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                      Cetak lembar foto asli per pose tanpa bingkai
+                      Pilih bebas cetak foto dengan frame atau foto saja
                     </div>
                   </div>
                   <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px]">
                     <span className="font-semibold text-slate-500">Terpilih:</span>
                     <span className="font-extrabold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full">
-                      {selectedPoseIndices.length} Pose
+                      {selectedPoseIndices.reduce((sum, idx) => sum + (itemCopies[idx] || 1), 0)} Lembar
                     </span>
                   </div>
                 </button>
               </div>
 
-              {/* Sub-section: Daftar Foto untuk Foto Saja */}
-              {printMode === 'raw' && (
+              {/* Sub-section: Daftar Lembar untuk Pilihan Custom */}
+              {(printMode === 'custom' || printMode === 'raw') && (
                 (() => {
                   const currentSess = previewPhoto || printChoiceSession;
-                  const poses = Array.isArray(currentSess?.photos) ? currentSess.photos : [];
-                  if (poses.length === 0) return null;
+                  const choiceItems = getSessionChoiceItems(currentSess);
+                  if (choiceItems.length === 0) return null;
 
                   return (
                     <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 animate-fade-in">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-slate-700">
-                          Pilih Foto ({selectedPoseIndices.length} dari {poses.length} terpilih):
+                          Pilih Lembar Cetak ({selectedPoseIndices.length} dari {choiceItems.length} terpilih):
                         </span>
                         <button
                           type="button"
                           onClick={() => {
-                            if (selectedPoseIndices.length === poses.length) {
+                            if (selectedPoseIndices.length === choiceItems.length) {
                               setSelectedPoseIndices([]);
                             } else {
-                              setSelectedPoseIndices(poses.map((_, i) => i));
+                              setSelectedPoseIndices(choiceItems.map((_, i) => i));
                             }
                           }}
                           className="text-xs text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer"
                         >
-                          {selectedPoseIndices.length === poses.length ? 'Hapus Pilihan' : 'Pilih Semua'}
+                          {selectedPoseIndices.length === choiceItems.length ? 'Hapus Pilihan' : 'Pilih Semua'}
                         </button>
                       </div>
 
                       {/* Thumbnail grid */}
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[32vh] overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200/80 custom-scrollbar">
-                        {poses.map((photo, idx) => {
+                        {choiceItems.map((item, idx) => {
                           const isChecked = selectedPoseIndices.includes(idx);
-                          const photoUrl = photo?.url || photo;
+                          const photoUrl = item?.url;
                           return (
                             <div
                               key={idx}
@@ -1211,7 +1380,7 @@ export default function SessionManagerModal({
                               <div className="w-full aspect-[3/4] relative overflow-hidden bg-slate-100">
                                 <img
                                   src={resolveApiUrl(photoUrl)}
-                                  alt={`Pose ${idx + 1}`}
+                                  alt={item.label}
                                   className="w-full h-full object-cover"
                                 />
                                 {/* Checkbox badge */}
@@ -1220,11 +1389,57 @@ export default function SessionManagerModal({
                                 }`}>
                                   {isChecked ? <Check size={13} strokeWidth={3} /> : null}
                                 </div>
+                                {/* Frame badge if composite */}
+                                {item.isComposite && (
+                                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white flex items-center gap-0.5">
+                                    <Layers size={9} className="text-rose-400" />
+                                    <span>Frame</span>
+                                  </div>
+                                )}
                               </div>
-                              <div className="py-1 px-1.5 w-full text-center bg-white">
-                                <span className={`text-[10px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
-                                  Pose #{idx + 1}
+                              <div className="py-1.5 px-1.5 w-full text-center bg-white flex flex-col items-center">
+                                <span className={`text-[11px] font-extrabold ${isChecked ? 'text-rose-600' : 'text-slate-500'}`}>
+                                  {item.label}
                                 </span>
+                                {/* Copies stepper per checked photo: borderless & larger touch targets */}
+                                {isChecked && (
+                                  <div
+                                    className="mt-1 flex items-center justify-center gap-1.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setItemCopies((prev) => ({
+                                          ...prev,
+                                          [idx]: Math.max(1, (prev[idx] || 1) - 1)
+                                        }));
+                                      }}
+                                      className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 hover:bg-rose-100 hover:text-rose-600 active:bg-rose-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-90 transition-all select-none"
+                                      title="Kurangi lembar"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="min-w-[18px] text-center text-xs font-black text-slate-800 select-none">
+                                      {itemCopies[idx] || 1}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setItemCopies((prev) => ({
+                                          ...prev,
+                                          [idx]: Math.min(10, (prev[idx] || 1) + 1)
+                                        }));
+                                      }}
+                                      className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 hover:bg-rose-100 hover:text-rose-600 active:bg-rose-200 text-slate-700 font-bold text-xs cursor-pointer active:scale-90 transition-all select-none"
+                                      title="Tambah lembar"
+                                >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1267,9 +1482,9 @@ export default function SessionManagerModal({
                   {isPrinting
                     ? 'Sedang Mencetak...'
                     : printMode === 'frame'
-                    ? 'Cetak Full Frame (1 Lembar)'
+                    ? `Cetak Full Frame (${fullFrameCopies} Lembar)`
                     : selectedPoseIndices.length > 0
-                    ? `Cetak Foto (${selectedPoseIndices.length} Lembar)`
+                    ? `Cetak Foto (${selectedPoseIndices.reduce((sum, idx) => sum + (itemCopies[idx] || 1), 0)} Lembar)`
                     : 'Pilih Foto'}
                 </span>
               </button>

@@ -11,7 +11,9 @@
     "start": "npm --prefix server run start",
     "test:server": "npm --prefix server run test",
     "test:client": "npm --prefix client run test",
-    "test": "npm run test:server && npm run test:client"
+    "test": "npm run test:server && npm run test:client",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

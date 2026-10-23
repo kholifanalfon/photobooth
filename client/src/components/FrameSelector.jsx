@@ -219,7 +219,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
 
               return (
                 <div
-                  key={f.id || idx}
+                  key={`custom-frame-${f.id || 'custom'}-${idx}`}
                   role="button"
                   tabIndex={0}
                   aria-label={f.name || `Frame ${idx + 1}`}
@@ -292,7 +292,7 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
 
                         return (
                           <div
-                            key={s.id || sIdx}
+                            key={`slot-${f.id || idx}-${s.id !== undefined && s.id !== null ? s.id : sIdx}-${sIdx}`}
                             style={{
                               left: `${leftPct}%`,
                               top: `${topPct}%`,

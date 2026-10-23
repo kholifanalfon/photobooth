@@ -1,9 +1,11 @@
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { generateQrDataUri } = require('../services/qrService');
 const { prisma } = require('../db');
+const eventService = require('../services/eventService');
 
 const router = express.Router();
 const defaultUploadsDirName = process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads';
@@ -23,6 +25,21 @@ const tempChunksDir = path.resolve(uploadsDir, 'temp_chunks');
     fs.mkdirSync(dir, { recursive: true });
   }
 });
+
+function stringToUuid(str) {
+  if (!str) return crypto.randomUUID();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+    return str.toLowerCase();
+  }
+  const hash = crypto.createHash('md5').update(String(str)).digest('hex');
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    '4' + hash.substring(13, 16),
+    ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16) + hash.substring(18, 20),
+    hash.substring(20, 32)
+  ].join('-');
+}
 
 /**
  * Determine upload category/folder based on request metadata
@@ -195,6 +212,26 @@ router.post('/merge-chunks', async (req, res) => {
     const relativeUrl = `/uploads/${subfolder}/${finalFilename}`;
     const stats = await fs.promises.stat(finalFilepath);
 
+    const eventId = req.query.eventId || (req.body && req.body.eventId);
+    if (eventId) {
+      try {
+        const ev = await eventService.getEventByIdOrSlug(eventId);
+        if (ev) {
+          const currentConfig = ev.config && typeof ev.config === 'object' ? ev.config : {};
+          await eventService.updateEvent(ev.id, {
+            config: {
+              ...currentConfig,
+              videoUrl: relativeUrl
+            }
+          });
+        }
+      } catch (eventErr) {
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('Failed to update event videoUrl in merge-chunks:', eventErr.message);
+        }
+      }
+    }
+
     return res.json({
       success: true,
       filename: finalFilename,
@@ -232,6 +269,26 @@ router.post('/upload-video', (req, res) => {
 
     const relativeUrl = `/uploads/${subfolder}/${filename}`;
     const fullUrl = `${host}${relativeUrl}`;
+
+    const eventId = req.query.eventId || (req.body && req.body.eventId);
+    if (eventId) {
+      try {
+        const ev = await eventService.getEventByIdOrSlug(eventId);
+        if (ev) {
+          const currentConfig = ev.config && typeof ev.config === 'object' ? ev.config : {};
+          await eventService.updateEvent(ev.id, {
+            config: {
+              ...currentConfig,
+              videoUrl: relativeUrl
+            }
+          });
+        }
+      } catch (eventErr) {
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('Failed to update event videoUrl:', eventErr.message);
+        }
+      }
+    }
 
     return res.json({
       success: true,
@@ -304,29 +361,70 @@ router.post('/upload', async (req, res) => {
     const relativeUrl = `/uploads/photos/${filename}`;
     const qrCodeDataUri = await generateQrDataUri(downloadPageUrl);
 
-    // Save to DB if safeSessionId and DATABASE_URL are present without bloating DB with multi-MB base64
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
-    if (isUuid && process.env.DATABASE_URL) {
+    // Save to DB and guarantee persistence in PostgreSQL
+    let savedToDb = false;
+    if (process.env.DATABASE_URL) {
       try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+        const validSessionId = isUuid ? sessionId.toLowerCase() : stringToUuid(sessionId);
+
+        let boothSession = await prisma.boothSession.findUnique({
+          where: { id: validSessionId }
+        });
+
+        if (!boothSession) {
+          const defaultEvent = await prisma.event.findFirst({
+            where: { isDefault: true, status: 'ACTIVE' }
+          }) || await prisma.event.findFirst({
+            where: { status: 'ACTIVE' }
+          }) || await prisma.event.findFirst();
+
+          boothSession = await prisma.boothSession.create({
+            data: {
+              id: validSessionId,
+              eventId: defaultEvent?.id || null,
+              frameTemplate: 'custom',
+              photoCount: 1,
+              frameColor: '#FFFFFF',
+              templateConfig: !isUuid ? { legacySessionId: sessionId } : null,
+              storageUrl: sessionId,
+              status: isComposite ? 'COMPLETED' : 'ACTIVE',
+              completedAt: isComposite ? new Date() : null
+            }
+          });
+        } else if (isComposite) {
+          await prisma.boothSession.update({
+            where: { id: validSessionId },
+            data: {
+              status: 'COMPLETED',
+              completedAt: new Date()
+            }
+          }).catch(() => {});
+        }
+
         const truncatedDataUri = imageBase64.length > 256
           ? `${imageBase64.slice(0, 128)}...[truncated, size=${imageBase64.length}]`
           : imageBase64;
 
         await prisma.capturedPhoto.create({
           data: {
-            sessionId,
-            poseIndex: Number(poseIndex) || 0,
+            sessionId: validSessionId,
+            poseIndex: Number(poseIndex) || (isComposite ? 0 : 1),
             filePath: filepath,
             imageDataUri: truncatedDataUri
           }
         });
+        savedToDb = true;
       } catch (dbErr) {
-        console.error('Prisma DB error saving photo record:', dbErr.message);
+        if (process.env.NODE_ENV !== 'test') {
+          console.error('Prisma DB error saving photo record:', dbErr.message);
+        }
       }
     }
 
     return res.json({
       success: true,
+      savedToDb,
       downloadUrl: downloadPageUrl,
       rawUrl: rawFileUrl,
       relativeUrl,

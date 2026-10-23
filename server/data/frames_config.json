@@ -22,6 +22,7 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "/uploads/frames/frame_1792482366961.png",
+      "isGlobal": true,
       "layerMode": "background",
       "paperSize": "image",
       "imageWidth": 709,
@@ -32,6 +33,7 @@
       "mirrorImageX": 0,
       "mirrorImageY": 0,
       "mirrorImageFlip": false,
+      "assignedEventIds": [],
       "mirrorImageWidth": 709,
       "frameNaturalWidth": 709,
       "mirrorImageHeight": 945,
@@ -59,6 +61,7 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "/uploads/frames/frame_1792482558499.png",
+      "isGlobal": true,
       "layerMode": "background",
       "paperSize": "image",
       "imageWidth": 709,
@@ -69,6 +72,7 @@
       "mirrorImageX": 0,
       "mirrorImageY": 0,
       "mirrorImageFlip": false,
+      "assignedEventIds": [],
       "mirrorImageWidth": 709,
       "frameNaturalWidth": 709,
       "mirrorImageHeight": 945,
@@ -96,6 +100,7 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "/uploads/frames/frame_1792481339791.png",
+      "isGlobal": true,
       "layerMode": "background",
       "paperSize": "image",
       "imageWidth": 709,
@@ -106,6 +111,7 @@
       "mirrorImageX": 0,
       "mirrorImageY": 0,
       "mirrorImageFlip": false,
+      "assignedEventIds": [],
       "mirrorImageWidth": 709,
       "frameNaturalWidth": 709,
       "mirrorImageHeight": 945,
@@ -118,7 +124,7 @@
         {
           "x": 40,
           "y": 41,
-          "id": 5,
+          "id": 1,
           "width": 518,
           "height": 367,
           "radius": 10,
@@ -218,6 +224,7 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "https://photobooth.kholifan.my.id/uploads/frames/frame_1792399153668.png",
+      "isGlobal": true,
       "layerMode": "overlay",
       "paperSize": "4R",
       "imageWidth": 600,
@@ -228,6 +235,7 @@
       "mirrorImageX": 600,
       "mirrorImageY": 0,
       "mirrorImageFlip": false,
+      "assignedEventIds": [],
       "mirrorImageWidth": 600,
       "mirrorImageHeight": 1800
     },
@@ -253,11 +261,13 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "",
+      "isGlobal": true,
       "paperSize": "3x5cm",
       "imageWidth": 591,
       "photoCount": 1,
       "imageHeight": 354,
-      "orientation": "landscape"
+      "orientation": "landscape",
+      "assignedEventIds": []
     },
     {
       "id": "frame-1792421077989",
@@ -281,11 +291,13 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "",
+      "isGlobal": true,
       "paperSize": "3x5cm",
       "imageWidth": 354,
       "photoCount": 1,
       "imageHeight": 591,
-      "orientation": "portrait"
+      "orientation": "portrait",
+      "assignedEventIds": []
     },
     {
       "id": "frame-1792483660236",
@@ -309,6 +321,7 @@
       "imageY": 0,
       "enabled": true,
       "imageUrl": "/uploads/frames/frame_1792561154687.png",
+      "isGlobal": true,
       "layerMode": "background",
       "paperSize": "image",
       "imageWidth": 709,
@@ -319,47 +332,115 @@
       "mirrorImageX": 0,
       "mirrorImageY": 0,
       "mirrorImageFlip": false,
+      "assignedEventIds": [],
       "mirrorImageWidth": 709,
       "frameNaturalWidth": 709,
       "mirrorImageHeight": 945,
       "frameNaturalHeight": 945
+    },
+    {
+      "id": "frame-1792666454563",
+      "name": "Frame 8",
+      "enabled": true,
+      "imageUrl": "",
+      "orientation": "portrait",
+      "paperSize": "4R",
+      "width": 1200,
+      "height": 1800,
+      "slots": [
+        {
+          "id": 1,
+          "x": 80,
+          "y": 240,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderWidth": 3,
+          "borderColor": "#1E293B"
+        },
+        {
+          "id": 2,
+          "x": 620,
+          "y": 240,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderWidth": 3,
+          "borderColor": "#1E293B"
+        },
+        {
+          "id": 3,
+          "x": 80,
+          "y": 910,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderWidth": 3,
+          "borderColor": "#1E293B"
+        },
+        {
+          "id": 4,
+          "x": 620,
+          "y": 910,
+          "width": 500,
+          "height": 630,
+          "radius": 8,
+          "borderWidth": 3,
+          "borderColor": "#1E293B"
+        }
+      ]
     }
   ],
   "customFrame": {
-    "id": "frame-1792395060235",
-    "name": "Frame 2",
+    "id": "frame-1792666454563",
+    "name": "Frame 8",
+    "enabled": true,
+    "imageUrl": "",
+    "orientation": "portrait",
+    "paperSize": "4R",
+    "width": 1200,
+    "height": 1800,
     "slots": [
       {
-        "x": 61,
-        "y": 57,
         "id": 1,
-        "width": 591,
-        "height": 591,
-        "radius": 4,
-        "photoIndex": 0,
-        "borderColor": "#1E293B",
-        "borderWidth": 2
+        "x": 80,
+        "y": 240,
+        "width": 500,
+        "height": 630,
+        "radius": 8,
+        "borderWidth": 3,
+        "borderColor": "#1E293B"
+      },
+      {
+        "id": 2,
+        "x": 620,
+        "y": 240,
+        "width": 500,
+        "height": 630,
+        "radius": 8,
+        "borderWidth": 3,
+        "borderColor": "#1E293B"
+      },
+      {
+        "id": 3,
+        "x": 80,
+        "y": 910,
+        "width": 500,
+        "height": 630,
+        "radius": 8,
+        "borderWidth": 3,
+        "borderColor": "#1E293B"
+      },
+      {
+        "id": 4,
+        "x": 620,
+        "y": 910,
+        "width": 500,
+        "height": 630,
+        "radius": 8,
+        "borderWidth": 3,
+        "borderColor": "#1E293B"
       }
-    ],
-    "width": 709,
-    "height": 945,
-    "imageX": 0,
-    "imageY": 0,
-    "enabled": true,
-    "imageUrl": "/uploads/frames/frame_1792482366961.png",
-    "layerMode": "background",
-    "paperSize": "image",
-    "imageWidth": 709,
-    "photoCount": 1,
-    "imageHeight": 945,
-    "imageMirror": false,
-    "orientation": "portrait",
-    "mirrorImageX": 0,
-    "mirrorImageY": 0,
-    "mirrorImageFlip": false,
-    "mirrorImageWidth": 709,
-    "frameNaturalWidth": 709,
-    "mirrorImageHeight": 945,
-    "frameNaturalHeight": 945
+    ]
   }
 }
