@@ -1,0 +1,38 @@
+{
+  "name": "Photobooth (GitHub Codespaces)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/photobooth",
+  "forwardPorts": [5173, 5025],
+  "portsAttributes": {
+    "5173": {
+      "label": "Photobooth Client (Vite)",
+      "onAutoForward": "openPreview",
+      "visibility": "public"
+    },
+    "5025": {
+      "label": "Photobooth Server (Express)",
+      "onAutoForward": "silent",
+      "visibility": "public"
+    },
+    "5432": {
+      "label": "PostgreSQL Database (Local only)",
+      "onAutoForward": "ignore",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "npm install && npm --prefix server install && npm --prefix client install && npx --prefix server prisma generate && npx --prefix server prisma db push",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

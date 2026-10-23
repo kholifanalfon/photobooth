@@ -1,0 +1,45 @@
+services:
+  # Internal PostgreSQL Database for GitHub Codespaces (Port 5432 strictly internal)
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: photobooth_secret
+      POSTGRES_DB: photobooth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - photobooth-net
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d photobooth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Dev Workspace Container for GitHub Codespaces
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm
+    volumes:
+      - ..:/workspaces/photobooth:cached
+    networks:
+      - photobooth-net
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sleep infinity
+    environment:
+      DATABASE_URL: "postgresql://postgres:photobooth_secret@db:5432/photobooth?schema=public"
+      PORT: "5025"
+      VITE_PORT: "5173"
+      CLIENT_URL: "http://localhost:5173"
+      PUBLIC_HOST_URL: "http://localhost:5025"
+
+volumes:
+  pgdata:
+
+networks:
+  photobooth-net:
+    driver: bridge

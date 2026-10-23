@@ -1,0 +1,80 @@
+services:
+  # Database PostgreSQL (Port 5432 tidak diekspor ke host / publik, hanya dapat diakses dalam jaringan internal docker)
+  db:
+    image: postgres:16-alpine
+    container_name: photobooth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: photobooth_secret
+      POSTGRES_DB: photobooth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - photobooth-net
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d photobooth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Server API Backend (Express + Prisma)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: photobooth-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 5025
+      DATABASE_URL: "postgresql://postgres:photobooth_secret@db:5432/photobooth?schema=public"
+      CLIENT_URL: "http://localhost:5173"
+      PUBLIC_HOST_URL: "http://localhost:5025"
+      UPLOADS_DIR: "uploads"
+    ports:
+      - "5025:5025"
+    volumes:
+      - ./server/src:/app/src
+      - ./server/prisma:/app/prisma
+      - ./server/data:/app/data
+      - uploads_data:/app/uploads
+    networks:
+      - photobooth-net
+
+  # Client Frontend (Vite + React)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: photobooth-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      PORT: 5173
+      VITE_PORT: 5173
+      BACKEND_HOST: server
+      BACKEND_PROXY_TARGET: "http://server:5025"
+      VITE_API_BASE_URL: ""
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+      - ./client/index.html:/app/index.html
+    networks:
+      - photobooth-net
+
+volumes:
+  pgdata:
+  uploads_data:
+
+networks:
+  photobooth-net:
+    driver: bridge

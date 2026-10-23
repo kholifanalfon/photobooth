@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+yarn-error.log
+.git
+.gitignore
+.env
+.env.test
+.env.local
+uploads
+uploads_test
+server/uploads
+server/uploads_test
+server/data_test
+dist
+client/dist
+.DS_Store
+*.log
