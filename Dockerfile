@@ -24,30 +24,21 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends build-essential python-is-python3 pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy root, client, and server package manifests
-COPY package*.json ./
-COPY client/package*.json ./client/
-COPY server/package*.json ./server/
-COPY server/prisma ./server/prisma/
+# Copy only server package files and Prisma schema
+COPY server/package*.json ./
+COPY server/prisma ./prisma/
 
-# Install root, client, and server dependencies
-RUN npm ci --include=dev && \
-    npm --prefix client ci --include=dev && \
-    npm --prefix server ci --include=dev
+# Install server dependencies
+RUN npm ci --include=dev
 
 # Generate Prisma Client
-RUN npm --prefix server run prisma:generate
+RUN npx prisma generate
 
-# Copy source code
-COPY . .
+# Copy server application source code
+COPY server/ ./
 
-# Build client SPA assets (outputs to /app/client/dist)
-RUN npm run build
-
-# Prune development dependencies to keep image size small
-RUN npm prune --omit=dev && \
-    npm --prefix client prune --omit=dev && \
-    npm --prefix server prune --omit=dev
+# Prune development dependencies to keep final image small
+RUN npm prune --omit=dev
 
 
 # Final Stage
@@ -55,13 +46,17 @@ FROM base
 
 WORKDIR /app
 
-# Copy application and built artifacts
+# Copy application and node_modules from build stage
 COPY --from=build /app /app
 
-# Ensure uploads and data directories exist
-RUN mkdir -p /app/server/uploads /app/server/data
+# Copy docker-entrypoint script if needed and set execution rights
+RUN chmod +x ./docker-entrypoint.sh 2>/dev/null || true
+
+# Ensure required runtime folders exist
+RUN mkdir -p /app/uploads /app/data
 
 EXPOSE 3000
 
-# Start Express server via root script
+# Start server using docker-entrypoint (for automatic Prisma schema sync if DATABASE_URL is set)
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD [ "npm", "run", "start" ]
