@@ -51,7 +51,8 @@ import {
   CheckCircle2,
   FolderArchive,
   Layers,
-  Lock
+  Lock,
+  Loader2
 } from 'lucide-react';
 import { audioFx } from '../utils/audioEffects.js';
 import LandingConfigDrawer, { THEME_PRESETS } from './LandingConfigDrawer.jsx';
@@ -117,6 +118,7 @@ const DEFAULT_CONFIG = {
 
 export default function LandingPage({
   onStartSession,
+  isStartingSession = false,
   isLiveMode = false,
   onEnterLiveMode,
   onExitLiveMode,
@@ -400,6 +402,7 @@ export default function LandingPage({
   };
 
   const handleStart = () => {
+    if (isStartingSession || isLaunchingRef.current) return;
     // In live mode, request fullscreen on user interaction
     if (isLiveMode && typeof document !== 'undefined' && !document.fullscreenElement) {
       if (document.documentElement.requestFullscreen) {
@@ -429,7 +432,7 @@ export default function LandingPage({
       if (typeof onStartSession === 'function') {
         onStartSession(config.customFrame, config.customFrames);
       }
-    }, 800);
+    }, 120);
   };
 
   const hasActiveVideo = config.enableVideo && Boolean((config.videoUrl || '').trim());
@@ -1168,7 +1171,7 @@ export default function LandingPage({
             role="button"
             tabIndex={0}
             aria-label="Buka Kotak Hadiah"
-            className="relative mb-5 sm:mb-6 cursor-pointer focus:outline-none"
+            className={`relative mb-5 sm:mb-6 cursor-pointer focus:outline-none ${isOpen ? "pointer-events-none opacity-90" : ""}`}
             onClick={handleStart}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -1204,10 +1207,11 @@ export default function LandingPage({
 
         {/* Action Button: Mulai Sekarang */}
         <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
+          whileHover={{ scale: isOpen ? 1 : 1.03 }}
+          whileTap={{ scale: isOpen ? 1 : 0.97 }}
           onClick={handleStart}
-          className={`flex items-center justify-center gap-2.5 px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl font-bold text-base sm:text-lg shadow-md hover:shadow-xl transition-all cursor-pointer ${activeTheme.btnClass}`}
+          disabled={isOpen}
+          className={`flex items-center justify-center gap-2.5 px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl font-bold text-base sm:text-lg shadow-md hover:shadow-xl transition-all cursor-pointer ${activeTheme.btnClass} ${isOpen ? "opacity-90" : ""}`}
         >
           <Camera size={20} className="sm:w-6 sm:h-6" />
           <span>Mulai Sekarang</span>

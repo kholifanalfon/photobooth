@@ -274,6 +274,8 @@ test('LandingPage Interactive Event Contracts', async (t) => {
     await new Promise((resolve) => setTimeout(resolve, 850));
     assert.strictEqual(sessionStarted, true, 'Session must start after 800ms animation delay');
   });
+
+
 });
 
 test('FrameSelector Component Rendering & Markup Structure', async (t) => {
@@ -290,6 +292,22 @@ test('FrameSelector Component Rendering & Markup Structure', async (t) => {
     assert.ok(html.includes('Lanjut ke Kamera'), 'Must include confirm CTA text');
     assert.ok(html.includes('lucide-arrow-left'), 'Must render ArrowLeft icon');
     assert.ok(html.includes('lucide-arrow-right'), 'Must render ArrowRight icon');
+  });
+
+  await t.test('renders loading frame skeleton and progress when isLoading is true', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(FrameSelector, {
+        onConfirm: () => {},
+        onBack: () => {},
+        isLoading: true,
+        loadingProgress: { percent: 50, message: 'Memuat template frame...' }
+      })
+    );
+
+    assert.ok(html.includes('Memuat template frame...'), 'Must render loading message');
+    assert.ok(html.includes('50%'), 'Must render progress percentage');
+    assert.ok(html.includes('Memuat Frame...'), 'CTA button must show loading state');
+    assert.ok(html.includes('Memuat Frame #1...'), 'Must render skeleton frame card');
   });
 
   await t.test('renders all 4 layout options from FRAME_CONFIGS with valid Tailwind scale syntax', () => {

@@ -3,7 +3,7 @@
   "title": "The Wedding Celebration 💍",
   "isLive": false,
   "subtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
-  "videoUrl": "/uploads/media/video_landing_1792395041700.mp4",
+  "videoUrl": "http://localhost:5025/uploads/media/video_landing_1792742623828.mp4",
   "autoPrint": false,
   "eventDate": "Saturday, 17 October 2026",
   "paperSize": "4R",

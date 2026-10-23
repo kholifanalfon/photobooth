@@ -47,6 +47,8 @@ export default function App() {
   const [landingConfig, setLandingConfig] = useState(null);
   const [availableCustomFrames, setAvailableCustomFrames] = useState([]);
   const [downloadFilename, setDownloadFilename] = useState(null);
+  const [isLoadingFrames, setIsLoadingFrames] = useState(false);
+  const [frameLoadingProgress, setFrameLoadingProgress] = useState(null);
 
   // Live Mode & Kiosk Lock States
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -396,32 +398,6 @@ export default function App() {
   };
 
   const handleStartLanding = async (customFrame = null, customFrames = null) => {
-    let newSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-
-    try {
-      const postUrl = resolveApiUrl('/api/sessions');
-      const payload = {
-        eventId: activeEvent?.id || null,
-        frameTemplate: customFrame?.id || 'custom',
-        photoCount: Number(customFrame?.photoCount) || 4,
-        frameColor: '#FFFFFF'
-      };
-      const res = await fetch(postUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        const created = await res.json();
-        if (created && created.id) {
-          newSessionId = created.id;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not persist session to backend, using fallback ID:', err);
-    }
-
-    setCurrentSessionId(newSessionId);
     const framesList = Array.isArray(customFrames) && customFrames.length > 0
       ? customFrames
       : (customFrame ? [customFrame] : []);
@@ -456,7 +432,84 @@ export default function App() {
     }
 
     setAvailableCustomFrames(activeFrames);
+
+    // Instant fallback ID so session is valid immediately
+    let newSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    setCurrentSessionId(newSessionId);
+
+    // Langsung pindah ke halaman pilih frame secara instan tanpa modal
+    setIsLoadingFrames(true);
+    setFrameLoadingProgress({
+      percent: 30,
+      message: 'Menghubungkan ke server photobooth...'
+    });
     setCurrentStep('FRAME_PICKER');
+
+    // Lakukan pembuatan sesi ke server dan preload frame di background halaman FrameSelector
+    try {
+      const postUrl = resolveApiUrl('/api/sessions');
+      const payload = {
+        eventId: activeEvent?.id || null,
+        frameTemplate: customFrame?.id || 'custom',
+        photoCount: Number(customFrame?.photoCount) || 4,
+        frameColor: '#FFFFFF'
+      };
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 2500) : null;
+
+      const res = await fetch(postUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const created = await res.json();
+        if (created && created.id) {
+          setCurrentSessionId(created.id);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not persist session to backend, using fallback ID:', err);
+    }
+
+    setFrameLoadingProgress({
+      percent: 75,
+      message: 'Memuat gambar frame...'
+    });
+
+    // Preload frame images so FrameSelector renders cleanly without flicker
+    const imageUrls = activeFrames
+      .map((f) => f?.imageUrl)
+      .filter((url) => typeof url === 'string' && url.trim().length > 0);
+
+    if (imageUrls.length > 0 && typeof window !== 'undefined' && typeof Image !== 'undefined') {
+      await Promise.allSettled(
+        imageUrls.map((url) => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = url;
+            setTimeout(() => resolve(false), 1200);
+          });
+        })
+      );
+    }
+
+    setFrameLoadingProgress({
+      percent: 100,
+      message: 'Frame siap!'
+    });
+
+    // Smooth subtle transition out of loading
+    setTimeout(() => {
+      setIsLoadingFrames(false);
+      setFrameLoadingProgress(null);
+    }, 100);
   };
 
   const handleConfirmFrame = (config) => {
@@ -552,8 +605,14 @@ export default function App() {
           {currentStep === 'FRAME_PICKER' && (
             <FrameSelector
               onConfirm={handleConfirmFrame}
-              onBack={() => setCurrentStep('LANDING')}
+              onBack={() => {
+                setIsLoadingFrames(false);
+                setFrameLoadingProgress(null);
+                setCurrentStep('LANDING');
+              }}
               availableCustomFrames={availableCustomFrames}
+              isLoading={isLoadingFrames}
+              loadingProgress={frameLoadingProgress}
             />
           )}
 

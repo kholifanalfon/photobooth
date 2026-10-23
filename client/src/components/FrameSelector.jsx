@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, Check, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
 import { FRAME_CONFIGS } from '../utils/canvasCompositor.js';
 import { PAPER_PRESETS } from '../constants/framePresets.js';
 
@@ -12,7 +12,13 @@ export const PALETTES = [
   { name: 'Warm Cream', hex: '#FEF3C7', text: '#78350F' }
 ];
 
-export default function FrameSelector({ onConfirm, onBack, availableCustomFrames = [] }) {
+export default function FrameSelector({
+  onConfirm,
+  onBack,
+  availableCustomFrames = [],
+  isLoading = false,
+  loadingProgress = null
+}) {
   // Filter valid custom frame objects defensively
   const validCustomFrames = (Array.isArray(availableCustomFrames) ? availableCustomFrames : []).filter(
     (f) => f && typeof f === 'object' && f.id
@@ -127,7 +133,15 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
           {hasCustomFrames ? 'Pilih Desain Frame Foto' : 'Pilih Template & Warna Frame'}
         </h2>
 
-        {hasCustomFrames && (
+        {isLoading ? (
+          <div className="flex items-center gap-2 px-3 py-1 mt-0.5 rounded-full bg-rose-50 border border-rose-200/80 text-rose-600 text-xs font-semibold shadow-2xs animate-pulse">
+            <Loader2 size={13} className="animate-spin text-rose-500 shrink-0" />
+            <span>{loadingProgress?.message || "Memuat template frame..."}</span>
+            {loadingProgress?.percent ? (
+              <span className="font-mono font-bold text-rose-500 ml-0.5">({loadingProgress.percent}%)</span>
+            ) : null}
+          </div>
+        ) : hasCustomFrames ? (
           <div className="flex items-center gap-2 mt-0.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">
               Desain Acara ({validCustomFrames.length})
@@ -136,11 +150,33 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
               Sentuh frame pilihanmu untuk memulai sesi foto
             </p>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Main Content (Center) */}
-      {hasCustomFrames ? (
+      {isLoading && !hasCustomFrames ? (
+        <div className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 overflow-y-auto custom-scrollbar min-h-0 pb-28 sm:pb-32 overscroll-contain">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5 justify-center items-start w-full mx-auto max-w-3xl">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={`skeleton-frame-${i}`}
+                className="rounded-xl sm:rounded-2xl border-2 border-slate-200 bg-white flex flex-col items-center text-center p-2 sm:p-3 shadow-xs animate-pulse"
+              >
+                <div className="w-full aspect-[2/3] max-h-[38vh] sm:max-h-[46vh] rounded-lg sm:rounded-xl bg-slate-100 flex flex-col items-center justify-center p-3 relative overflow-hidden border border-slate-200/60">
+                  <div className="w-9 h-9 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-400 mb-2 shadow-2xs">
+                    <Loader2 size={18} className="animate-spin text-rose-400" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">Memuat Frame #{i}...</span>
+                </div>
+                <div className="w-full mt-2 sm:mt-2.5 space-y-1 flex flex-col items-center">
+                  <div className="w-24 h-3.5 bg-slate-200 rounded-full" />
+                  <div className="w-16 h-2.5 bg-slate-100 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : hasCustomFrames ? (
         <div className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 overflow-y-auto custom-scrollbar min-h-0 pb-28 sm:pb-32 overscroll-contain">
           <div
             className={`grid gap-2.5 sm:gap-5 justify-center items-start w-full mx-auto ${
@@ -475,9 +511,24 @@ export default function FrameSelector({ onConfirm, onBack, availableCustomFrames
           <button
             type="button"
             onClick={handleConfirm}
-            className="w-2/3 py-2.5 sm:py-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            disabled={isLoading}
+            className={`w-2/3 py-2.5 sm:py-3 font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 transition-colors ${
+              isLoading
+                ? "bg-rose-400 text-white cursor-wait opacity-85"
+                : "bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white cursor-pointer"
+            }`}
           >
-            Lanjut ke Kamera <ArrowRight size={15} />
+            {isLoading ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                <span>Memuat Frame...</span>
+              </>
+            ) : (
+              <>
+                <span>Lanjut ke Kamera</span>
+                <ArrowRight size={15} />
+              </>
+            )}
           </button>
         </div>
       </div>
