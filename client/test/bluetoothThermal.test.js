@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCanvasForThermalLabel, ditherCanvasThermal, PRINTER_MODEL_OPTIONS, getPrinterProfile, resolveImageToCanvas } from '../src/utils/bluetoothPrinter.js';
+import { bluetoothPrinter, formatCanvasForThermalLabel, ditherCanvasThermal, PRINTER_MODEL_OPTIONS, getPrinterProfile, resolveImageToCanvas } from '../src/utils/bluetoothPrinter.js';
 
 function createMockCanvas(width, height) {
   const operations = [];
@@ -244,4 +244,89 @@ test('resolveImageToCanvas - Source validation & canvas resolution', async () =>
   // 3. Handles non-browser fallback safely for strings
   const strResolved = await resolveImageToCanvas('https://example.com/photo.jpg');
   assert.ok(strResolved);
+});
+
+test('WebBluetoothPrinter - B21 / B21_V1 single label feed protection (no duplicate printEnd)', async () => {
+  const b21Profile = getPrinterProfile('b21');
+  assert.equal(b21Profile.taskType, 'B21_V1');
+
+  let printEndCalledCount = 0;
+  let waitForFinishedCalledCount = 0;
+  let printPageCalledCount = 0;
+
+  const mockTask = {
+    setPrintOptions() {},
+    async printInit() {},
+    async printPage(encoded, qty) {
+      printPageCalledCount++;
+      assert.equal(qty, 1);
+    },
+    async waitForFinished() {
+      waitForFinishedCalledCount++;
+    }
+  };
+
+  const mockProtocol = {
+    setPacketTimeout() {},
+    newPrintTask(taskType, opts) {
+      return mockTask;
+    },
+    async printEnd() {
+      printEndCalledCount++;
+    },
+    cancelStatusPoll() {}
+  };
+
+  const mockNiimbotClient = {
+    isConnected: () => true,
+    stopHeartbeat() {},
+    startHeartbeat() {},
+    getPrintTaskType: () => 'B21_V1',
+    getModelMetadata: () => ({ printheadPixels: 384, dpi: 203 }),
+    protocol: mockProtocol,
+    printerInfo: { modelId: 768 }
+  };
+
+  bluetoothPrinter.isConnected = true;
+  bluetoothPrinter.isNiimbot = true;
+  bluetoothPrinter.niimbotClient = mockNiimbotClient;
+
+  const mockCanvas = createMockCanvas(384, 240);
+
+  // 1. Print with B21 preset
+  await bluetoothPrinter.printImage(mockCanvas, {
+    printerModelPreset: 'b21',
+    labelWidthMm: 50,
+    labelHeightMm: 30
+  });
+
+  // Verify that printPage was called exactly once
+  assert.equal(printPageCalledCount, 1);
+  // Verify that waitForFinished (which polls printEnd and hangs) was NOT called
+  assert.equal(waitForFinishedCalledCount, 0);
+  // Verify that protocol.printEnd was NOT called (which causes duplicate print / double label feed on B21)
+  assert.equal(printEndCalledCount, 0);
+
+  // 2. Test B1: B1 DOES require protocol.printEnd()
+  mockNiimbotClient.getPrintTaskType = () => 'B1';
+  await bluetoothPrinter.printImage(mockCanvas, {
+    printerModelPreset: 'b1',
+    labelWidthMm: 50,
+    labelHeightMm: 30
+  });
+  assert.equal(waitForFinishedCalledCount, 1);
+  assert.equal(printEndCalledCount, 1);
+
+  // 3. Test B21S (D110): skips protocol.printEnd()
+  mockNiimbotClient.getPrintTaskType = () => 'D110';
+  await bluetoothPrinter.printImage(mockCanvas, {
+    printerModelPreset: 'b21s',
+    labelWidthMm: 50,
+    labelHeightMm: 30
+  });
+  // printEnd should still remain 1 (no extra call)
+  assert.equal(printEndCalledCount, 1);
+
+  // Cleanup
+  bluetoothPrinter.disconnect();
 });

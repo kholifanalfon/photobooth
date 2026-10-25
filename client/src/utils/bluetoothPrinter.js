@@ -894,16 +894,18 @@ export class WebBluetoothPrinter {
 
         if (onProgress) onProgress('Menyelesaikan halaman cetak...');
         try {
-          // For D110 / B21S (model 777), the printer hardware automatically advances and stops cleanly at the die-cut label gap after pageEnd.
-          // Polling status (0xA3) repeatedly during motor feeding can interrupt the gap sensor and trigger re-printing/buffer replay loops.
-          // Therefore, a simple 1200ms stabilization delay is used instead of active BLE status query polling.
-          if (taskType === 'D110' || taskType === 'B21L2_B') {
+          // For B21, B21S, D110, and B21L2_B, the printer hardware automatically advances and stops cleanly at the die-cut label gap after pageEnd.
+          // Polling status or sending premature printEnd packets during motor feeding interrupts the transmissive gap sensor,
+          // triggering re-printing / buffer replay loops or extra blank label feeds.
+          // Additionally, B21V1PrintTask.waitForFinished() uses waitUntilPrintFinishedByPrintEndPoll, which cancels its own
+          // timer and hangs, followed by a duplicate printEnd that causes double printing.
+          // Therefore, B21, B21S, D110, and B21L2_B use a clean 1200ms stabilization delay without active polling or duplicate printEnd.
+          if (taskType === 'D110' || taskType === 'B21L2_B' || taskType === 'B21_V1') {
             await new Promise((resolve) => setTimeout(resolve, 1200));
           } else if (typeof task.waitForFinished === 'function') {
-            const waitTimeout = taskType === 'B21_V1' ? 7000 : 4000;
             await Promise.race([
               task.waitForFinished(),
-              new Promise((resolve) => setTimeout(resolve, waitTimeout))
+              new Promise((resolve) => setTimeout(resolve, 4000))
             ]);
           } else {
             await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -922,9 +924,11 @@ export class WebBluetoothPrinter {
         }
 
         // Clean task termination & gap advancement
-        // B1 and B21_V1 require protocol.printEnd() to commit buffer and feed to gap
-        // B1 Pro (D110M_V4) sends printEnd via task.printEnd()
-        if (taskType === 'B1' || taskType === 'B21_V1') {
+        // - B1 requires protocol.printEnd() to commit buffer and feed to gap
+        // - B1 Pro (D110M_V4) sends printEnd via task.printEnd()
+        // - B21 / B21S (B21_V1, D110, B21L2_B) automatically complete feed on pageEnd;
+        //   sending an explicit printEnd causes firmware buffer replay or extra blank label ejection (double print).
+        if (taskType === 'B1') {
           try {
             await this.niimbotClient.protocol.printEnd();
           } catch (_) {}
