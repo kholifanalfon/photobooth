@@ -9,17 +9,42 @@
     "config": {
       "theme": "wedding",
       "title": "The Wedding Celebration 💍",
-      "isLive": false,
       "subtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
-      "videoUrl": "http://localhost:5025/uploads/media/video_landing_1792742623828.mp4",
-      "autoPrint": false,
+      "coupleNames": "Kevin & Sheila",
       "eventDate": "Saturday, 17 October 2026",
-      "paperSize": "4R",
       "eventTitle": "The Wedding Celebration",
+      "eventSubtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
       "footerText": "Scan QR di hasil cetak untuk mengunduh fotomu • Free high-res download",
+      "requireSessionCode": false,
+      "sessionCode": "WED41",
+      "adminExitCode": "9999",
+      "isLive": false,
+      "printerName": "Niimbot 4R Photo Printer",
+      "paperSize": "4R",
+      "printCopies": 1,
+      "printerModelPreset": "b1_pro",
+      "printMethod": "bluetooth",
+      "autoPrint": false,
+      "printOrientation": "landscape",
+      "bluetoothDeviceName": "B1 Pro-I708030351",
+      "bluetoothLabelSize": "50x50",
+      "bluetoothLabelWidthMm": 50,
+      "bluetoothLabelHeightMm": 50,
+      "bluetoothMarginMm": 0,
+      "bluetoothFitMode": "fit",
+      "bluetoothAutoRotate": true,
+      "bluetoothDensity": 1,
+      "bluetoothBrightnessPreset": "seimbang",
+      "bluetoothBrightness": 15,
+      "bluetoothContrast": 1.1,
+      "bluetoothGamma": 1.5,
+      "bluetoothDither": "atkinson",
+      "bluetoothSharpen": true,
+      "videoDisplayMode": "background",
+      "countdownDuration": 3,
+      "videoUrl": "http://localhost:5025/uploads/media/video_landing_1792742623828.mp4",
       "videoRatio": "auto",
       "videoScale": "auto",
-      "coupleNames": "Kevin & Sheila",
       "customFrame": {
         "id": "frame-1792395060235",
         "name": "Frame 2",
@@ -60,10 +85,6 @@
         "frameNaturalHeight": 945
       },
       "enableVideo": true,
-      "printCopies": 1,
-      "printMethod": "bluetooth",
-      "printerName": "Niimbot 4R Photo Printer",
-      "sessionCode": "WED41",
       "customFrames": [
         {
           "id": "frame-1792395060235",
@@ -189,7 +210,7 @@
             {
               "x": 40,
               "y": 41,
-              "id": 5,
+              "id": 1,
               "width": 518,
               "height": 367,
               "radius": 10,
@@ -406,82 +427,61 @@
         {
           "id": "frame-1792666454563",
           "name": "Frame 8",
-          "slots": [
-            {
-              "x": 80,
-              "y": 240,
-              "id": 1,
-              "width": 500,
-              "height": 630,
-              "radius": 8,
-              "borderColor": "#1E293B",
-              "borderWidth": 3
-            },
-            {
-              "x": 620,
-              "y": 240,
-              "id": 2,
-              "width": 500,
-              "height": 630,
-              "radius": 8,
-              "borderColor": "#1E293B",
-              "borderWidth": 3
-            },
-            {
-              "x": 80,
-              "y": 910,
-              "id": 3,
-              "width": 500,
-              "height": 630,
-              "radius": 8,
-              "borderColor": "#1E293B",
-              "borderWidth": 3
-            },
-            {
-              "x": 620,
-              "y": 910,
-              "id": 4,
-              "width": 500,
-              "height": 630,
-              "radius": 8,
-              "borderColor": "#1E293B",
-              "borderWidth": 3
-            }
-          ],
-          "width": 1200,
-          "height": 1800,
           "enabled": true,
           "imageUrl": "",
+          "orientation": "portrait",
           "paperSize": "4R",
-          "orientation": "portrait"
+          "width": 1200,
+          "height": 1800,
+          "slots": [
+            {
+              "id": 1,
+              "x": 80,
+              "y": 240,
+              "width": 500,
+              "height": 630,
+              "radius": 8,
+              "borderWidth": 3,
+              "borderColor": "#1E293B"
+            },
+            {
+              "id": 2,
+              "x": 620,
+              "y": 240,
+              "width": 500,
+              "height": 630,
+              "radius": 8,
+              "borderWidth": 3,
+              "borderColor": "#1E293B"
+            },
+            {
+              "id": 3,
+              "x": 80,
+              "y": 910,
+              "width": 500,
+              "height": 630,
+              "radius": 8,
+              "borderWidth": 3,
+              "borderColor": "#1E293B"
+            },
+            {
+              "id": 4,
+              "x": 620,
+              "y": 910,
+              "width": 500,
+              "height": 630,
+              "radius": 8,
+              "borderWidth": 3,
+              "borderColor": "#1E293B"
+            }
+          ]
         }
       ],
-      "adminExitCode": "9999",
-      "eventSubtitle": "Abadikan momen bahagia dan penuh cinta di hari istimewa ini.",
       "isTitleCustom": false,
-      "bluetoothGamma": 1.5,
-      "bluetoothDither": "atkinson",
-      "bluetoothDensity": 1,
-      "bluetoothFitMode": "fit",
-      "bluetoothSharpen": true,
       "isSubtitleCustom": false,
-      "printOrientation": "landscape",
-      "videoDisplayMode": "background",
-      "bluetoothContrast": 1.1,
-      "bluetoothMarginMm": 0,
-      "countdownDuration": 3,
-      "bluetoothLabelSize": "50x50",
-      "bluetoothLabelType": 1,
-      "printerModelPreset": "b1_pro",
-      "requireSessionCode": false,
-      "bluetoothAutoRotate": true,
-      "bluetoothBrightness": 15,
-      "bluetoothDeviceName": "B1 Pro-I708030351",
-      "bluetoothLabelWidthMm": 50,
-      "bluetoothLabelHeightMm": 50,
-      "bluetoothBrightnessPreset": "seimbang"
+      "bluetoothLabelType": 1
     },
     "createdAt": "2026-10-22T05:16:30.834Z",
-    "updatedAt": "2026-10-23T08:17:25.565Z"
+    "updatedAt": "2026-10-26T03:04:36.901Z"
   }
 ]

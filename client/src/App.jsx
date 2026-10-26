@@ -55,7 +55,33 @@ export default function App() {
   const [isBoothUnlocked, setIsBoothUnlocked] = useState(false);
   const [adminExitCode, setAdminExitCode] = useState('1234');
   const [showSplash, setShowSplash] = useState(true);
+  const [currentPath, setCurrentPath] = useState(() => (
+    typeof window !== 'undefined' ? window.location.pathname : '/'
+  ));
   const adminLastActivityRef = useRef(0);
+
+  const navigateTo = (path, replace = false) => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (replace) {
+          window.history.replaceState(null, '', path);
+        } else {
+          window.history.pushState(null, '', path);
+        }
+      } catch (_) {}
+    }
+    setCurrentPath(path);
+  };
+
+  // Sync currentPath with browser popstate
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Check URL on load for /download/:filename route or /live route
   useEffect(() => {
@@ -70,7 +96,7 @@ export default function App() {
         }
       }
 
-      if (pathname === '/live' || pathname === '/kiosk') {
+      if (pathname === '/live' || pathname === '/kiosk' || pathname === '/open-lock') {
         setIsLiveMode(true);
       }
     }
@@ -110,6 +136,7 @@ export default function App() {
         adminLastActivityRef.current = 0;
         clearAdminSession();
         setIsBoothUnlocked(false);
+        navigateTo('/open-lock', true);
       }
     };
 
@@ -293,35 +320,50 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Redirect to /live after splash if booth is already in Live mode
+  // Route Guard: enforce /open-lock when in live mode without unlocked admin session
   useEffect(() => {
     if (showSplash || typeof window === 'undefined') return;
+    if (currentStep === 'DOWNLOAD') return;
 
-    const pathname = window.location.pathname;
-    if (pathname !== '/' && pathname !== '') return;
-    if (!landingConfig || !landingConfig.isLive) return;
+    const isCurrentlyLive = Boolean(isLiveMode || landingConfig?.isLive || currentPath === '/open-lock');
 
-    setIsLiveMode(true);
-    try {
-      window.history.replaceState(null, '', '/live');
-    } catch (_) {}
-  }, [showSplash, landingConfig]);
+    if (isCurrentlyLive) {
+      if (!isLiveMode) setIsLiveMode(true);
+
+      if (!isBoothUnlocked) {
+        if (currentPath !== '/open-lock') {
+          navigateTo('/open-lock', true);
+        }
+      } else {
+        if (currentPath === '/open-lock') {
+          navigateTo('/live', true);
+        } else if (currentPath === '/' || currentPath === '') {
+          navigateTo('/live', true);
+        }
+      }
+    } else {
+      if (currentPath === '/open-lock') {
+        navigateTo('/', true);
+      }
+    }
+  }, [showSplash, isLiveMode, isBoothUnlocked, landingConfig?.isLive, currentPath, currentStep]);
 
   // Keyboard shortcut: Shift + Escape to trigger lock screen when in live mode
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.shiftKey && e.key === 'Escape') {
-        if (isLiveMode) {
+        if (isLiveMode || landingConfig?.isLive) {
           adminLastActivityRef.current = 0;
           clearAdminSession();
           setIsBoothUnlocked(false);
+          navigateTo('/open-lock', true);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLiveMode]);
+  }, [isLiveMode, landingConfig?.isLive]);
 
   const effectiveLandingConfig = useMemo(() => {
     if (!landingConfig && !activeEvent) return null;
@@ -536,19 +578,21 @@ export default function App() {
         {showSplash && <SplashScreen key="splash" />}
       </AnimatePresence>
 
-      {/* Admin Lock Screen after reload/refresh on all pages except /download */}
-      {isLiveMode && !isBoothUnlocked && currentStep !== 'DOWNLOAD' && (
+      {/* DOM Isolation: When locked in Live Mode or /open-lock, render ONLY AdminLockScreen.
+          No photobooth steps or modals are rendered in the DOM, preventing inspect/element deletion bypass. */}
+      {((isLiveMode || landingConfig?.isLive || currentPath === '/open-lock') && !isBoothUnlocked && currentStep !== 'DOWNLOAD') ? (
         <AdminLockScreen
           onUnlock={() => {
             adminLastActivityRef.current = touchAdminSession();
             setIsBoothUnlocked(true);
+            navigateTo('/live', true);
           }}
           expectedCode={adminExitCode}
         />
-      )}
-
-      {/* Smooth Page Transitions without Stuck Freezing */}
-      <motion.div
+      ) : (
+        <>
+          {/* Smooth Page Transitions without Stuck Freezing */}
+          <motion.div
         key={currentStep}
         initial={false}
         animate={{ opacity: 1 }}
@@ -584,20 +628,14 @@ export default function App() {
                 adminLastActivityRef.current = touchAdminSession();
                 setIsBoothUnlocked(true);
                 setIsLiveMode(true);
-                if (typeof window !== 'undefined') {
-                  try {
-                    window.history.pushState(null, '', '/live');
-                  } catch (_) {}
-                }
+                navigateTo('/live', false);
               }}
               onExitLiveMode={() => {
                 adminLastActivityRef.current = 0;
                 clearAdminSession();
                 setIsBoothUnlocked(false);
                 setIsLiveMode(false);
-                if (typeof window !== 'undefined') {
-                  window.history.pushState(null, '', '/');
-                }
+                navigateTo('/', false);
               }}
             />
           )}
@@ -657,6 +695,8 @@ export default function App() {
         description="Masukkan Kode Admin untuk membuka pengelolaan event photobooth."
         actionLabel="Buka Kelola Event"
       />
+        </>
+      )}
     </div>
   );
 }
